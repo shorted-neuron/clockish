@@ -1,0 +1,103 @@
+# big-red.yaml — clockish config for a big red clock perhaps for your bedroom
+# ---------------------------------------------------------------------------
+# Display layout configuration for clockish
+# See clockish.yaml for full documentation.
+# ---------------------------------------------------------------------------
+
+display:
+  width:    480
+  height:   320
+  rotation: 180     # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+
+rows:
+  - name: clock
+    height: 170
+    panels:
+      - type: clock
+        justify: left
+        timezone: US/Mountain
+        label: " UTC"
+        time_format: 12h
+        colors:
+          time:   darkred
+        time_font: huge
+        label_font: small
+
+  - name: divider-1
+    height: 5
+    panels:
+      - type: divider
+        height: 1
+        color: dimred
+
+  - name: date
+    height: 42
+    panels:
+      - type: date
+        justify: center
+        timezone: US/Mountain
+        date_format: "%A, %B %-d"
+        colors:
+          date: dimred
+        date_font: med
+
+  - name: divider-1
+    height: 5
+    panels:
+      - type: divider
+        height: 1
+        color: dimred
+
+  - name: wifi-info
+    height: 34
+    panels:
+      - type: wifi_graphic
+        width: 44
+        # justify: center
+        color: darkred
+      - type: fact
+        # justify: center
+        width: 18%
+        source: wifi_status
+        color: darkred
+        font: small
+      - type: fact
+        # justify: center
+        width: 20%
+        source: wifi_ssid
+        label: "SSID "
+        color: darkred
+        font: small
+      - type: fact
+        # justify: center
+        width: 35%
+        source: wifi_signal
+        label: " signal: "
+        color: dimred
+        font: small
+      - type: fact
+        # justify: center
+        width: 18%
+        source: wifi_quality
+        label: "qual:"
+        color: dimred
+        font: small
+
+  - name: host-ip
+    height: 46
+    panels:
+      - type: fact
+        width: 24%
+        justify: left
+        source: hostname
+        color: darkgreen
+        font: small
+      - type: fact
+        width: 33%
+        justify: center
+        source: ip
+        color: darkgreen
+        font: small
+      - type: debug
+        color: darkgrey
+
