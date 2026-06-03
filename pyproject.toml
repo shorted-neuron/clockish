@@ -1,0 +1,106 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# =============================================================================
+# Project metadata
+# Follows PEP 621 / PyPA standard.  When you're ready to publish to PyPI,
+# most of this is already in the right shape.
+# =============================================================================
+[project]
+name = "clockish"
+version = "0.1.0"
+description = "A short, one-line description of what clockish does."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+
+# Put your own name/email here
+authors = [
+    { name = "Your Name", email = "you@example.com" },
+]
+
+keywords = ["raspberry-pi", "clock"]   # update as appropriate
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",   # change if needed
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: POSIX :: Linux",
+]
+
+# ── Runtime dependencies ───────────────────────────────────────────────────────
+# Add packages here.  Use platform markers for Pi-only hardware libs so the
+# package can still be installed and tested on Windows.
+#
+# Example:
+# Pi architecture values:
+#   armv6l  — Pi 1, Pi Zero (1st gen)          ← don't forget this one!
+#   armv7l  — Pi 2, Pi 3, Pi 4 (32-bit OS)
+#   aarch64 — Pi 3, Pi 4, Pi 5 (64-bit OS), Ubuntu on Pi
+#
+#   "RPi.GPIO>=0.7.1; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'"
+#   "smbus2>=0.4"
+dependencies = [
+    # Display rendering
+    "Pillow>=12.0.0",
+    "numpy>=2.4.0",
+    # Config files
+    "PyYAML>=6.0",
+    # Timezone data (needed on systems without tzdata OS package, e.g. minimal Pi OS)
+    "tzdata>=2024.1",
+    # pyili9486 — ILI9486 SPI display driver (Pi only; pulls in spidev which is Linux-only)
+    # Source: https://github.com/SirLefti/Python_ILI9486
+    "pyili9486>=1.0.0; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
+    # GPIO — rpi-lgpio is the recommended modern backend; RPi.GPIO also works as a drop-in
+    "rpi-lgpio>=0.6; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
+]
+
+# ── Optional / development dependencies ───────────────────────────────────────
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "pytest-cov",
+    "ruff",          # linter + formatter
+    "mypy",          # type checker
+]
+
+# ── CLI entry points ──────────────────────────────────────────────────────────
+[project.scripts]
+clockish         = "clockish.display:main"
+clockish-preview = "clockish.render_preview:main"
+clockish-colors  = "clockish.colorchart:main"
+clockish-depth   = "clockish.colordepth:main"
+clockish-test    = "clockish.colortest:main"
+clockish-fonts   = "clockish.fontdemo:main"
+
+# ── Where to find packages ────────────────────────────────────────────────────
+[tool.hatch.build.targets.wheel]
+packages = ["src/clockish"]
+
+# Also include third-party code in the wheel
+# (only needed if third_party/ contains Python packages you import directly)
+# packages = ["src/clockish", "third_party/some_upstream"]
+
+# =============================================================================
+# Tool configuration
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]   # pycodestyle, pyflakes, isort
+
+[tool.mypy]
+python_version = "3.9"
+warn_unused_configs = true
+

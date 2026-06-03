@@ -1,0 +1,215 @@
+# system-info.yaml — clockish config
+# ---------------------------------------------------------------------------
+# System information display: local time + all available fact sources.
+# See clockish.yaml for full documentation.
+# ---------------------------------------------------------------------------
+
+display:
+  width:    320
+  height:   480
+  rotation: 90      # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+
+rows:
+  - name: app-header
+    height: 40
+    background: navy
+    panels:
+      - type: text
+        # justify: center
+        label: "clockish"
+        color: silver
+        font: normal
+
+  - name: app-version
+    height: 30
+    background: navy
+    panels:
+      - type: fact
+        # justify: center
+        source: version
+        label: "default"
+        color: grey
+        font: small
+
+  - name: divider-1
+    height: 5
+    background: black
+    panels:
+      - type: divider
+        height: 1
+        color: darkgrey
+
+  - name: local-clock
+    height: 56
+    panels:
+      - type: clock
+        # justify: center
+        timezone: local
+        time_format: 24hs
+        colors:
+          time:   white
+          label:  grey
+        time_font: big
+
+  - name: local-date
+    height: 36
+    panels:
+      - type: date
+        # justify: center
+        timezone: local
+        date_format: "%a, %B %-d %Y"
+        colors:
+          date: pink
+        date_font: normal
+
+  - name: network
+    height: 28
+    background: darkred
+    panels:
+      - type: fact
+        # justify: center
+        source: hostname
+        label: "default"
+        color: yellow
+        font: small
+      - type: fact
+        # justify: center
+        source: ip
+        # label: "default"
+        color: silver
+        font: small
+
+  - name: wifi-status
+    height: 44
+    panels:
+      - type: wifi_graphic
+        width: 64
+        # justify: center
+        color: lime
+        background: navy
+      - type: fact
+        # justify: center
+        source: wifi_status
+        color: lime
+        font: normal
+      - type: fact
+        # justify: center
+        source: wifi_ssid
+        label: "default"
+        color: darklime
+        font: normal
+
+  - name: wifi-signal
+    height: 26
+    panels:
+      - type: fact
+        # justify: center
+        source: wifi_signal
+        label: "default"
+        color: yellow
+        font: small
+      - type: fact
+        # justify: center
+        source: wifi_quality
+        label: "default"
+        color: darkyellow
+        font: small
+
+  - name: divider-2
+    height: 3
+    panels:
+      - type: divider
+        height: 1
+        color: darkgrey
+
+  - name: ntp
+    height: 26
+    panels:
+      - type: fact
+        # justify: center
+        source: ntp_status
+        label: "default"
+        color: cyan
+        font: small
+      - type: fact
+        # justify: center
+        source: ntp_upstream
+        label: "default"
+        color: steelblue
+        font: small
+
+  - name: divider-3
+    height: 3
+    panels:
+      - type: divider
+        height: 1
+        color: darkgrey
+
+  - name: cpu
+    height: 26
+    panels:
+      - type: fact
+        # justify: center
+        source: cpu
+        label: "default"
+        color: yellow
+        font: small
+      - type: fact
+        # justify: center
+        source: cpu_load
+        label: "default"
+        color: darkyellow
+        font: small
+
+  - name: memory
+    height: 26
+    panels:
+      - type: fact
+        # justify: center
+        source: mem
+        label: "default"
+        color: purple
+        font: small
+
+  - name: disk
+    height: 26
+    panels:
+      - type: fact
+        # justify: center
+        source: disk
+        label: "default"
+        color: green
+        font: small
+
+  - name: temp
+    height: 27
+    panels:
+      - type: fact
+        # justify: center
+        source: temp
+        label: "default"
+        color: orange
+        font: small
+
+  - name: uptime-config
+    height: 26
+    panels:
+      - type: fact
+        justify: left
+        source: uptime
+        label: "default"
+        color: grey
+        font: small
+      - type: fact
+        justify: right
+        source: config_file
+        # label: "default"
+        color: brown
+        font: small
+
+  - name: debug
+    height: 52
+    background: chocolate
+    panels:
+      - type: debug
+        color: tan

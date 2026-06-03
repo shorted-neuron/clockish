@@ -1,0 +1,54 @@
+# =============================================================================
+# .gitattributes — Line-ending normalisation
+#
+# IMPORTANT for Windows → Raspberry Pi (Linux) development:
+#   - Git stores files with LF line endings in the repo (eol=lf)
+#   - On checkout, Windows gets CRLF for normal text files (eol=crlf)
+#   - Shell scripts and anything that runs on the Pi always stays LF
+#
+# Without this file, nano/vim/bash on the Pi will see ^M characters at the
+# end of every line and scripts will flat-out refuse to run.
+# =============================================================================
+
+# Default: normalise to LF in the repo, checkout with native endings on each OS
+* text=auto eol=lf
+
+# Explicitly keep shell scripts as LF everywhere — they run on Linux only
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# Python source — LF everywhere (avoids SyntaxError on Pi with CRLF shebangs)
+*.py        text eol=lf
+
+# Config / data formats
+*.json      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.toml      text eol=lf
+*.cfg       text eol=lf
+*.ini       text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+*.rst       text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+
+# Windows-only artifacts — keep their native CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# True binary files — never mangle
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.gz        binary
+*.tar       binary
+*.whl       binary
+*.pyc       binary
+

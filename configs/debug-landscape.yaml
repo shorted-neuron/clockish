@@ -1,0 +1,144 @@
+# debug.yaml — clockish config
+# ---------------------------------------------------------------------------
+# Display layout configuration for clockish.py
+# See clockish.yaml for full documentation.
+# ---------------------------------------------------------------------------
+
+display:
+  width:    480
+  height:   320
+  rotation: 180      # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+
+rows:
+  - name: utc-clock
+    height: 72
+    background: darkblue
+    panels:
+      - type: clock
+        width: 40%
+        timezone: UTC
+        time_format: 24h
+        colors:
+          time:   lime
+          label:  lime
+        time_font: huge
+      - type: date
+        width: 25%
+        timezone: UTC
+        date_format: ":%S UTC"
+        colors:
+          date:   lime
+          label:  lime
+        time_font: huge
+      - type: date
+        width: 35%
+        timezone: UTC
+        date_format: "%a %b %-d, %Y"
+        colors:
+          date: darklime
+        date_font: small
+
+  - name: divider-1
+    height: 3
+    background: grey
+    panels:
+      - type: divider
+        height: 1
+        color: red
+
+  - name: den-clock
+    height: 64
+    panels:
+      - type: clock
+        width: 60%
+        timezone: America/Denver
+        label: "DEN"
+        time_format: 12h
+        colors:
+          time:   ff0000
+          label:  darkred
+        time_font: big
+        label_font: normal
+      - type: date
+        timezone: America/Denver
+        date_format: " %a, %B %-d"
+        colors:
+          date: slate
+        date_font: normal
+
+  - name: ist-clock
+    height: 36
+    panels:
+      - type: clock
+        width: 70%
+        timezone: Asia/Kolkata
+        label: "IST"
+        time_format: 12h
+        colors:
+          time:   brown
+          label:  brown
+        time_font: big
+        label_font: small
+      - type: clock
+        width: 30%
+
+  - name: divider-2
+    height: 1
+    panels:
+      - type: divider
+        height: 1
+
+  - name: ntp-status
+    height: 26
+    background: darkgrey
+    panels:
+      - type: text
+        label: "Time sync status:"
+        color: white
+        font: small
+        background: black
+        width: 60%
+      - type: fact
+        source: ntp_all
+        label: " is "
+        color: black
+        font: small
+        background: darkred
+
+  - name: ip-disk
+    height: 32
+    panels:
+      - type: fact
+        source: hostname
+        color: lime
+        font: small
+      - type: fact
+        source: ip
+        label: "ip "
+        color: grey
+        font: small
+
+  - name: cpu-mem
+    height: 26
+    panels:
+      - type: fact
+        width: 40%
+        source: cpu
+        label: "cpu: "
+        color: yellow
+        font: small
+      - type: memory_stats
+        color: purple
+        font: small
+
+  - name: debug
+    height: 60
+    panels:
+      - type: debug
+        width: 70%
+        color: brown
+      - type: fact
+        label: v
+        source: version
+        font: small
+

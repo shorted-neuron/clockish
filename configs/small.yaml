@@ -1,0 +1,94 @@
+# small-info.yaml — clockish config
+# ---------------------------------------------------------------------------
+# small subset for a smaller display
+# See clockish.yaml for full documentation.
+# ---------------------------------------------------------------------------
+
+display:
+  width:    240
+  height:   135
+  rotation: 90      # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+
+rows:
+  - name: app-header
+    height: 30
+    background: navy
+    panels:
+      - type: text
+        # justify: center
+        label: "clockish"
+        color: silver
+        font: small
+      - type: fact
+        # justify: center
+        source: version
+        label: "default"
+        color: grey
+        font: small
+
+  - name: local-clock
+    height: 30
+    panels:
+      - type: clock
+        # justify: center
+        timezone: local
+        time_format: 24hs
+        colors:
+          time:   white
+          label:  grey
+        time_font: small
+
+  - name: network
+    height: 28
+    background: darkred
+    panels:
+      - type: fact
+        width: 40%
+        # justify: center
+        source: hostname
+        # label: "default"
+        color: yellow
+        font: small
+      - type: fact
+        # justify: center
+        source: ip
+        # label: "default"
+        color: silver
+        font: small
+
+# - name: wifi-status
+#   height: 24
+#   panels:
+#     - type: wifi_graphic
+#       width: 34
+#       # justify: center
+#       color: lime
+#       background: navy
+#     - type: fact
+#       # justify: center
+#       source: wifi_status
+#       color: lime
+#       font: tiny
+#     - type: fact
+#       # justify: center
+#       source: wifi_ssid
+#       label: "default"
+#       color: darklime
+#       font: tiny
+
+  - name: cpu
+    height: 26
+    panels:
+      - type: fact
+        # justify: center
+        source: cpu
+        label: "default"
+        color: yellow
+        font: small
+      - type: fact
+        # justify: center
+        source: cpu_load
+        label: "default"
+        color: darkyellow
+        font: small
+

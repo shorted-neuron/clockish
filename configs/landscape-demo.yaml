@@ -1,0 +1,166 @@
+# landscape-demo.yaml — clockish config
+# ---------------------------------------------------------------------------
+# Display layout configuration for clockish
+# See clockish.yaml for full documentation.
+# ---------------------------------------------------------------------------
+
+display:
+  width:    480
+  height:   320
+  rotation: 180     # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+
+rows:
+  - name: utc-clock
+    height: 72
+    panels:
+      - type: clock
+        justify: left
+        timezone: UTC
+        label: " UTC"
+        time_format: 24hs
+        colors:
+          time:   lime
+          label:  lime
+        time_font: huge
+        label_font: big
+
+  - name: divider-1
+    height: 3
+    panels:
+      - type: divider
+        height: 1
+        color: darkgrey
+
+  - name: utc-date
+    height: 60
+    panels:
+      - type: date
+        justify: center
+        timezone: UTC
+        date_format: "%A, %B %-d  UTC"
+        colors:
+          date: darklime
+        date_font: med
+
+  - name: world-clocks
+    height: 68
+    panels:
+      - type: clock
+        # justify: center
+        timezone: America/Denver
+        time_format: 24h
+        colors:
+          time:   cornflower
+          label:  darkorange
+        time_font: big
+      - type: divider
+        width: 2%
+        color: black
+      - type: clock
+        # justify: center
+        width: 35%
+        background: darkred
+        timezone: US/Eastern
+        time_format: 24h
+        colors:
+          time:   orange
+          label:  red
+        time_font: big
+      - type: divider
+        width: 2%
+        color: black
+      - type: clock
+        # justify: center
+        timezone: Asia/Kolkata
+        time_format: 24h
+        background: black
+        colors:
+          time:   brown
+          label:  yellow
+        time_font: big
+        label_font: med
+
+  - name: world-labels
+    height: 48
+    panels:
+      - type: text
+        # justify: center
+        label: " Denver"
+        color: cornflower
+        font: normal
+        background: black
+      - type: divider
+        width: 2%
+        color: black
+      - type: text
+        # justify: center
+        width: 35%
+        label: "US/Eastern"
+        background: darkred
+        color: orange
+        font: normal
+      - type: divider
+        width: 2%
+        color: black
+      - type: text
+        # justify: center
+        label: "  India"
+        font: normal
+        color: brown
+
+  - name: divider-2
+    height: 8
+    panels:
+      - type: divider
+        height: 1
+
+  - name: wifi-info
+    height: 34
+    panels:
+      - type: wifi_graphic
+        width: 44
+        # justify: center
+        color: white
+      - type: fact
+        # justify: center
+        width: 18%
+        source: wifi_status
+        color: ff8888
+        font: small
+      - type: fact
+        # justify: center
+        width: 20%
+        source: wifi_ssid
+        label: "SSID "
+        color: brightblue
+        font: small
+      - type: fact
+        # justify: center
+        width: 35%
+        source: wifi_signal
+        label: " signal: "
+        color: pink
+        font: small
+      - type: fact
+        # justify: center
+        width: 18%
+        source: wifi_quality
+        label: "qual:"
+        color: purple
+        font: small
+
+  - name: host-ip
+    height: 26
+    panels:
+      - type: fact
+        justify: left
+        source: hostname
+        color: green
+        font: small
+      - type: fact
+        justify: center
+        source: ip
+        color: green
+        font: small
+      - type: debug
+        color: silver

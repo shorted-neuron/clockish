@@ -1,0 +1,367 @@
+#!/usr/bin/env bash
+# =============================================================================
+# install.sh  —  Bootstrap script for clockish.py
+#
+# Usage:
+#   chmod +x install.sh
+#   ./install.sh
+#
+# What this script does:
+#   1. Verifies it is running on a Raspberry Pi / Linux
+#   2. Checks and installs required apt system packages
+#   3. Verifies that SPI is enabled (offers to enable it via raspi-config)
+#   4. Creates a Python virtual environment (.venv)
+#   5. Installs all required pip packages into .venv
+#   6. Prints a final summary / next-steps message
+#
+# Run as a regular user with sudo access (NOT as root).
+# =============================================================================
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Colour helpers
+# ---------------------------------------------------------------------------
+RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+
+info()    { echo -e "${CYAN}[INFO]${RESET}  $*"; }
+ok()      { echo -e "${GREEN}[OK]${RESET}    $*"; }
+warn()    { echo -e "${YELLOW}[WARN]${RESET}  $*"; }
+error()   { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
+die()     { error "$*"; exit 1; }
+section() { echo -e "\n${BOLD}${CYAN}=== $* ===${RESET}"; }
+
+# ---------------------------------------------------------------------------
+# 0. Sanity checks
+# ---------------------------------------------------------------------------
+section "Environment checks"
+
+[[ "$EUID" -eq 0 ]] && die "Do NOT run this script as root. Run as your normal user (sudo will be called when needed)."
+
+OS=$(uname -s)
+[[ "$OS" != "Linux" ]] && die "This script is for Linux (Raspberry Pi OS). Detected: $OS"
+
+# Detect Raspberry Pi
+if grep -qi "raspberry" /proc/cpuinfo 2>/dev/null || \
+   grep -qi "raspberry" /sys/firmware/devicetree/base/model 2>/dev/null; then
+    IS_RPI=true
+    RPI_MODEL=$(cat /sys/firmware/devicetree/base/model 2>/dev/null | tr -d '\0' || echo "unknown")
+    ok "Running on Raspberry Pi: $RPI_MODEL"
+else
+    IS_RPI=false
+    warn "Not detected as a Raspberry Pi — GPIO/SPI checks will be skipped."
+fi
+
+# Python version check (need 3.11+)
+PYTHON_BIN=$(command -v python3 || true)
+[[ -z "$PYTHON_BIN" ]] && die "python3 not found. Install with: sudo apt install python3"
+PY_VER=$("$PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
+PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
+if [[ "$PY_MAJOR" -lt 3 || ( "$PY_MAJOR" -eq 3 && "$PY_MINOR" -lt 11 ) ]]; then
+    die "Python 3.11+ required. Found: $PY_VER"
+fi
+ok "Python $PY_VER found at $PYTHON_BIN"
+
+# ---------------------------------------------------------------------------
+# 1. System (apt) packages
+# ---------------------------------------------------------------------------
+section "System package checks"
+
+APT_PACKAGES=(
+    # Python build tools
+    python3-pip
+    python3-dev
+    python3-venv          # needed to create .venv
+    python3-numpy         # packaged version of numpy (for PIL) — much faster to install than via pip
+    # Pillow native dependencies
+    libopenjp2-7          # JPEG 2000 support
+    libfreetype6          # TrueType font rendering
+    libjpeg-dev           # JPEG support
+    zlib1g-dev            # PNG / zlib support
+    # Font files — DejaVuSans.ttf is the default font used by clockish
+    fonts-dejavu-core
+    # swig is needed to build rpi-lgpio later
+    swig
+    # python3-swiglpk # unknown if needed
+    # lgpio / GPIO system library (needed by rpi-lgpio pip package)
+    python3-libgpiod
+    # Timezone database — required by zoneinfo (used for multi-timezone clocks)
+    tzdata
+    # Useful utilities already installed but listed for completeness
+    git
+    tmux
+    chrony                # NTP (get_ntp_upstream_count() calls chronyc)
+    bind9-dnsutils
+)
+
+MISSING_APT=()
+for pkg in "${APT_PACKAGES[@]}"; do
+    if dpkg -s "$pkg" &>/dev/null; then
+        ok "  apt: $pkg"
+    else
+        warn "  apt: $pkg  [MISSING]"
+        MISSING_APT+=("$pkg")
+    fi
+done
+
+if [[ ${#MISSING_APT[@]} -gt 0 ]]; then
+    info "Installing missing apt packages: ${MISSING_APT[*]}"
+    sudo apt-get update -qq
+    sudo apt-get install -y "${MISSING_APT[@]}"
+    ok "apt packages installed."
+else
+    ok "All required apt packages are present."
+fi
+
+# ---------------------------------------------------------------------------
+# 2. SPI interface check  (Raspberry Pi only)
+# ---------------------------------------------------------------------------
+section "SPI interface check"
+
+if [[ "$IS_RPI" == true ]]; then
+    SPI_ENABLED=false
+
+    # Method 1: check for /dev/spidev0.0
+    if [[ -e /dev/spidev0.0 ]]; then
+        SPI_ENABLED=true
+        ok "SPI device /dev/spidev0.0 found."
+    fi
+
+    # Method 2: check /boot/config.txt or /boot/firmware/config.txt
+    for BOOT_CFG in /boot/firmware/config.txt /boot/config.txt; do
+        if [[ -f "$BOOT_CFG" ]] && grep -q "^dtparam=spi=on" "$BOOT_CFG"; then
+            SPI_ENABLED=true
+            ok "SPI enabled in $BOOT_CFG"
+        fi
+    done
+
+    if [[ "$SPI_ENABLED" == false ]]; then
+        warn "SPI does not appear to be enabled!"
+        echo ""
+        echo "  To enable SPI, run ONE of the following:"
+        echo "    Option A (interactive):  sudo raspi-config"
+        echo "       -> Interface Options -> SPI -> Enable"
+        echo ""
+        echo "    Option B (non-interactive, then reboot):"
+        echo "       sudo raspi-config nonint do_spi 0"
+        echo "       sudo reboot"
+        echo ""
+        read -r -p "  Enable SPI now automatically? [y/N] " REPLY
+        if [[ "${REPLY,,}" == "y" ]]; then
+            sudo raspi-config nonint do_spi 0
+            warn "SPI enabled — a REBOOT IS REQUIRED before SPI will work."
+            warn "After rebooting, re-run this script or just run clockish"
+            NEEDS_REBOOT=true
+        else
+            warn "Skipping SPI enable. clockish will fail at runtime without SPI."
+        fi
+    fi
+
+    # SPI group membership check
+    if ! groups | grep -qw "spi"; then
+        warn "User '$USER' is not in the 'spi' group."
+        info "Adding $USER to spi group..."
+        sudo usermod -aG spi "$USER"
+        warn "Group change requires logout/login (or reboot) to take effect."
+    else
+        ok "User '$USER' is in the 'spi' group."
+    fi
+
+    # GPIO group membership check
+    if ! groups | grep -qw "gpio"; then
+        warn "User '$USER' is not in the 'gpio' group."
+        info "Adding $USER to gpio group..."
+        sudo usermod -aG gpio "$USER"
+        warn "Group change requires logout/login (or reboot) to take effect."
+    else
+        ok "User '$USER' is in the 'gpio' group."
+    fi
+else
+    warn "Skipping SPI check (not a Raspberry Pi)."
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Virtual environment
+# ---------------------------------------------------------------------------
+section "Python virtual environment"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$SCRIPT_DIR/.venv"
+
+if [[ -d "$VENV_DIR" ]]; then
+    ok ".venv already exists at $VENV_DIR"
+    read -r -p "  Re-create .venv from scratch? [y/N] " REPLY
+    if [[ "${REPLY,,}" == "y" ]]; then
+        info "Removing existing .venv..."
+        rm -rf "$VENV_DIR"
+        python3 -m venv "$VENV_DIR"
+        ok ".venv re-created."
+    fi
+else
+    info "Creating .venv at $VENV_DIR ..."
+    python3 -m venv "$VENV_DIR"
+    ok ".venv created."
+fi
+
+VENV_PY="$VENV_DIR/bin/python"
+VENV_PIP="$VENV_DIR/bin/pip"
+
+# ---------------------------------------------------------------------------
+# 4. Pip packages
+# ---------------------------------------------------------------------------
+section "Python pip packages"
+
+info "Upgrading pip..."
+"$VENV_PIP" install --upgrade pip --quiet
+
+# Core packages required by ILI9486.py and clockish
+PIP_PACKAGES=(
+    "Pillow>=12.0.0"         # image rendering
+    "numpy>=2.0.0"           # array ops in ILI9486.py
+    "spidev>=3.6"            # SPI bus interface
+    "PyYAML>=6.0"            # clockish.yaml parsing
+    "tzdata>=2024.1"         # IANA timezone database for zoneinfo (fallback when system tzdata absent)
+)
+
+# GPIO: rpi-lgpio is the recommended drop-in for RPi.GPIO on modern kernels.
+# It imports as RPi.GPIO so no code changes are needed.
+# lgpio is a system-level library that rpi-lgpio builds on.
+if [[ "$IS_RPI" == true ]]; then
+    PIP_PACKAGES+=("rpi-lgpio>=0.6")
+else
+    warn "Not on Raspberry Pi — skipping rpi-lgpio. GPIO will fail at runtime."
+fi
+
+info "Installing pip packages..."
+for pkg in "${PIP_PACKAGES[@]}"; do
+    info "  pip install \"$pkg\""
+    "$VENV_PIP" install "$pkg" --quiet
+    ok "  installed: $pkg"
+done
+
+# ---------------------------------------------------------------------------
+# 5. Verify key imports
+# ---------------------------------------------------------------------------
+section "Import verification"
+
+IMPORT_ERRORS=0
+
+check_import() {
+    local module="$1"
+    local label="${2:-$1}"
+    if "$VENV_PY" -c "import $module" 2>/dev/null; then
+        ok "  import $label"
+    else
+        error "  import $label  [FAILED]"
+        IMPORT_ERRORS=$((IMPORT_ERRORS + 1))
+    fi
+}
+
+check_import "PIL"        "Pillow (PIL)"
+check_import "numpy"      "numpy"
+check_import "yaml"       "PyYAML (yaml)"
+
+if [[ "$IS_RPI" == true ]]; then
+    check_import "spidev"     "spidev"
+    check_import "RPi.GPIO"   "RPi.GPIO (via rpi-lgpio)"
+fi
+
+# Verify the local pyili9486 package is importable (it lives in src/)
+PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PY" -c "from pyili9486.colors import BY_NAME" 2>/dev/null \
+    && ok "  import pyili9486.colors" \
+    || { error "  import pyili9486.colors  [FAILED]"; IMPORT_ERRORS=$((IMPORT_ERRORS + 1)); }
+
+# ---------------------------------------------------------------------------
+# 6. Font check
+# ---------------------------------------------------------------------------
+section "Font check"
+
+FONT_SEARCH_DIRS=(
+    /usr/share/fonts/truetype/dejavu
+    /usr/share/fonts/truetype
+    /usr/share/fonts
+)
+FONT_FOUND=false
+for d in "${FONT_SEARCH_DIRS[@]}"; do
+    if [[ -f "$d/DejaVuSans.ttf" ]]; then
+        ok "DejaVuSans.ttf found at $d/DejaVuSans.ttf"
+        FONT_FOUND=true
+        break
+    fi
+done
+
+if [[ "$FONT_FOUND" == false ]]; then
+    warn "DejaVuSans.ttf not found in standard locations."
+    warn "clockish will fail when loading fonts."
+    info "Install with:  sudo apt install fonts-dejavu-core"
+fi
+
+# Check if Pillow can actually load the font
+if [[ "$FONT_FOUND" == true ]]; then
+    FONT_PATH=$(find "${FONT_SEARCH_DIRS[@]}" -name "DejaVuSans.ttf" 2>/dev/null | head -1)
+    "$VENV_PY" -c "
+from PIL import ImageFont
+try:
+    f = ImageFont.truetype('$FONT_PATH', 28)
+    print('Pillow font load: OK')
+except Exception as e:
+    print(f'Pillow font load FAILED: {e}')
+    exit(1)
+" && ok "Pillow can load DejaVuSans.ttf" || { error "Pillow font load failed"; IMPORT_ERRORS=$((IMPORT_ERRORS + 1)); }
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Wrapper / run script
+# ---------------------------------------------------------------------------
+section "Creating run script"
+
+RUN_SCRIPT="$SCRIPT_DIR/run-clockish.sh"
+cat > "$RUN_SCRIPT" << 'RUNEOF'
+#!/usr/bin/env bash
+# Convenience wrapper: activates .venv and runs clockish
+# Usage: ./run-clockish.sh [--debug] [--debug-layout]
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/.venv/bin/activate"
+export PYTHONPATH="$SCRIPT_DIR/src"
+exec python3 "$SCRIPT_DIR/clockish" "$@"
+RUNEOF
+chmod +x "$RUN_SCRIPT"
+ok "Created $RUN_SCRIPT"
+
+# ---------------------------------------------------------------------------
+# 8. Summary
+# ---------------------------------------------------------------------------
+section "Installation Summary"
+
+if [[ $IMPORT_ERRORS -eq 0 ]]; then
+    ok "All checks passed!"
+else
+    warn "$IMPORT_ERRORS import check(s) failed — see errors above."
+fi
+
+echo ""
+echo -e "${BOLD}To run the panel display:${RESET}"
+echo "    ./run-clockish.sh"
+echo "    ./run-clockish.sh --debug"
+echo ""
+echo -e "${BOLD}Or manually:${RESET}"
+echo "    source .venv/bin/activate"
+echo "    PYTHONPATH=src python3 clockish.py"
+echo ""
+
+if [[ "${NEEDS_REBOOT:-false}" == true ]]; then
+    echo -e "${YELLOW}${BOLD}*** A REBOOT IS REQUIRED for SPI and/or group changes to take effect. ***${RESET}"
+    echo "    sudo reboot"
+    echo ""
+fi
+
+echo -e "${BOLD}Troubleshooting tips:${RESET}"
+echo "  • SPI not working?   sudo raspi-config nonint do_spi 0 && sudo reboot"
+echo "  • Permission denied on /dev/spidev*?  sudo usermod -aG spi,gpio \$USER  then reboot"
+echo "  • Font errors?       sudo apt install fonts-dejavu-core"
+echo "  • RPi.GPIO missing?  source .venv/bin/activate && pip install rpi-lgpio"
+echo "  • numpy/Pillow?      source .venv/bin/activate && pip install 'Pillow>=12' 'numpy>=2'"
+echo ""
+

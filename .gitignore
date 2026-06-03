@@ -1,0 +1,63 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+MANIFEST
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Packaging / distribution ───────────────────────────────────────────────────
+dist/
+*.whl
+*.tar.gz
+
+# ── Testing / coverage ────────────────────────────────────────────────────────
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── PyCharm / JetBrains ────────────────────────────────────────────────────────
+# Keep project config but not local/machine-specific stuff
+.idea/*
+!.idea/.gitignore
+!.idea/modules.xml
+!.idea/vcs.xml
+!.idea/*.iml
+!.idea/inspectionProfiles/
+
+# ── OS cruft ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+secrets.toml
+secrets.json
+
+# ── Editor swap / lock files ──────────────────────────────────────────────────
+*.swp
+*.swo
+*~
+
+# ── Raspberry Pi specific ──────────────────────────────────────────────────────
+# Compiled device-tree overlays, kernel objects — never commit these
+*.dtbo
+*.ko
+
