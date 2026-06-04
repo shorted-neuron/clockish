@@ -35,5 +35,34 @@ rm -rf some_lib/.git          # don't nest git repos — use submodules if you w
 
 | Directory | Upstream URL | Fork URL | Branch | Upstream commit | License |
 |-----------|-------------|----------|--------|-----------------|---------|
-| _(none — pyili9486 is a pip dependency, not vendored)_ | | | | | |
+| `dseg/` | https://github.com/keshikan/DSEG | — | — | v0.46 | SIL OFL 1.1 |
+
+### `dseg/` — DSEG 7-segment / 14-segment fonts
+
+**Not committed to this repo** — the font files are binary assets.
+Run the helper script to download them on first use:
+
+```bash
+bash scripts/download-dseg-font.sh
+```
+
+Or install system-wide via apt (Debian / Raspberry Pi OS / Ubuntu):
+
+```bash
+sudo apt install fonts-dseg
+```
+
+After either step the `seven-segment.yaml` config (and any config that
+references `DSEG7Classic-Regular.ttf` or similar in its `fonts:` section)
+will work automatically.
+
+**Key variants:**
+
+| File | Style |
+|------|-------|
+| `DSEG7Classic-Regular.ttf` | Authentic: dim "ghost" segments visible (most realistic) |
+| `DSEG7Classic-Bold.ttf` | Bold classic |
+| `DSEG7Modern-Regular.ttf` | Clean: no ghost segments |
+| `DSEG7Modern-Bold.ttf` | Bold modern |
+| `DSEG14Classic-Regular.ttf` | 14-segment (alphanumeric) |
 
