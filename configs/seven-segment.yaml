@@ -28,16 +28,16 @@
 # ---------------------------------------------------------------------------
 fonts:
   seg7giant:
-    file: DSEG7Classic-Italic.ttf
+    file: DSEG7Classic-BoldItalic.ttf
     size: 128
   seg7huge:
-    file: DSEG7Classic-Regular.ttf
+    file: DSEG7Classic-Italic.ttf
     size: 64
   seg7med:
-    file: DSEG7Classic-Regular.ttf
+    file: DSEG7Classic-Italic.ttf
     size: 32
   seg7small:
-    file: DSEG7Classic-Regular.ttf
+    file: DSEG7Classic-Italic.ttf
     size: 18
 
 display:
