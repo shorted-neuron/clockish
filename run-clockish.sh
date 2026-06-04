@@ -81,6 +81,13 @@ fi
 # ---------------------------------------------------------------------------
 # Normal run — activate venv and exec clockish
 # ---------------------------------------------------------------------------
+CLOCKISH_BIN="$VENV_BIN/clockish"
+if [[ ! -x "$CLOCKISH_BIN" ]]; then
+    echo "ERROR: clockish entry point not found at $CLOCKISH_BIN" >&2
+    echo "  Run ./install.sh first, or:" >&2
+    echo "    source $VENV_BIN/activate && pip install -e $PROJECT_ROOT" >&2
+    exit 1
+fi
 source "$VENV_BIN/activate"
-exec clockish "$@"
+exec "$CLOCKISH_BIN" "$@"
 

@@ -243,6 +243,11 @@ for pkg in "${PIP_PACKAGES[@]}"; do
     ok "  installed: $pkg"
 done
 
+# Install the clockish package itself (creates the `clockish` entry-point binary).
+info "Installing clockish package (pip install -e .) ..."
+"$VENV_PIP" install -e "$SCRIPT_DIR" --quiet
+ok "clockish package installed — entry point: $VENV_DIR/bin/clockish"
+
 # ---------------------------------------------------------------------------
 # 5. Verify key imports
 # ---------------------------------------------------------------------------
