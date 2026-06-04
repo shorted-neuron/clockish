@@ -366,6 +366,26 @@ if [[ "$DSEG_FOUND" == false ]]; then
     info "If it's missing, try:  sudo apt install fonts-dseg"
 fi
 
+# Check for Nixie One font (used by configs/nixie.yaml)
+NIXIE_FOUND=false
+NIXIE_SEARCH_DIRS=(
+    "$SCRIPT_DIR/third_party/nixie"
+    /usr/share/fonts/truetype
+    /usr/share/fonts
+)
+for d in "${NIXIE_SEARCH_DIRS[@]}"; do
+    if [[ -f "$d/NixieOne-Regular.ttf" ]]; then
+        ok "NixieOne-Regular.ttf found at $d/NixieOne-Regular.ttf"
+        NIXIE_FOUND=true
+        break
+    fi
+done
+
+if [[ "$NIXIE_FOUND" == false ]]; then
+    warn "NixieOne-Regular.ttf not found — nixie.yaml will not work."
+    info "Install with:  bash scripts/download-nixie-font.sh"
+fi
+
 # ---------------------------------------------------------------------------
 # 8. Helper scripts
 # ---------------------------------------------------------------------------
@@ -422,7 +442,8 @@ echo -e "${BOLD}Troubleshooting tips:${RESET}"
 echo "  • SPI not working?      sudo raspi-config nonint do_spi 0 && sudo reboot"
 echo "  • Permission denied?    sudo usermod -aG spi,gpio \$USER  then reboot"
 echo "  • Font errors?          sudo apt install fonts-dejavu-core
-  • 7-seg font missing?   sudo apt install fonts-dseg"
+  • 7-seg font missing?   sudo apt install fonts-dseg
+  • Nixie font missing?   bash scripts/download-nixie-font.sh"
 echo "  • RPi.GPIO missing?     source .venv/bin/activate && pip install rpi-lgpio"
 echo "  • numpy/Pillow?         source .venv/bin/activate && pip install 'Pillow>=12' 'numpy>=2'"
 echo "  • Service not starting? sudo journalctl -u clockish -n 50"

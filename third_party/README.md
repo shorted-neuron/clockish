@@ -36,6 +36,24 @@ rm -rf some_lib/.git          # don't nest git repos — use submodules if you w
 | Directory | Upstream URL | Fork URL | Branch | Upstream commit | License |
 |-----------|-------------|----------|--------|-----------------|---------|
 | `dseg/` | https://github.com/keshikan/DSEG | — | — | v0.46 | SIL OFL 1.1 |
+| `nixie/` | https://github.com/google/fonts/tree/main/ofl/nixieone | — | — | main | SIL OFL 1.1 |
+
+### `nixie/` — Nixie One display font
+
+**Not committed to this repo** — run the helper script to download:
+
+```bash
+bash scripts/download-nixie-font.sh
+```
+
+(No apt package exists for Nixie One; the script fetches it directly from the
+Google Fonts GitHub repository.)
+
+**Font file:**
+
+| File | Notes |
+|------|-------|
+| `NixieOne-Regular.ttf` | Only weight/style available |
 
 ### `dseg/` — DSEG 7-segment / 14-segment fonts
 
