@@ -111,9 +111,16 @@ _PROC_STUBS: dict[str, str] = {
     "/proc/uptime":    "123456.78 234567.89\n",
     "/proc/stat":      "cpu  100 0 50 800 20 5 5 0 0 0\n",
     "/proc/meminfo":   "MemTotal:        4096000 kB\nMemAvailable:    2048000 kB\n",
-    "/proc/net/wireless": "",
+    # /proc/net/wireless: two header lines then one data line per interface.
+    # Columns (after split): 0=iface 1=status 2=quality 3=signal(dBm) 4=noise
+    # quality "57." → 57/70  signal "-57." → -57 dBm (3 of 4 bars in the graphic)
+    "/proc/net/wireless": (
+        "Inter-| sta-|   Quality        |   Discarded packets               | Missed | WEP\n"
+        " face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | mode\n"
+        "  wlan0: 0000   57.  -57.  -256        0      0      0      0      0        0\n"
+    ),
     "/sys/class/thermal/thermal_zone0/temp": "42000\n",
-    "/sys/class/net/wlan0/operstate": "down\n",
+    "/sys/class/net/wlan0/operstate": "up\n",
     "/run/systemd/timesync/synchronized": "",
 }
 
@@ -153,7 +160,7 @@ def _patched_check_output(cmd, *args, **kwargs):
     if "timedatectl" in cmd_str:
         return b"NTP=yes\nNTPSynchronized=yes\n"
     if "iwgetid" in cmd_str:
-        return b"StubSSID\n"
+        return b"Preview\n"
     return _real_check_output(cmd, *args, **kwargs)
 
 _subprocess.check_output = _patched_check_output
