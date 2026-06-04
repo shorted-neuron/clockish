@@ -169,7 +169,8 @@ _FONTS: dict = {}
 
 def _get_font(name: str) -> ImageFont.FreeTypeFont:
     if not _FONTS:
-        _FONTS['huge']   = ImageFont.truetype(_FONT_PATH, 160)
+        _FONTS['giant']  = ImageFont.truetype(_FONT_PATH, 160)
+        _FONTS['huge']   = ImageFont.truetype(_FONT_PATH, 72)
         _FONTS['big']    = ImageFont.truetype(_FONT_PATH, 48)
         _FONTS['med']    = ImageFont.truetype(_FONT_PATH, 36)
         _FONTS['normal'] = ImageFont.truetype(_FONT_PATH, 28)
