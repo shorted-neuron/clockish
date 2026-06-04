@@ -291,7 +291,8 @@ DEFAULT_CFG="$SCRIPT_DIR/configs/clockish.yaml"
 
 if [[ -f "$USER_CFG" ]]; then
     ok "User config already exists: $USER_CFG"
-    info "  (not overwritten — edit it with: ./edit-clockish-config.sh)"else
+    info "  (not overwritten — edit it with: ./edit-clockish-config.sh)"
+else
     if [[ -f "$DEFAULT_CFG" ]]; then
         mkdir -p "$USER_CFG_DIR"
         cp "$DEFAULT_CFG" "$USER_CFG"
