@@ -305,6 +305,16 @@ def render_config(config_path: str, out_path: str) -> None:
     cfg_copy = cfg.copy()
     _ppd._resolve_colors(cfg_copy)
 
+    # Point display module at this config so _get_font() can resolve any
+    # custom font names defined in the config's 'fonts:' section.
+    # Evict previously-cached custom font names first so they are re-loaded
+    # from the new config rather than reused from a prior render.
+    _STANDARD_FONT_NAMES = {'giant', 'huge', 'big', 'med', 'normal', 'small', 'tiny'}
+    for _custom_name in list(_ppd._FONTS.keys()):
+        if _custom_name not in _STANDARD_FONT_NAMES:
+            del _ppd._FONTS[_custom_name]
+    _ppd._config = cfg_copy
+
     disp   = cfg_copy.get("display", {})
     w      = disp.get("width",  320)
     h      = disp.get("height", 480)
