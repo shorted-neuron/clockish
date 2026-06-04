@@ -4,7 +4,7 @@
 Usage:
     python render_preview.py [--outdir docs/previews] [config ...]
 
-If no config paths are given, all YAML files under panel-configs/ are rendered.
+If no config paths are given, all YAML files under configs/ are rendered.
 Output PNGs are written to --outdir (default: docs/previews/).
 
 The script stubs out every hardware dependency (RPi.GPIO, spidev, ILI9486)
@@ -343,7 +343,7 @@ def main() -> None:
     )
     parser.add_argument(
         "configs", nargs="*",
-        help="YAML config files to render (default: all files in panel-configs/)"
+        help="YAML config files to render (default: all files in configs/)"
     )
     args = parser.parse_args()
 
