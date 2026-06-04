@@ -16,12 +16,11 @@ rows:
       - type: clock
         justify: left
         timezone: US/Mountain
-        label: " UTC"
         time_format: 12h
         colors:
           time:   darkred
-        time_font: huge
-        label_font: small
+        time_font: giant
+        label_font: huge
 
   - name: divider-1
     height: 5
