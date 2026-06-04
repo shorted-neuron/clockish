@@ -27,7 +27,7 @@
 fonts:
   nixiegiant:
     file: NixieOne-Regular.ttf
-    size: 148
+    size: 220
   nixiehuge:
     file: NixieOne-Regular.ttf
     size: 64
@@ -45,18 +45,21 @@ display:
 
 rows:
   - name: clock
-    height: 175
+    height: 220
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
-        time_format: 24h
+        time_format: 12h
+        label: "am/pm"
         colors:
           # time: gold            # classic warm nixie yellow-orange
           # time: darkorange      # deeper amber
           # time: orange          # bright amber
-          time: gold
+          time: darkorange
+          label:  rust
         time_font: nixiegiant
+        label_font: nixiehuge
 
   - name: divider-1
     height: 4
@@ -99,42 +102,14 @@ rows:
       - type: fact
         width: 18%
         source: wifi_status
-        color: burntsienna
-        font: small
-      - type: fact
-        width: 20%
-        source: wifi_ssid
-        label: "SSID "
         color: rust
         font: small
       - type: fact
-        width: 35%
-        source: wifi_signal
-        label: " signal: "
-        color: rust
-        font: small
-      - type: fact
-        width: 18%
-        source: wifi_quality
-        label: "qual:"
-        color: rust
-        font: small
-
-  - name: host-ip
-    height: 55
-    panels:
-      - type: fact
-        width: 24%
-        justify: left
         source: hostname
-        color: burntsienna
+        color: rust
         font: small
       - type: fact
-        width: 33%
-        justify: center
         source: ip
-        color: burntsienna
-        font: small
-      - type: debug
         color: rust
+        font: small
 
