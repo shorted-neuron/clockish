@@ -14,6 +14,7 @@ Unique in the universe?  Doubtful.  But I had fun making it.
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Config previews](#config-previews)
+- [Real life use](#real-life-use)
 - [Project Structure](#project-structure)
 - [On the Shoulders of Giants](#on-the-shoulders-of-giants)
 - [AI / Artificial Intelligence Disclaimer](#ai--artificial-intelligence-disclaimer)
@@ -207,6 +208,17 @@ Layout focused on the debug timing panel.
 Same as above in landscape orientation.
 
 ![debug-landscape](docs/previews/debug-landscape.png)
+
+
+---
+
+## real life use
+
+Here's a photo of two raspberry pi's running clockish in portrait and landscape orientations.
+The left side one is running the default `clockish.yaml` config, and right side is running `landscape-demo.yaml`.
+
+![clockish_in_real_life.jpeg](docs/clockish_in_real_life.jpeg)
+
 
 ---
 
