@@ -4,7 +4,7 @@
 Usage:
     python render_preview.py [--outdir docs/previews] [config ...]
 
-If no config paths are given, all YAML files under panel-configs/ are rendered.
+If no config paths are given, all YAML files under configs/ are rendered.
 Output PNGs are written to --outdir (default: docs/previews/).
 
 The script stubs out every hardware dependency (RPi.GPIO, spidev, ILI9486)
@@ -18,9 +18,11 @@ import sys
 import types
 
 # ---------------------------------------------------------------------------
-# Locate repo root and add src/ to path (mirrors clockish.py)
+# Locate repo root and add src/ to path.
+# This file lives at src/clockish/render_preview.py, so the repo root is
+# two directories up.
 # ---------------------------------------------------------------------------
-_REPO = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 _SRC  = os.path.join(_REPO, "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -52,7 +54,11 @@ _spidev_mod = types.ModuleType("spidev")
 _spidev_mod.SpiDev = _SpiDevStub
 sys.modules["spidev"] = _spidev_mod
 
-# --- ILI9486 stub ---
+# --- pyili9486 stub (replaces ILI9486 — display.py imports from pyili9486) ---
+class _SKUStub:
+    MPI3501 = 'MPI3501'
+    MHS3528 = 'MHS3528'
+
 class _OriginStub:
     UPPER_LEFT  = 0
     UPPER_RIGHT = 1
@@ -62,16 +68,29 @@ class _OriginStub:
 class _ILI9486Stub:
     """No-op LCD that just absorbs display() calls."""
     def __init__(self, *a, **kw): pass
-    def begin(self):       return self
+    def begin(self):        return self
     def display(self, img): pass
     def idle(self, *a, **kw): pass
+    @property
     def is_landscape(self): return False
-    def dimensions(self):  return (320, 480)
+    @property
+    def dimensions(self):   return (320, 480)
 
-_ili_mod = types.ModuleType("ILI9486")
-_ili_mod.ILI9486 = _ILI9486Stub
-_ili_mod.Origin  = _OriginStub
-sys.modules["ILI9486"] = _ili_mod
+class _RPiLGPIOFacadeStub:
+    def __init__(self, *a, **kw): pass
+
+_pyili_mod = types.ModuleType("pyili9486")
+_pyili_mod.ILI9486 = _ILI9486Stub
+_pyili_mod.Origin  = _OriginStub
+_pyili_mod.SKU     = _SKUStub
+
+_pyili_gpio_mod         = types.ModuleType("pyili9486.gpio")
+_pyili_gpio_facade_mod  = types.ModuleType("pyili9486.gpio.rpilgpio_facade")
+_pyili_gpio_facade_mod.RPiLGPIOFacade = _RPiLGPIOFacadeStub
+
+sys.modules["pyili9486"]                        = _pyili_mod
+sys.modules["pyili9486.gpio"]                   = _pyili_gpio_mod
+sys.modules["pyili9486.gpio.rpilgpio_facade"]   = _pyili_gpio_facade_mod
 
 # --- yaml stub (only if not installed) ---
 try:
@@ -91,10 +110,18 @@ _real_open = _builtins.open
 _PROC_STUBS: dict[str, str] = {
     "/proc/uptime":    "123456.78 234567.89\n",
     "/proc/stat":      "cpu  100 0 50 800 20 5 5 0 0 0\n",
-    "/proc/meminfo":   "MemTotal:        4096000 kB\nMemAvailable:    2048000 kB\n",
-    "/proc/net/wireless": "",
+    # total=960 MB (983040 kB), available=648 MB (663552 kB) → used=312 MB
+    "/proc/meminfo":   "MemTotal:         983040 kB\nMemAvailable:     663552 kB\n",
+    # /proc/net/wireless: two header lines then one data line per interface.
+    # Columns (after split): 0=iface 1=status 2=quality 3=signal(dBm) 4=noise
+    # quality "57." → 57/70  signal "-57." → -57 dBm (3 of 4 bars in the graphic)
+    "/proc/net/wireless": (
+        "Inter-| sta-|   Quality        |   Discarded packets               | Missed | WEP\n"
+        " face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | mode\n"
+        "  wlan0: 0000   57.  -57.  -256        0      0      0      0      0        0\n"
+    ),
     "/sys/class/thermal/thermal_zone0/temp": "42000\n",
-    "/sys/class/net/wlan0/operstate": "down\n",
+    "/sys/class/net/wlan0/operstate": "up\n",
     "/run/systemd/timesync/synchronized": "",
 }
 
@@ -134,7 +161,7 @@ def _patched_check_output(cmd, *args, **kwargs):
     if "timedatectl" in cmd_str:
         return b"NTP=yes\nNTPSynchronized=yes\n"
     if "iwgetid" in cmd_str:
-        return b"StubSSID\n"
+        return b"Preview\n"
     return _real_check_output(cmd, *args, **kwargs)
 
 _subprocess.check_output = _patched_check_output
@@ -190,17 +217,24 @@ def _patched_truetype(font=None, size=10, *args, **kwargs):
 _ImageFont.truetype = _patched_truetype
 
 # ---------------------------------------------------------------------------
-# Now import clockish as a module.
-# We must set __name__ to something other than '__main__' so the `if __name__`
-# block at the bottom does NOT execute.
+# Now import clockish.display as a regular module.
+# All hardware stubs are already in sys.modules so no physical hardware is
+# touched.  A standard import never executes the `if __name__ == '__main__'`
+# block, so the main loop does not run.
 # ---------------------------------------------------------------------------
-import importlib.util as _ilu
+import clockish.display as _ppd
 
-_ppdpy = os.path.join(_REPO, "clockish.py")
-_spec  = _ilu.spec_from_file_location("pi_panel_display", _ppdpy)
-_ppd   = _ilu.module_from_spec(_spec)
-# Do NOT add to sys.modules under __main__; let it load as a library.
-_spec.loader.exec_module(_ppd)  # type: ignore[union-attr]
+# ---------------------------------------------------------------------------
+# Preview data patches — replace live system calls with canned values so
+# every preview looks realistic regardless of the host machine.
+# ---------------------------------------------------------------------------
+_ppd.get_ip_address      = lambda: "192.168.1.42"
+_ppd.get_hostname        = lambda: "raspberrypi"
+# get_cpu_percent() diffs two /proc/stat reads; the static stub makes delta=0
+# so it always returns 0.0 — override it directly instead.
+_ppd.get_cpu_percent     = lambda: 6.8
+# disp= value in the debug panel comes from this module-level variable.
+_ppd._last_display_ms    = 198.0
 
 # Restore parse_args (cleanup)
 _argparse.ArgumentParser.parse_args = _real_parse_args
@@ -290,8 +324,10 @@ def render_config(config_path: str, out_path: str) -> None:
 
     layout = _ppd._measure_rows(cfg_copy.get("rows", []))
 
-    timings: dict = {}
-    t0 = 0.0   # not timing here; debug panel will show 0 ms — acceptable
+    timings: dict = {'ntp': 0.001, 'tz': 0.0, 'draw': 0.076}
+    # Back-date t0 so the debug panel's prep= value shows a realistic 91 ms.
+    import time as _time
+    t0 = _time.perf_counter() - 0.091
 
     for row_idx, (r, ry, rh) in enumerate(layout):
         panels = r.get("panels", [])
@@ -329,13 +365,13 @@ def main() -> None:
     )
     parser.add_argument(
         "configs", nargs="*",
-        help="YAML config files to render (default: all files in panel-configs/)"
+        help="YAML config files to render (default: all files in configs/)"
     )
     args = parser.parse_args()
 
     configs = args.configs
     if not configs:
-        panel_cfg_dir = os.path.join(_REPO, "panel-configs")
+        panel_cfg_dir = os.path.join(_REPO, "configs")
         configs = sorted(
             os.path.join(panel_cfg_dir, f)
             for f in os.listdir(panel_cfg_dir)

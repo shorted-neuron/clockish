@@ -49,7 +49,8 @@ def _find_default_config() -> str:
         # 1. Next to this file (old fork layout — kept for dev convenience)
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'clockish.yaml'),
         # 2. configs/ directory relative to project root (clockish src-layout)
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'configs', 'clockish.yaml'),
+        # __file__ is src/clockish/display.py → go up 2 levels to reach the project root.
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'configs', 'clockish.yaml'),
         # 3. User config directory
         os.path.expanduser('~/.config/clockish/clockish.yaml'),
         # 4. Home directory (simple deployment)
