@@ -28,8 +28,8 @@
 # ---------------------------------------------------------------------------
 fonts:
   seg7giant:
-    file: DSEG7Classic-Regular.ttf
-    size: 148
+    file: DSEG7Classic-Italic.ttf
+    size: 128
   seg7huge:
     file: DSEG7Classic-Regular.ttf
     size: 64
@@ -54,7 +54,10 @@ rows:
         timezone: US/Mountain
         time_format: 24h          # 24h looks most authentic on a 7-seg display
         colors:
-          time: orange            # classic amber LED colour
+          # time: orange
+          # time: darkorange        # classic amber LED colour
+          # time: burntsienna       # pretty cool too
+          time: ff0000  # aka RED
         time_font: seg7giant
 
   - name: divider-1
@@ -68,12 +71,19 @@ rows:
     height: 48
     panels:
       - type: date
-        justify: center
+        justify: left
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
           date: darkorange
-        date_font: seg7med
+        # date_font: seg7med
+      - type: clock
+        justify: right
+        timezone: US/Mountain
+        time_format: 24hs
+        colors:
+          time: burntsienna
+        time_font: seg7med
 
   - name: divider-2
     height: 4
