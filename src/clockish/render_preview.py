@@ -18,9 +18,11 @@ import sys
 import types
 
 # ---------------------------------------------------------------------------
-# Locate repo root and add src/ to path (mirrors clockish.py)
+# Locate repo root and add src/ to path.
+# This file lives at src/clockish/render_preview.py, so the repo root is
+# two directories up.
 # ---------------------------------------------------------------------------
-_REPO = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 _SRC  = os.path.join(_REPO, "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -52,7 +54,11 @@ _spidev_mod = types.ModuleType("spidev")
 _spidev_mod.SpiDev = _SpiDevStub
 sys.modules["spidev"] = _spidev_mod
 
-# --- ILI9486 stub ---
+# --- pyili9486 stub (replaces ILI9486 — display.py imports from pyili9486) ---
+class _SKUStub:
+    MPI3501 = 'MPI3501'
+    MHS3528 = 'MHS3528'
+
 class _OriginStub:
     UPPER_LEFT  = 0
     UPPER_RIGHT = 1
@@ -62,16 +68,29 @@ class _OriginStub:
 class _ILI9486Stub:
     """No-op LCD that just absorbs display() calls."""
     def __init__(self, *a, **kw): pass
-    def begin(self):       return self
+    def begin(self):        return self
     def display(self, img): pass
     def idle(self, *a, **kw): pass
+    @property
     def is_landscape(self): return False
-    def dimensions(self):  return (320, 480)
+    @property
+    def dimensions(self):   return (320, 480)
 
-_ili_mod = types.ModuleType("ILI9486")
-_ili_mod.ILI9486 = _ILI9486Stub
-_ili_mod.Origin  = _OriginStub
-sys.modules["ILI9486"] = _ili_mod
+class _RPiLGPIOFacadeStub:
+    def __init__(self, *a, **kw): pass
+
+_pyili_mod = types.ModuleType("pyili9486")
+_pyili_mod.ILI9486 = _ILI9486Stub
+_pyili_mod.Origin  = _OriginStub
+_pyili_mod.SKU     = _SKUStub
+
+_pyili_gpio_mod         = types.ModuleType("pyili9486.gpio")
+_pyili_gpio_facade_mod  = types.ModuleType("pyili9486.gpio.rpilgpio_facade")
+_pyili_gpio_facade_mod.RPiLGPIOFacade = _RPiLGPIOFacadeStub
+
+sys.modules["pyili9486"]                        = _pyili_mod
+sys.modules["pyili9486.gpio"]                   = _pyili_gpio_mod
+sys.modules["pyili9486.gpio.rpilgpio_facade"]   = _pyili_gpio_facade_mod
 
 # --- yaml stub (only if not installed) ---
 try:
@@ -190,17 +209,12 @@ def _patched_truetype(font=None, size=10, *args, **kwargs):
 _ImageFont.truetype = _patched_truetype
 
 # ---------------------------------------------------------------------------
-# Now import clockish as a module.
-# We must set __name__ to something other than '__main__' so the `if __name__`
-# block at the bottom does NOT execute.
+# Now import clockish.display as a regular module.
+# All hardware stubs are already in sys.modules so no physical hardware is
+# touched.  A standard import never executes the `if __name__ == '__main__'`
+# block, so the main loop does not run.
 # ---------------------------------------------------------------------------
-import importlib.util as _ilu
-
-_ppdpy = os.path.join(_REPO, "clockish.py")
-_spec  = _ilu.spec_from_file_location("pi_panel_display", _ppdpy)
-_ppd   = _ilu.module_from_spec(_spec)
-# Do NOT add to sys.modules under __main__; let it load as a library.
-_spec.loader.exec_module(_ppd)  # type: ignore[union-attr]
+import clockish.display as _ppd
 
 # Restore parse_args (cleanup)
 _argparse.ArgumentParser.parse_args = _real_parse_args
@@ -335,7 +349,7 @@ def main() -> None:
 
     configs = args.configs
     if not configs:
-        panel_cfg_dir = os.path.join(_REPO, "panel-configs")
+        panel_cfg_dir = os.path.join(_REPO, "configs")
         configs = sorted(
             os.path.join(panel_cfg_dir, f)
             for f in os.listdir(panel_cfg_dir)
