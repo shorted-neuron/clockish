@@ -12,7 +12,9 @@
 #   3. Verifies that SPI is enabled (offers to enable it via raspi-config)
 #   4. Creates a Python virtual environment (.venv)
 #   5. Installs all required pip packages into .venv
-#   6. Prints a final summary / next-steps message
+#   6. Copies the default config to ~/.config/clockish/clockish-config.yaml
+#   7. Ensures run-clockish.sh and edit-clockish-config.sh are executable
+#   8. Prints a final summary / next-steps message
 #
 # Run as a regular user with sudo access (NOT as root).
 # =============================================================================
@@ -274,7 +276,29 @@ PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PY" -c "from pyili9486.colors import BY_NAME
     || { error "  import pyili9486.colors  [FAILED]"; IMPORT_ERRORS=$((IMPORT_ERRORS + 1)); }
 
 # ---------------------------------------------------------------------------
-# 6. Font check
+# 6. User config file
+# ---------------------------------------------------------------------------
+section "User configuration"
+
+USER_CFG_DIR="$HOME/.config/clockish"
+USER_CFG="$USER_CFG_DIR/clockish-config.yaml"
+DEFAULT_CFG="$SCRIPT_DIR/configs/clockish.yaml"
+
+if [[ -f "$USER_CFG" ]]; then
+    ok "User config already exists: $USER_CFG"
+    info "  (not overwritten — edit it with: ./edit-clockish-config.sh)"else
+    if [[ -f "$DEFAULT_CFG" ]]; then
+        mkdir -p "$USER_CFG_DIR"
+        cp "$DEFAULT_CFG" "$USER_CFG"
+        ok "Default config copied to $USER_CFG"
+        info "  Edit it to customise your layout: ./edit-clockish-config.sh"
+    else
+        warn "Default config not found at $DEFAULT_CFG — skipping user config copy."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Font check
 # ---------------------------------------------------------------------------
 section "Font check"
 
@@ -313,25 +337,20 @@ except Exception as e:
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Wrapper / run script
+# 8. Helper scripts
 # ---------------------------------------------------------------------------
-section "Creating run script"
+section "Helper scripts"
 
-RUN_SCRIPT="$SCRIPT_DIR/run-clockish.sh"
-cat > "$RUN_SCRIPT" << 'RUNEOF'
-#!/usr/bin/env bash
-# Convenience wrapper: activates .venv and runs clockish
-# Usage: ./run-clockish.sh [--debug] [--debug-layout]
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/.venv/bin/activate"
-export PYTHONPATH="$SCRIPT_DIR/src"
-exec python3 "$SCRIPT_DIR/clockish" "$@"
-RUNEOF
-chmod +x "$RUN_SCRIPT"
-ok "Created $RUN_SCRIPT"
+# SCRIPT_DIR is the project root (install.sh now lives at the repo root).
+# Both helper scripts are committed to the repo — just ensure they're executable.
+chmod +x "$SCRIPT_DIR/run-clockish.sh"
+ok "run-clockish.sh is executable"
+
+chmod +x "$SCRIPT_DIR/edit-clockish-config.sh"
+ok "edit-clockish-config.sh is executable"
 
 # ---------------------------------------------------------------------------
-# 8. Summary
+# 9. Summary
 # ---------------------------------------------------------------------------
 section "Installation Summary"
 
@@ -342,13 +361,22 @@ else
 fi
 
 echo ""
-echo -e "${BOLD}To run the panel display:${RESET}"
+echo -e "${BOLD}Your config file:${RESET}"
+echo "    $HOME/.config/clockish/clockish-config.yaml"
+echo ""
+echo -e "${BOLD}To customise the display layout:${RESET}"
+echo "    ./edit-clockish-config.sh"
+echo "    # or open any file from configs/ and copy it to your config location"
+echo ""
+echo -e "${BOLD}To run the display once (for testing):${RESET}"
 echo "    ./run-clockish.sh"
 echo "    ./run-clockish.sh --debug"
+echo "    ./run-clockish.sh configs/big-red.yaml   # try a specific layout"
 echo ""
-echo -e "${BOLD}Or manually:${RESET}"
-echo "    source .venv/bin/activate"
-echo "    PYTHONPATH=src python3 clockish.py"
+echo -e "${BOLD}To install as a systemd service (auto-start on boot):${RESET}"
+echo "    ./run-clockish.sh --install-service"
+echo "    # or with a specific config:"
+echo "    ./run-clockish.sh --install-service configs/big-red.yaml"
 echo ""
 
 if [[ "${NEEDS_REBOOT:-false}" == true ]]; then
@@ -358,10 +386,11 @@ if [[ "${NEEDS_REBOOT:-false}" == true ]]; then
 fi
 
 echo -e "${BOLD}Troubleshooting tips:${RESET}"
-echo "  • SPI not working?   sudo raspi-config nonint do_spi 0 && sudo reboot"
-echo "  • Permission denied on /dev/spidev*?  sudo usermod -aG spi,gpio \$USER  then reboot"
-echo "  • Font errors?       sudo apt install fonts-dejavu-core"
-echo "  • RPi.GPIO missing?  source .venv/bin/activate && pip install rpi-lgpio"
-echo "  • numpy/Pillow?      source .venv/bin/activate && pip install 'Pillow>=12' 'numpy>=2'"
+echo "  • SPI not working?      sudo raspi-config nonint do_spi 0 && sudo reboot"
+echo "  • Permission denied?    sudo usermod -aG spi,gpio \$USER  then reboot"
+echo "  • Font errors?          sudo apt install fonts-dejavu-core"
+echo "  • RPi.GPIO missing?     source .venv/bin/activate && pip install rpi-lgpio"
+echo "  • numpy/Pillow?         source .venv/bin/activate && pip install 'Pillow>=12' 'numpy>=2'"
+echo "  • Service not starting? sudo journalctl -u clockish -n 50"
 echo ""
 
