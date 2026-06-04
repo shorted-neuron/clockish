@@ -1,0 +1,145 @@
+# fourteen-segment.yaml — clockish config for a VFD-style 14-segment clock
+# ---------------------------------------------------------------------------
+# Requires the DSEG14Classic font (SIL OFL 1.1 license).
+# Install one of these ways:
+#
+#   Option A — apt package (Debian / Raspberry Pi OS / Ubuntu):
+#     sudo apt install fonts-dseg
+#
+#   Option B — vendor the font into third_party/dseg/:
+#     bash scripts/download-dseg-font.sh
+#
+# Unlike DSEG7, the 14-segment font supports the full alphabet — so the date
+# row is rendered in 14-seg style too, giving a full VFD display look.
+#
+# Font variants available once installed (set the 'file:' key below):
+#   DSEG14Classic-Regular.ttf   ← authentic look: ghost/"off" segments visible
+#   DSEG14Classic-Bold.ttf
+#   DSEG14Classic-Italic.ttf    ← nice retro slant
+#   DSEG14Classic-BoldItalic.ttf
+#   DSEG14Modern-Regular.ttf    ← cleaner look: no ghost segments
+#   DSEG14Modern-Bold.ttf
+#
+# See also: https://github.com/keshikan/DSEG
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Custom fonts — maps a config name to a TTF file + size.
+# The 'file' is searched in:
+#   /usr/share/fonts/truetype/dseg/  (apt install fonts-dseg)
+#   third_party/dseg/                (scripts/download-dseg-font.sh)
+# ---------------------------------------------------------------------------
+fonts:
+  seg14giant:
+    file: DSEG14Classic-Italic.ttf
+    size: 128
+  seg14huge:
+    file: DSEG14Classic-Regular.ttf
+    size: 64
+  seg14med:
+    file: DSEG14Classic-Regular.ttf
+    size: 32
+  seg14small:
+    file: DSEG14Classic-Regular.ttf
+    size: 18
+
+display:
+  width:    480
+  height:   320
+  rotation: 180     # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+
+rows:
+  - name: clock
+    height: 175
+    panels:
+      - type: clock
+        justify: center
+        timezone: US/Mountain
+        time_format: 24h
+        colors:
+          # time: lawngreen       # bright VFD green
+          # time: brightgreen
+          # time: aqua            # blue-green VFD tint
+          time: lawngreen
+        time_font: seg14giant
+
+  - name: divider-1
+    height: 4
+    panels:
+      - type: divider
+        height: 1
+        color: seagreen
+
+  - name: date
+    height: 48
+    panels:
+      - type: date
+        justify: left
+        timezone: US/Mountain
+        date_format: "%A, %B %-d"   # 14-seg handles letters — no need to fall back to DejaVu
+        colors:
+          date: medspringgreen
+        date_font: seg14med
+      - type: clock
+        justify: right
+        timezone: US/Mountain
+        time_format: 24hs
+        colors:
+          time: seagreen
+        time_font: seg14med
+
+  - name: divider-2
+    height: 4
+    panels:
+      - type: divider
+        height: 1
+        color: seagreen
+
+  - name: wifi-info
+    height: 34
+    panels:
+      - type: wifi_graphic
+        width: 44
+        color: seagreen
+      - type: fact
+        width: 18%
+        source: wifi_status
+        color: seagreen
+        font: small
+      - type: fact
+        width: 20%
+        source: wifi_ssid
+        label: "SSID "
+        color: forestgreen
+        font: small
+      - type: fact
+        width: 35%
+        source: wifi_signal
+        label: " signal: "
+        color: forestgreen
+        font: small
+      - type: fact
+        width: 18%
+        source: wifi_quality
+        label: "qual:"
+        color: forestgreen
+        font: small
+
+  - name: host-ip
+    height: 55
+    panels:
+      - type: fact
+        width: 24%
+        justify: left
+        source: hostname
+        color: seagreen
+        font: small
+      - type: fact
+        width: 33%
+        justify: center
+        source: ip
+        color: seagreen
+        font: small
+      - type: debug
+        color: forestgreen
+
