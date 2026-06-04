@@ -110,7 +110,8 @@ _real_open = _builtins.open
 _PROC_STUBS: dict[str, str] = {
     "/proc/uptime":    "123456.78 234567.89\n",
     "/proc/stat":      "cpu  100 0 50 800 20 5 5 0 0 0\n",
-    "/proc/meminfo":   "MemTotal:        4096000 kB\nMemAvailable:    2048000 kB\n",
+    # total=960 MB (983040 kB), available=648 MB (663552 kB) → used=312 MB
+    "/proc/meminfo":   "MemTotal:         983040 kB\nMemAvailable:     663552 kB\n",
     # /proc/net/wireless: two header lines then one data line per interface.
     # Columns (after split): 0=iface 1=status 2=quality 3=signal(dBm) 4=noise
     # quality "57." → 57/70  signal "-57." → -57 dBm (3 of 4 bars in the graphic)
@@ -223,6 +224,18 @@ _ImageFont.truetype = _patched_truetype
 # ---------------------------------------------------------------------------
 import clockish.display as _ppd
 
+# ---------------------------------------------------------------------------
+# Preview data patches — replace live system calls with canned values so
+# every preview looks realistic regardless of the host machine.
+# ---------------------------------------------------------------------------
+_ppd.get_ip_address      = lambda: "192.168.1.42"
+_ppd.get_hostname        = lambda: "raspberrypi"
+# get_cpu_percent() diffs two /proc/stat reads; the static stub makes delta=0
+# so it always returns 0.0 — override it directly instead.
+_ppd.get_cpu_percent     = lambda: 6.8
+# disp= value in the debug panel comes from this module-level variable.
+_ppd._last_display_ms    = 198.0
+
 # Restore parse_args (cleanup)
 _argparse.ArgumentParser.parse_args = _real_parse_args
 
@@ -311,8 +324,10 @@ def render_config(config_path: str, out_path: str) -> None:
 
     layout = _ppd._measure_rows(cfg_copy.get("rows", []))
 
-    timings: dict = {}
-    t0 = 0.0   # not timing here; debug panel will show 0 ms — acceptable
+    timings: dict = {'ntp': 0.001, 'tz': 0.0, 'draw': 0.076}
+    # Back-date t0 so the debug panel's prep= value shows a realistic 91 ms.
+    import time as _time
+    t0 = _time.perf_counter() - 0.091
 
     for row_idx, (r, ry, rh) in enumerate(layout):
         panels = r.get("panels", [])
