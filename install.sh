@@ -354,6 +354,9 @@ ok "run-clockish.sh is executable"
 chmod +x "$SCRIPT_DIR/edit-clockish-config.sh"
 ok "edit-clockish-config.sh is executable"
 
+chmod +x "$SCRIPT_DIR/uninstall.sh"
+ok "uninstall.sh is executable"
+
 # ---------------------------------------------------------------------------
 # 9. Summary
 # ---------------------------------------------------------------------------
