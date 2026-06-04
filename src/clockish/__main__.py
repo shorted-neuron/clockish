@@ -1,15 +1,15 @@
 """
-Entry point — allows `python -m clockish` as well as a `clockish` CLI command
-(configure the latter in pyproject.toml [project.scripts]).
+Entry point — allows `python -m clockish` as well as the `clockish` CLI command
+(the latter is configured in pyproject.toml [project.scripts]).
 """
 import sys
 
 
 def main() -> None:
-    """Main entry point."""
-    print("clockish running")
+    """Delegate to the display engine."""
+    from clockish.display import main as _display_main
+    _display_main()
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

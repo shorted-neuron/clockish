@@ -990,32 +990,10 @@ def show_rows():
 
 
 # ---------------------------------------------------------------------------
-# Entry point (callable by `clockish` CLI command)
+# Entry point — called by the `clockish` console script and by __main__.py
 # ---------------------------------------------------------------------------
 def main():
-    """Entry point — delegates to the module-level __main__ block."""
-    import runpy
-    runpy.run_module('clockish.display', run_name='__main__', alter_sys=True)
-
-
-# ---------------------------------------------------------------------------
-# Legacy / alternate display functions
-# ---------------------------------------------------------------------------
-@timed_display
-def blank():
-    draw.rectangle((0, 0, width, height), fill=0)
-    lcd.display(image)
-
-@timed_display
-def show_invert():
-    im = PIL.ImageOps.invert(image)
-    lcd.display(im)
-
-
-# ---------------------------------------------------------------------------
-# Main loop — call show_rows() once per second
-# ---------------------------------------------------------------------------
-if __name__ == '__main__':
+    """Run the display loop.  All module-level init has already happened."""
     try:
         lcd.idle()
         lcd.idle(False)   # idle(True) can cause fonts/colors to render weirdly
@@ -1036,8 +1014,28 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     finally:
-        # Do not blank the display... if program exits we want to see when it got stuck
-        # blank()
-        # lcd.display(image)
-        # GPIO.cleanup() is not needed — rpi-lgpio facade does not require it.  will it cause the LCD to blank-to-white?
+        # Do not blank the display on exit — lets you see where it stopped.
+        # GPIO.cleanup() is not needed — rpi-lgpio facade handles it.
         spi.close()
+
+
+# ---------------------------------------------------------------------------
+# utility / alternate display functions
+# ---------------------------------------------------------------------------
+@timed_display
+def blank():
+    draw.rectangle((0, 0, width, height), fill=0)
+    lcd.display(image)
+
+@timed_display
+def show_invert():
+    im = PIL.ImageOps.invert(image)
+    lcd.display(im)
+
+
+# ---------------------------------------------------------------------------
+# Main loop — call show_rows() once per second
+# ---------------------------------------------------------------------------
+if __name__ == '__main__':
+    main()
+
