@@ -26,10 +26,30 @@ Wrapper-specific options (handled here, not passed to clockish):
       Defaults to ~/.config/clockish/clockish-config.yaml if no config given.
       clockish will then start automatically on every boot.
 
+  --remove-service
+      Stop the clockish service, disable it, and delete the unit file.
+
 All other options and arguments are forwarded to clockish:
 
 USAGE
     "$VENV_BIN/clockish" --help 2>&1 || true
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# --remove-service  — stop, disable, and delete the unit file
+# ---------------------------------------------------------------------------
+if [[ "${1:-}" == "--remove-service" ]]; then
+    if [[ ! -f "$SERVICE_FILE" ]]; then
+        echo "No service file found at $SERVICE_FILE — nothing to remove."
+        exit 0
+    fi
+    echo "Stopping and disabling $SERVICE_NAME ..."
+    sudo systemctl stop    "$SERVICE_NAME" 2>/dev/null || true
+    sudo systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    sudo rm -f "$SERVICE_FILE"
+    sudo systemctl daemon-reload
+    echo "Service removed."
     exit 0
 fi
 
