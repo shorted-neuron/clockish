@@ -27,7 +27,7 @@
 fonts:
   nixiegiant:
     file: NixieOne-Regular.ttf
-    size: 220
+    size: 225
   nixiehuge:
     file: NixieOne-Regular.ttf
     size: 64
@@ -45,7 +45,7 @@ display:
 
 rows:
   - name: clock
-    height: 220
+    height: 200
     panels:
       - type: clock
         justify: center
@@ -62,11 +62,11 @@ rows:
         label_font: nixiehuge
 
   - name: divider-1
-    height: 4
+    height: 19
     panels:
       - type: divider
         height: 1
-        color: burntsienna
+        color: rust
 
   - name: date
     height: 48
@@ -87,11 +87,11 @@ rows:
         time_font: nixiemed
 
   - name: divider-2
-    height: 4
+    height: 19
     panels:
       - type: divider
         height: 1
-        color: burntsienna
+        color: rust
 
   - name: wifi-info
     height: 34
