@@ -14,6 +14,26 @@ SERVICE_NAME="clockish"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 # ---------------------------------------------------------------------------
+# -h / --help  — show wrapper usage then pass through to clockish -h
+# ---------------------------------------------------------------------------
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'USAGE'
+run-clockish.sh — wrapper around the clockish display engine
+
+Wrapper-specific options (handled here, not passed to clockish):
+  --install-service [config.yaml]
+      Write (or update) /etc/systemd/system/clockish.service and start it.
+      Defaults to ~/.config/clockish/clockish-config.yaml if no config given.
+      clockish will then start automatically on every boot.
+
+All other options and arguments are forwarded to clockish:
+
+USAGE
+    "$VENV_BIN/clockish" --help 2>&1 || true
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # --install-service  — write the unit file and (re)start the service
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "--install-service" ]]; then
