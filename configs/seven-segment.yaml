@@ -28,8 +28,8 @@
 # ---------------------------------------------------------------------------
 fonts:
   seg7giant:
-    file: DSEG7Classic-BoldItalic.ttf
-    size: 128
+    file: DSEG7Classic-Italic.ttf
+    size: 135
   seg7huge:
     file: DSEG7Classic-Italic.ttf
     size: 64
@@ -47,17 +47,17 @@ display:
 
 rows:
   - name: clock
-    height: 175
+    height: 150
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
-        time_format: 24h          # 24h looks most authentic on a 7-seg display
+        time_format: 12h          # 24h looks most authentic on a 7-seg display
         colors:
           # time: orange
           # time: darkorange        # classic amber LED colour
-          # time: burntsienna       # pretty cool too
-          time: ff0000  # aka RED
+          time: burntsienna       # pretty cool too
+          # time: ff0000  # aka RED
         time_font: seg7giant
 
   - name: divider-1
