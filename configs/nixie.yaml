@@ -72,19 +72,25 @@ rows:
     height: 48
     panels:
       - type: date
+        width: 70%
         justify: left
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
           date: darkorange
         date_font: nixiemed
-      - type: clock
-        justify: right
+      - type: date
+        justify: center
         timezone: US/Mountain
-        time_format: 24hs
+        date_format: ":%S"
         colors:
           time: burntsienna
-        time_font: nixiemed
+        date_font: nixiemed
+      - type: fact
+        source: cpu
+        justify: right
+        color: darkorange
+        font: nixiemed
 
   - name: divider-2
     height: 19
