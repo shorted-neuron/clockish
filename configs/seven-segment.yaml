@@ -52,7 +52,8 @@ rows:
       - type: clock
         justify: center
         timezone: US/Mountain
-        time_format: 12h          # 24h looks most authentic on a 7-seg display
+        time_format: "%H:%M"
+        # time_format: 24h        # 24h looks most authentic on a 7-seg display
         colors:
           # time: orange
           # time: darkorange        # classic amber LED colour
