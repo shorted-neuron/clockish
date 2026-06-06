@@ -16,9 +16,10 @@
 
 set -euo pipefail
 
-DSEG_VERSION="0.46"
-DSEG_ZIP="DSEG-font-${DSEG_VERSION}.zip"
-DSEG_URL="https://github.com/keshikan/DSEG/releases/download/v${DSEG_VERSION}/${DSEG_ZIP}"
+DSEG_DIRVERSION="v0.46"
+DSEG_VERSION="v046"
+DSEG_ZIP="fonts-DSEG_${DSEG_VERSION}.zip"
+DSEG_URL="https://github.com/keshikan/DSEG/releases/download/${DSEG_DIRVERSION}/${DSEG_ZIP}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
