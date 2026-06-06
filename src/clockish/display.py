@@ -690,7 +690,11 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
     label_color = colors_cfg.get('label', _C_WHITE)
     time_f      = _get_font(p.get('time_font',  'normal'))
     label_f     = _get_font(p.get('label_font', 'normal'))
-    fmt         = _TIME_FORMATS.get(p.get('time_format', '24h'), '%H:%M')
+    _time_format = p.get('time_format')
+    if _time_format is None:
+        fmt = '%H:%M'
+    else:
+        fmt = _TIME_FORMATS.get(_time_format, _time_format)
     time_str    = now.strftime(fmt).upper()
     label_str   = p.get('label', '')
 
