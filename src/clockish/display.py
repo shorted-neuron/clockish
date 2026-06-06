@@ -146,17 +146,32 @@ print(f'Initialized display: {width}x{height} rotation={rotation}, landscape={lc
 # ---------------------------------------------------------------------------
 # Fonts — loaded once on first use, keyed by config name
 # ---------------------------------------------------------------------------
+
+# Project root: src/clockish/display.py → up two levels
+_PROJECT_ROOT = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
+)
+
 def _find_font(name: str) -> str:
     """Locate a TrueType font file by searching common system directories.
 
-    Falls back to the bare filename (Pillow will try its own search paths).
+    Search order:
+      1. Standard DejaVu location
+      2. /usr/share/fonts/truetype/dseg  — installed by: sudo apt install fonts-dseg
+      3. Other system font directories
+      4. Alongside this script
+      5. third_party/dseg/               — vendored DSEG fonts (see scripts/download-dseg-font.sh)
+
+    Falls back to the bare filename (Pillow will raise a clear error if not found).
     """
     search_dirs = [
         '/usr/share/fonts/truetype/dejavu',
+        '/usr/share/fonts/truetype/dseg',                              # apt: fonts-dseg
         '/usr/share/fonts/truetype',
         '/usr/share/fonts',
         '/usr/local/share/fonts',
-        os.path.dirname(os.path.abspath(__file__)),   # alongside this script
+        os.path.dirname(os.path.abspath(__file__)),                    # alongside this script
+        os.path.join(_PROJECT_ROOT, 'third_party', 'dseg'),           # vendored DSEG fonts
     ]
     for d in search_dirs:
         candidate = os.path.join(d, name)
@@ -176,7 +191,20 @@ def _get_font(name: str) -> ImageFont.FreeTypeFont:
         _FONTS['normal'] = ImageFont.truetype(_FONT_PATH, 28)
         _FONTS['small']  = ImageFont.truetype(_FONT_PATH, 20)
         _FONTS['tiny']   = ImageFont.truetype(_FONT_PATH, 14)
-    return _FONTS.get(name, _FONTS['normal'])
+    if name not in _FONTS:
+        # Try to load a custom font defined in the config's 'fonts:' section.
+        # Each entry looks like:
+        #   fonts:
+        #     myfont:
+        #       file: SomeName-Regular.ttf
+        #       size: 120
+        custom = _config.get('fonts', {}).get(name)
+        if custom:
+            font_path = _find_font(custom.get('file', 'DejaVuSans.ttf'))
+            _FONTS[name] = ImageFont.truetype(font_path, int(custom.get('size', 28)))
+        else:
+            return _FONTS.get('normal', ImageFont.load_default())
+    return _FONTS[name]
 
 
 def dump_font_metrics():
@@ -651,7 +679,11 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
     label_color = colors_cfg.get('label', _C_WHITE)
     time_f      = _get_font(p.get('time_font',  'normal'))
     label_f     = _get_font(p.get('label_font', 'normal'))
-    fmt         = _TIME_FORMATS.get(p.get('time_format', '24h'), '%H:%M')
+    _time_format = p.get('time_format')
+    if _time_format is None:
+        fmt = '%H:%M'
+    else:
+        fmt = _TIME_FORMATS.get(_time_format, _time_format)
     time_str    = now.strftime(fmt).upper()
     label_str   = p.get('label', '')
 

@@ -84,6 +84,8 @@ APT_PACKAGES=(
     zlib1g-dev            # PNG / zlib support
     # Font files — DejaVuSans.ttf is the default font used by clockish
     fonts-dejavu-core
+    # 7-segment display font — used by configs/seven-segment.yaml
+    fonts-dseg
     # swig is needed to build rpi-lgpio later
     swig
     # python3-swiglpk # unknown if needed
@@ -342,6 +344,28 @@ except Exception as e:
 " && ok "Pillow can load DejaVuSans.ttf" || { error "Pillow font load failed"; IMPORT_ERRORS=$((IMPORT_ERRORS + 1)); }
 fi
 
+# Check for DSEG 7-segment font (used by configs/seven-segment.yaml)
+DSEG_SEARCH_DIRS=(
+    /usr/share/fonts/truetype/dseg
+    /usr/share/fonts/truetype
+    /usr/share/fonts
+    "$SCRIPT_DIR/third_party/dseg"
+)
+DSEG_FOUND=false
+for d in "${DSEG_SEARCH_DIRS[@]}"; do
+    if [[ -f "$d/DSEG7Classic-Regular.ttf" ]]; then
+        ok "DSEG7Classic-Regular.ttf found at $d/DSEG7Classic-Regular.ttf"
+        DSEG_FOUND=true
+        break
+    fi
+done
+
+if [[ "$DSEG_FOUND" == false ]]; then
+    warn "DSEG7Classic-Regular.ttf not found — seven-segment.yaml and fourteen-segment.yaml will not work."
+    info "It should have been installed above via fonts-dseg."
+    info "If it's missing, try:  sudo apt install fonts-dseg"
+fi
+
 # ---------------------------------------------------------------------------
 # 8. Helper scripts
 # ---------------------------------------------------------------------------
@@ -397,7 +421,8 @@ fi
 echo -e "${BOLD}Troubleshooting tips:${RESET}"
 echo "  • SPI not working?      sudo raspi-config nonint do_spi 0 && sudo reboot"
 echo "  • Permission denied?    sudo usermod -aG spi,gpio \$USER  then reboot"
-echo "  • Font errors?          sudo apt install fonts-dejavu-core"
+echo "  • Font errors?          sudo apt install fonts-dejavu-core
+  • 7-seg font missing?   sudo apt install fonts-dseg"
 echo "  • RPi.GPIO missing?     source .venv/bin/activate && pip install rpi-lgpio"
 echo "  • numpy/Pillow?         source .venv/bin/activate && pip install 'Pillow>=12' 'numpy>=2'"
 echo "  • Service not starting? sudo journalctl -u clockish -n 50"
