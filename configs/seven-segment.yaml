@@ -57,8 +57,8 @@ rows:
         colors:
           # time: orange
           # time: darkorange        # classic amber LED colour
-          time: burntsienna       # pretty cool too
-          # time: ff0000  # aka RED
+          # time: burntsienna       # pretty cool too
+          time: ff0000  # aka RED
         time_font: seg7giant
 
   - name: divider-1
