@@ -99,10 +99,10 @@ rows:
     height: 34
     panels:
       - type: wifi_graphic
-        width: 44
+        width: 50
         color: seagreen
       - type: fact
-        width: 18%
+        width: 20%
         source: wifi_status
         color: seagreen
         font: seg14small
@@ -114,27 +114,27 @@ rows:
       - type: fact
         width: 35%
         source: wifi_signal
-        label: " s: "
+        # label: "sig: "
         color: forestgreen
         font: seg14small
       - type: fact
         width: 18%
         source: wifi_quality
-        label: "qual:"
+        label: "q:"
         color: forestgreen
         font: seg14small
 
   - name: host-ip
-    height: 55
+    height: 39
     panels:
       - type: fact
-        width: 24%
+        width: 30%
         justify: left
         source: hostname
         color: seagreen
         font: seg14small
       - type: fact
-        width: 33%
+        width: 38%
         justify: center
         source: ip
         color: seagreen
