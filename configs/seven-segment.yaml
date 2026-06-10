@@ -69,7 +69,7 @@ rows:
         color: burntsienna
 
   - name: date
-    height: 48
+    height: 52
     panels:
       - type: date
         justify: left
@@ -100,31 +100,31 @@ rows:
         width: 44
         color: burntsienna
       - type: fact
-        width: 18%
+        width: 20%
         source: wifi_status
         color: burntsienna
         font: small
       - type: fact
         width: 20%
         source: wifi_ssid
-        label: "SSID "
+        # label: "SSID "
         color: rust
         font: small
       - type: fact
-        width: 35%
+        width: 25%
         source: wifi_signal
-        label: " signal: "
+        label: " sig: "
         color: rust
         font: small
       - type: fact
         width: 18%
         source: wifi_quality
-        label: "qual:"
+        label: "q:"
         color: rust
         font: small
 
   - name: host-ip
-    height: 55
+    height: 45
     panels:
       - type: fact
         width: 24%
@@ -133,7 +133,7 @@ rows:
         color: burntsienna
         font: small
       - type: fact
-        width: 33%
+        width: 38%
         justify: center
         source: ip
         color: burntsienna
