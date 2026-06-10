@@ -54,7 +54,7 @@ rows:
         source: ip
         # label: "default"
         color: silver
-        font: small
+        font: tiny
 
 # - name: wifi-status
 #   height: 24

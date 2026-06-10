@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-VERSION = "26.6.0"
-
 import sys
 import os
 import argparse
-
-# (sys.path manipulation removed — clockish is now a proper installed package)
-
 import time
 import subprocess
 import socket
@@ -24,6 +19,7 @@ from spidev import SpiDev
 from pyili9486 import ILI9486, Origin, SKU
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
 from clockish.colors import rgb_to_hex, BY_NAME
+from clockish import __version__
 
 # ---------------------------------------------------------------------------
 # Hardware configuration for ILI9486 display on Raspberry Pi
@@ -525,7 +521,7 @@ def _get_fact(source: str) -> str:
         'ip':           get_ip_address,
         'hostname':     get_hostname,
         'uptime':       get_uptime_str,
-        'version':      lambda: VERSION,
+        'version':      lambda: __version__,
         'config_file':  lambda: os.path.basename(_args.config) if _args.config else os.path.basename(_DEFAULT_CONFIG),
         'cpu':          lambda: f"{get_cpu_percent():.1f}%",
         'cpu_load':     lambda: f"{get_cpu_load():.2f}",

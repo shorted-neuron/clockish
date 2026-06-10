@@ -152,7 +152,7 @@ rows:
     height: 80
     panels:
       - type: debug
-        width: 70%
+        width: 65%
         color: brown
       - type: fact
         label: v
