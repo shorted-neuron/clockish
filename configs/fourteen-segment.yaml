@@ -76,7 +76,7 @@ rows:
       - type: date
         justify: left
         timezone: US/Mountain
-        date_format: "%A, %B %-d"   # 14-seg handles letters — no need to fall back to DejaVu
+        date_format: "%a, %B %-d"   # 14-seg handles letters — no need to fall back to DejaVu
         colors:
           date: medspringgreen
         date_font: seg14med
@@ -105,25 +105,24 @@ rows:
         width: 18%
         source: wifi_status
         color: seagreen
-        font: small
+        font: seg14small
       - type: fact
         width: 20%
         source: wifi_ssid
-        label: "SSID "
         color: forestgreen
-        font: small
+        font: seg14small
       - type: fact
         width: 35%
         source: wifi_signal
-        label: " signal: "
+        label: " s: "
         color: forestgreen
-        font: small
+        font: seg14small
       - type: fact
         width: 18%
         source: wifi_quality
         label: "qual:"
         color: forestgreen
-        font: small
+        font: seg14small
 
   - name: host-ip
     height: 55
@@ -133,13 +132,13 @@ rows:
         justify: left
         source: hostname
         color: seagreen
-        font: small
+        font: seg14small
       - type: fact
         width: 33%
         justify: center
         source: ip
         color: seagreen
-        font: small
+        font: seg14small
       - type: debug
         color: forestgreen
 
