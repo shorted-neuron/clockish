@@ -5,8 +5,13 @@ It supports multiple "panel" widgets that can show time, date, weather, and more
 
 Unique in the universe?  Doubtful.  But I had fun making it.
 
----
+Here's a photo of two raspberry pi's running clockish in portrait and landscape orientations.
+The left side one is running the default `clockish.yaml` config, and right side is running `landscape-demo.yaml`.
 
+![clockish_in_real_life.jpeg](docs/clockish_in_real_life.jpeg)
+
+
+---
 ## Table of Contents
 - [Overview](#overview)
 - [Requirements](#requirements)
@@ -212,15 +217,6 @@ Same as above in landscape orientation.
 
 ---
 
-## real life use
-
-Here's a photo of two raspberry pi's running clockish in portrait and landscape orientations.
-The left side one is running the default `clockish.yaml` config, and right side is running `landscape-demo.yaml`.
-
-![clockish_in_real_life.jpeg](docs/clockish_in_real_life.jpeg)
-
-
----
 
 ## Project Structure
 
@@ -267,16 +263,22 @@ especially like to thank:
 
 ## AI / Artificial Intelligence Disclaimer
 
-This software was definitely assisted by AI.  I'm an old-ass programmmer
+Building this software was definitely assisted by AI.  I'm an old-ass programmmer
 who understands every bit, and I sure am thankful i got to make a good
-living at this sort of thing while that was still possible.
+living at this sort of thing while that was still possible.  That said, I'd be a 
+fool if I did not take advantage of the speed multiplier of AI.  So don't bug me
+nit picking something that myself or AI did or didn't  catch ... contribute instead!
 
-There's mistakes in here.  You're welcome to submit PRs, but they should
-be small, focused, and deliver meaningful benefit to the project.
+---
 
-Meaningful is determined solely by the authors and authorize maintainers.
+## Contributing
 
-Contributions always welcome.  Fork this if you like, see the [LICENSE](LICENSE).
+Yeah... do it.  Contributing is fun.  Please be respectful and see the AI disclaimer and other missives.
+Or don't, no one really cares.  Fork this if you like, but see the [LICENSE](LICENSE).
+
+There are mistakes in here.  Some might matter to you, so you're welcome to submit PRs to fix or improve things.
+PRs should be small, focused, and deliver meaningful benefit to the project.  Meaningful is determined solely by the authors and authorized maintainers.
+
 
 ---
 
@@ -286,12 +288,6 @@ See [`NOTICE.md`](./NOTICE.md) for full attribution.
 Third-party code lives in [`third_party/`](./third_party/) and is kept **unmodified** from
 upstream wherever possible so that diffs against upstream are easy to produce.
 
----
-
-## Contributing
-
-Yeah... do it.  Contributing is fun.  Please be respectful and see the AI disclaimer and other missives.
-Or don't, no one really cares.
 
 ---
 

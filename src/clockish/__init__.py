@@ -6,7 +6,7 @@ Import public API here so consumers can write:
 instead of reaching into submodules.
 """
 
-__version__ = "0.1.0"
+__version__ = "26.6.1"
 
 # Example:
 # from clockish.core import SomeClass

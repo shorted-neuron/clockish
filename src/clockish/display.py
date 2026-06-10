@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-VERSION = "26.6.0"
-
 import sys
 import os
 import argparse
@@ -20,6 +18,7 @@ import yaml
 from contextlib import contextmanager
 from PIL import Image, ImageDraw, ImageFont
 import PIL.ImageOps
+from numpy.f2py import __version__
 from spidev import SpiDev
 from pyili9486 import ILI9486, Origin, SKU
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
@@ -525,7 +524,7 @@ def _get_fact(source: str) -> str:
         'ip':           get_ip_address,
         'hostname':     get_hostname,
         'uptime':       get_uptime_str,
-        'version':      lambda: VERSION,
+        'version':      lambda: __version__,
         'config_file':  lambda: os.path.basename(_args.config) if _args.config else os.path.basename(_DEFAULT_CONFIG),
         'cpu':          lambda: f"{get_cpu_percent():.1f}%",
         'cpu_load':     lambda: f"{get_cpu_load():.2f}",
