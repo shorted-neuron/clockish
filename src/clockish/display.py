@@ -18,11 +18,11 @@ import yaml
 from contextlib import contextmanager
 from PIL import Image, ImageDraw, ImageFont
 import PIL.ImageOps
-from numpy.f2py import __version__
 from spidev import SpiDev
 from pyili9486 import ILI9486, Origin, SKU
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
 from clockish.colors import rgb_to_hex, BY_NAME
+from clockish import __version__
 
 # ---------------------------------------------------------------------------
 # Hardware configuration for ILI9486 display on Raspberry Pi
