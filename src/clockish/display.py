@@ -4,9 +4,6 @@
 import sys
 import os
 import argparse
-
-# (sys.path manipulation removed — clockish is now a proper installed package)
-
 import time
 import subprocess
 import socket
