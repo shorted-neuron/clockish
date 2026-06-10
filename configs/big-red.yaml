@@ -14,13 +14,22 @@ rows:
     height: 170
     panels:
       - type: clock
-        justify: left
+        justify: center
         timezone: US/Mountain
-        time_format: 12h
+        time_format: "%-I:%M"
         colors:
           time:   darkred
         time_font: giant
         label_font: huge
+
+      # - type: clock
+      #   justify: right
+      #   width: 0%
+      #   timezone: US/Mountain
+      #   time_format: "%p"
+      #   colors:
+      #     time:   darkred
+      #   time_font: normal
 
   - name: divider-1
     height: 5
@@ -37,7 +46,7 @@ rows:
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
-          date: dimred
+          date: darkred
         date_font: med
 
   - name: divider-1
@@ -53,7 +62,7 @@ rows:
       - type: wifi_graphic
         width: 44
         # justify: center
-        color: darkred
+        color: red
       - type: fact
         # justify: center
         width: 18%
@@ -62,23 +71,23 @@ rows:
         font: small
       - type: fact
         # justify: center
-        width: 20%
+        width: 30%
         source: wifi_ssid
         label: "SSID "
         color: darkred
         font: small
       - type: fact
         # justify: center
-        width: 35%
+        width: 20%
         source: wifi_signal
-        label: " signal: "
+        label: "sig: "
         color: dimred
         font: small
       - type: fact
         # justify: center
         width: 18%
         source: wifi_quality
-        label: "qual:"
+        label: "q:"
         color: dimred
         font: small
 
@@ -89,14 +98,14 @@ rows:
         width: 24%
         justify: left
         source: hostname
-        color: darkgreen
+        color: brown
         font: small
       - type: fact
         width: 33%
         justify: center
         source: ip
-        color: darkgreen
+        color: brown
         font: small
       - type: debug
-        color: darkgrey
+        color: chocolate
 
