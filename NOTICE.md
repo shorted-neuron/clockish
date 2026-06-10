@@ -30,6 +30,15 @@ Licenses are noted for attribution; the full license text is available at the up
 | **Version** | v0.46 |
 | **Notes** | 7-segment and 14-segment TrueType fonts. Not committed to this repository. Obtained at setup time via `scripts/download-dseg-font.sh` or `sudo apt install fonts-dseg`. Used by `configs/seven-segment.yaml`. |
 
+### Nixie One
+
+| | |
+|---|---|
+| **Source** | https://github.com/google/fonts/tree/main/ofl/nixieone |
+| **Author** | Jovanny Lemonad |
+| **License** | [SIL Open Font License 1.1](https://github.com/google/fonts/blob/main/ofl/nixieone/OFL.txt) |
+| **Notes** | Nixie-tube-style display font. Not committed to this repository. Obtained via `scripts/download-nixie-font.sh`. Used by `configs/nixie.yaml`. |
+
 ---
 
 *Add additional entries for each upstream project you incorporate.*

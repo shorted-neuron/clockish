@@ -160,7 +160,10 @@ def _find_font(name: str) -> str:
       2. /usr/share/fonts/truetype/dseg  — installed by: sudo apt install fonts-dseg
       3. Other system font directories
       4. Alongside this script
-      5. third_party/dseg/               — vendored DSEG fonts (see scripts/download-dseg-font.sh)
+      5. Every direct subdirectory of third_party/ — covers vendored fonts such as
+         third_party/dseg/   (scripts/download-dseg-font.sh)
+         third_party/nixie/  (scripts/download-nixie-font.sh)
+         … and any future additions automatically.
 
     Falls back to the bare filename (Pillow will raise a clear error if not found).
     """
@@ -171,8 +174,16 @@ def _find_font(name: str) -> str:
         '/usr/share/fonts',
         '/usr/local/share/fonts',
         os.path.dirname(os.path.abspath(__file__)),                    # alongside this script
-        os.path.join(_PROJECT_ROOT, 'third_party', 'dseg'),           # vendored DSEG fonts
     ]
+    # Automatically include every direct subdirectory of third_party/ so that
+    # any future vendored font is discovered without touching this file.
+    _tp = os.path.join(_PROJECT_ROOT, 'third_party')
+    if os.path.isdir(_tp):
+        for _sub in sorted(os.listdir(_tp)):
+            _subpath = os.path.join(_tp, _sub)
+            if os.path.isdir(_subpath):
+                search_dirs.append(_subpath)
+
     for d in search_dirs:
         candidate = os.path.join(d, name)
         if os.path.isfile(candidate):

@@ -1,0 +1,121 @@
+# nixie.yaml — clockish config for a nixie-tube-style clock
+# ---------------------------------------------------------------------------
+# Requires the Nixie One font (SIL OFL 1.1 license).
+# Nixie One is a Google Font by Jovanny Lemonad — a faithful recreation of
+# the warm, glowing cathode style of vintage Nixie tube displays.
+#
+# Install:
+#   bash scripts/download-nixie-font.sh
+#
+# (No apt package exists for Nixie One; the script downloads it from the
+#  Google Fonts GitHub repository.)
+#
+# Font file installed:
+#   third_party/nixie/NixieOne-Regular.ttf
+#   (only one weight/style is available for this font)
+#
+# See also: https://fonts.google.com/specimen/Nixie+One
+#           https://github.com/google/fonts/tree/main/ofl/nixieone
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Custom fonts — maps a config name to a TTF file + size.
+# The 'file' is searched in all subdirectories of third_party/ automatically,
+# so third_party/nixie/NixieOne-Regular.ttf will be found after running the
+# download script.
+# ---------------------------------------------------------------------------
+fonts:
+  nixiegiant:
+    file: NixieOne-Regular.ttf
+    size: 225
+  nixiehuge:
+    file: NixieOne-Regular.ttf
+    size: 64
+  nixiemed:
+    file: NixieOne-Regular.ttf
+    size: 32
+  nixiesmall:
+    file: NixieOne-Regular.ttf
+    size: 18
+
+display:
+  width:    480
+  height:   320
+  rotation: 180     # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+
+rows:
+  - name: clock
+    height: 200
+    panels:
+      - type: clock
+        justify: center
+        timezone: US/Mountain
+        time_format: 12h
+        label: "am/pm"
+        colors:
+          # time: gold            # classic warm nixie yellow-orange
+          # time: darkorange      # deeper amber
+          # time: orange          # bright amber
+          time: darkorange
+          label:  rust
+        time_font: nixiegiant
+        label_font: nixiehuge
+
+  - name: divider-1
+    height: 19
+    panels:
+      - type: divider
+        height: 1
+        color: rust
+
+  - name: date
+    height: 48
+    panels:
+      - type: date
+        width: 70%
+        justify: left
+        timezone: US/Mountain
+        date_format: "%A, %B %-d"
+        colors:
+          date: darkorange
+        date_font: nixiemed
+      - type: date
+        justify: center
+        timezone: US/Mountain
+        date_format: ":%S"
+        colors:
+          time: burntsienna
+        date_font: nixiemed
+      - type: fact
+        source: cpu
+        justify: right
+        color: darkorange
+        font: nixiemed
+
+  - name: divider-2
+    height: 19
+    panels:
+      - type: divider
+        height: 1
+        color: rust
+
+  - name: wifi-info
+    height: 34
+    panels:
+      - type: wifi_graphic
+        width: 44
+        color: burntsienna
+      - type: fact
+        width: 18%
+        source: wifi_status
+        color: rust
+        font: small
+      - type: fact
+        source: hostname
+        color: rust
+        font: small
+      - type: fact
+        source: ip
+        color: rust
+        font: small
+
