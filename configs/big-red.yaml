@@ -18,18 +18,18 @@ rows:
         timezone: US/Mountain
         time_format: "%-I:%M"
         colors:
-          time:   darkred
+          time: red
         time_font: giant
         label_font: huge
 
-      # - type: clock
-      #   justify: right
-      #   width: 0%
-      #   timezone: US/Mountain
-      #   time_format: "%p"
-      #   colors:
-      #     time:   darkred
-      #   time_font: normal
+      - type: clock
+        justify: center
+        width: 10%
+        timezone: US/Mountain
+        time_format: "%p"
+        colors:
+          time:   darkred
+        time_font: normal
 
   - name: divider-1
     height: 5
