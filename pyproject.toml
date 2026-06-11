@@ -9,15 +9,15 @@ build-backend = "hatchling.build"
 # =============================================================================
 [project]
 name = "clockish"
-version = "0.1.0"
-description = "A short, one-line description of what clockish does."
+version = "26.6.2"
+description = "Clockish is a customizable _whatever_ display for Raspberry Pi with a PIL compatible display driver."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.9"
 
 # Put your own name/email here
 authors = [
-    { name = "Your Name", email = "you@example.com" },
+    { name = "shorted.neuron", email = "55761404+shorted-neuron@users.noreply.github.com" },
 ]
 
 keywords = ["raspberry-pi", "clock"]   # update as appropriate
