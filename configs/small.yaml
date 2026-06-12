@@ -22,8 +22,8 @@ display:
 
   # Adafruit 240×135 panel sits at offset (53, 40) in the ST7789
   # controller's 320×240 framebuffer — required for correct addressing.
-  offset_left:  53
-  offset_top:   40
+  offset_left:  40
+  offset_top:   53
 
 rows:
   - name: app-header

@@ -36,7 +36,6 @@ from PIL import Image
 
 from clockish.drivers.base import DisplayDriver
 
-
 # Lazy imports so the module can be *imported* on non-Pi platforms without
 # raising ImportError.  The error surfaces only when begin() is called.
 _IMPORTS_OK = False
@@ -45,9 +44,11 @@ _IMPORTS_OK = False
 def _try_import():
     global _IMPORTS_OK, SpiDev, ILI9486, Origin, SKU, RPiLGPIOFacade
     try:
-        from spidev import SpiDev as _SpiDev                                    # noqa: F401
-        from pyili9486 import ILI9486 as _ILI9486, Origin as _Origin, SKU as _SKU  # noqa: F401
-        from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade as _RPLGF    # noqa: F401
+        from pyili9486 import ILI9486 as _ILI9486  # noqa: F401
+        from pyili9486 import SKU as _SKU
+        from pyili9486 import Origin as _Origin
+        from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade as _RPLGF  # noqa: F401
+        from spidev import SpiDev as _SpiDev  # noqa: F401
         SpiDev = _SpiDev
         ILI9486 = _ILI9486
         Origin = _Origin
