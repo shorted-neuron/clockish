@@ -259,6 +259,7 @@ PIP_PACKAGES=(
     "spidev>=3.6"            # SPI bus interface
     "PyYAML>=6.0"            # clockish.yaml parsing
     "tzdata>=2024.1"         # IANA timezone database for zoneinfo (fallback when system tzdata absent)
+    "types-seaborn>=0.13.2"  # satisfies pre-existing system dep conflict (requires matplotlib, pandas-stubs)
 )
 
 # GPIO: rpi-lgpio is the recommended drop-in for RPi.GPIO on modern kernels.
