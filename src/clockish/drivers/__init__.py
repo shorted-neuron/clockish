@@ -22,6 +22,7 @@ Adding a new driver
 Available drivers
 -----------------
 * ``ili9486``  — ILI9486-based SPI TFT (MPI3501 / MHS3528, Raspberry Pi)
+* ``st7789``   — ST7789-based SPI TFT (Pimoroni library; Adafruit 240×135, 240×240, …)
 """
 
 from __future__ import annotations
@@ -29,8 +30,11 @@ from __future__ import annotations
 from clockish.drivers.base import DisplayDriver
 
 # Registry: lower-case driver name → dotted module + class name
+# To add a new driver: create src/clockish/drivers/mydriver.py, subclass
+# DisplayDriver, then add one line here.
 _DRIVER_REGISTRY: dict[str, tuple[str, str]] = {
     "ili9486": ("clockish.drivers.ili9486", "ILI9486Driver"),
+    "st7789":  ("clockish.drivers.st7789",  "ST7789Driver"),
 }
 
 
