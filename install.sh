@@ -4,7 +4,8 @@
 #
 # Usage:
 #   chmod +x install.sh
-#   ./install.sh
+#   ./install.sh           # normal (terse pip output)
+#   ./install.sh --verbose # show full pip output  (-v also works)
 #
 # What this script does:
 #   1. Verifies it is running on a Raspberry Pi / Linux
@@ -20,6 +21,21 @@
 # =============================================================================
 
 set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Verbose / quiet flag  (-v / --verbose)
+# Pass -v or --verbose to see full pip output; omit for terse install output.
+# ---------------------------------------------------------------------------
+VERBOSE=false
+PIP_Q="--quiet"
+for _arg in "$@"; do
+    case "$_arg" in
+        -v|--verbose)
+            VERBOSE=true
+            PIP_Q=""
+            ;;
+    esac
+done
 
 # ---------------------------------------------------------------------------
 # Colour helpers
@@ -232,7 +248,7 @@ VENV_PIP="$VENV_DIR/bin/pip"
 section "Python pip packages"
 
 info "Upgrading pip..."
-"$VENV_PIP" install --upgrade pip --quiet
+"$VENV_PIP" install --upgrade pip $PIP_Q
 
 # Core packages required by clockish.
 # numpy is intentionally absent here — it is either inherited from the system
@@ -257,13 +273,13 @@ fi
 info "Installing pip packages..."
 for pkg in "${PIP_PACKAGES[@]}"; do
     info "  pip install \"$pkg\""
-    "$VENV_PIP" install "$pkg" --quiet
+    "$VENV_PIP" install "$pkg" $PIP_Q
     ok "  installed: $pkg"
 done
 
 # Install the clockish package itself (creates the `clockish` entry-point binary).
 info "Installing clockish package (pip install -e .) ..."
-"$VENV_PIP" install -e "$SCRIPT_DIR" --quiet
+"$VENV_PIP" install -e "$SCRIPT_DIR" $PIP_Q
 ok "clockish package installed — entry point: $VENV_DIR/bin/clockish"
 
 # ---------------------------------------------------------------------------
