@@ -84,6 +84,7 @@ clockish-colors  = "clockish.colorchart:main"
 clockish-depth   = "clockish.colordepth:main"
 clockish-test    = "clockish.colortest:main"
 clockish-fonts   = "clockish.fontdemo:main"
+clockish-corners = "clockish.cornertest:main"
 
 # ── Where to find packages ────────────────────────────────────────────────────
 [tool.hatch.build.targets.wheel]
