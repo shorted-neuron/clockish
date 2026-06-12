@@ -263,22 +263,7 @@ done
 
 # Install the clockish package itself (creates the `clockish` entry-point binary).
 info "Installing clockish package (pip install -e .) ..."
-if [[ -n "$VENV_SYSTEM_FLAG" ]]; then
-    # The venv was created with --system-site-packages, so apt packages are visible.
-    # Generate a temporary pip constraints file that pins numpy to the exact system
-    # version.  pip will then see the requirement already satisfied and skip it
-    # rather than downloading/compiling a newer one.
-    _CONSTRAINTS=$(mktemp)
-    _SYS_NUMPY_VER=$(python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null || true)
-    if [[ -n "$_SYS_NUMPY_VER" ]]; then
-        echo "numpy==$_SYS_NUMPY_VER" > "$_CONSTRAINTS"
-        info "  Pinning numpy==$_SYS_NUMPY_VER (system version) to skip recompile"
-    fi
-    "$VENV_PIP" install -e "$SCRIPT_DIR" --constraint "$_CONSTRAINTS" --quiet
-    rm -f "$_CONSTRAINTS"
-else
-    "$VENV_PIP" install -e "$SCRIPT_DIR" --quiet
-fi
+"$VENV_PIP" install -e "$SCRIPT_DIR" --quiet
 ok "clockish package installed — entry point: $VENV_DIR/bin/clockish"
 
 # ---------------------------------------------------------------------------
