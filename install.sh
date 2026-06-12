@@ -223,7 +223,7 @@ info "Upgrading pip..."
 # Core packages required by ILI9486.py and clockish
 PIP_PACKAGES=(
     "Pillow>=12.0.0"         # image rendering
-    "numpy>=2.0.0"           # array ops in ILI9486.py
+    # "numpy>=2.0.0"         # array ops in ILI9486.py, fulfilled by system package python3-numpy
     "spidev>=3.6"            # SPI bus interface
     "PyYAML>=6.0"            # clockish.yaml parsing
     "tzdata>=2024.1"         # IANA timezone database for zoneinfo (fallback when system tzdata absent)
@@ -277,7 +277,7 @@ if [[ "$IS_RPI" == true ]]; then
     check_import "RPi.GPIO"   "RPi.GPIO (via rpi-lgpio)"
 fi
 
-# Verify the local pyili9486 package is importable (it lives in src/)
+# Verify the local pyili9486 package is importable
 PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PY" -c "from pyili9486.colors import BY_NAME" 2>/dev/null \
     && ok "  import pyili9486.colors" \
     || { error "  import pyili9486.colors  [FAILED]"; IMPORT_ERRORS=$((IMPORT_ERRORS + 1)); }

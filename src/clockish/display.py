@@ -15,26 +15,10 @@ import yaml
 from contextlib import contextmanager
 from PIL import Image, ImageDraw, ImageFont
 import PIL.ImageOps
-from spidev import SpiDev
-from pyili9486 import ILI9486, Origin, SKU
-from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
 from clockish.colors import rgb_to_hex, BY_NAME
+from clockish.drivers import load_driver
 from clockish import __version__
 
-# ---------------------------------------------------------------------------
-# Hardware configuration for ILI9486 display on Raspberry Pi
-# Adjust pin numbers to match your wiring if needed.
-# ---------------------------------------------------------------------------
-
-# SPI bus and device (typically SPI0, CE0)
-SPI_BUS = 0
-SPI_DEVICE = 0
-
-# GPIO pin numbers (BCM numbering)
-DC_PIN = 24    # Data/Command pin
-RST_PIN = 25   # Reset pin
-
-spi: SpiDev
 
 # ---------------------------------------------------------------------------
 # Debug flag — set by -d / --debug command-line argument
@@ -102,22 +86,6 @@ width    = _display_cfg.get('width',    320)
 height   = _display_cfg.get('height',   480)
 rotation = _display_cfg.get('rotation', 0)
 
-# Map user-friendly rotation degrees to pyili9486 Origin constants.
-# The ILI9486 library uses the origin corner to determine orientation.
-_ROTATION_TO_ORIGIN = {
-    0:   Origin.UPPER_LEFT,
-    90:  Origin.UPPER_RIGHT,
-    180: Origin.LOWER_RIGHT,
-    270: Origin.LOWER_LEFT,
-}
-_origin = _ROTATION_TO_ORIGIN.get(rotation, Origin.UPPER_RIGHT)
-
-# Display SKU — controls pixel format and init sequence.
-# MPI3501: standard 3.5" RPi display (RGB666, default)
-# MHS3528: alternate 3.5" RPi display (RGB565)
-# Set 'sku' in the [display] section of your config file if needed.
-_SKU_MAP = {'MPI3501': SKU.MPI3501, 'MHS3528': SKU.MHS3528}
-_sku = _SKU_MAP.get(_display_cfg.get('sku', 'MPI3501').upper(), SKU.MPI3501)
 
 image = Image.new("RGB", (width, height))
 draw  = ImageDraw.Draw(image)
@@ -129,14 +97,10 @@ bottom  = height - padding
 x       = 0
 
 # ---------------------------------------------------------------------------
-# Hardware init
+# Hardware init — driver is selected by display.driver in the config
+# (default: ili9486).  All display-section keys are forwarded to the driver.
 # ---------------------------------------------------------------------------
-# RPiLGPIOFacade handles GPIO.setmode + pin setup internally.
-_gpio = RPiLGPIOFacade(dc_pin=DC_PIN, rs_pin=RST_PIN)
-spi = SpiDev(SPI_BUS, SPI_DEVICE)
-spi.mode = 0b10
-spi.max_speed_hz = 64000000
-lcd = ILI9486(spi=spi, gpio_facade=_gpio, origin=_origin, sku=_sku).begin()
+lcd = load_driver(_display_cfg).begin()
 print(f'Initialized display: {width}x{height} rotation={rotation}, landscape={lcd.is_landscape}, dimensions={lcd.dimensions}')
 
 # ---------------------------------------------------------------------------
@@ -1055,7 +1019,7 @@ def main():
     finally:
         # Do not blank the display on exit — lets you see where it stopped.
         # GPIO.cleanup() is not needed — rpi-lgpio facade handles it.
-        spi.close()
+        lcd.close()
 
 
 # ---------------------------------------------------------------------------
