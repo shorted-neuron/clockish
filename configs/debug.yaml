@@ -1,13 +1,9 @@
 # debug.yaml — clockish config
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish
-# See clockish.yaml for full documentation.
+# Display settings are in display.yaml — use configs/display/ili9486-portrait.yaml.
 # ---------------------------------------------------------------------------
 
-display:
-  width:    320
-  height:   480
-  rotation: 90      # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
 
 rows:
   - name: utc-clock

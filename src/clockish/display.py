@@ -75,7 +75,47 @@ def _load_config(path: str | None) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
 
+
+def _find_display_profile(config_path: str | None) -> str | None:
+    """Search for a display profile YAML file (contains only a 'display:' section).
+
+    Search order:
+      1. display.yaml alongside the row config file
+      2. ~/.config/clockish/display.yaml  (installed by install.sh)
+    """
+    candidates = []
+    if config_path:
+        candidates.append(
+            os.path.join(os.path.dirname(os.path.abspath(config_path)), 'display.yaml')
+        )
+    candidates.append(os.path.expanduser('~/.config/clockish/display.yaml'))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 _config: dict = _load_config(_args.config)
+
+# If the row config has no inline 'display:' section, load it from a
+# display profile file.  This lets users switch row configs freely while
+# keeping all hardware settings in one place.
+if 'display' not in _config:
+    _profile_path = _find_display_profile(_args.config)
+    if _profile_path:
+        print(f"Loading display profile: {_profile_path}")
+        with open(_profile_path) as _pf:
+            _profile = yaml.safe_load(_pf) or {}
+        if 'display' not in _profile:
+            sys.exit(f"ERROR: display profile '{_profile_path}' has no 'display:' section")
+        _config['display'] = _profile['display']
+    else:
+        sys.exit(
+            "ERROR: no 'display:' section in config and no display profile found.\n"
+            "  Tried: display.yaml alongside config, ~/.config/clockish/display.yaml\n"
+            "  Fix:   run install.sh to set up a display profile, or copy one from\n"
+            "         configs/display/ to ~/.config/clockish/display.yaml"
+        )
 
 
 # ---------------------------------------------------------------------------

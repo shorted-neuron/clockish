@@ -1,29 +1,9 @@
 # small-info.yaml — clockish config
 # ---------------------------------------------------------------------------
 # Layout for a small 240×135 ST7789 display (e.g. Adafruit 1.14" TFT #4383).
-# Install the driver library:  pip install clockish[st7789]
-# See clockish.yaml for full row/panel documentation.
+# Display settings are in display.yaml — use configs/display/st7789-240x135.yaml.
 # ---------------------------------------------------------------------------
 
-display:
-  driver:   st7789
-  width:    240
-  height:   135
-  rotation: 0          # ST7789 landscape panels: use 0, not 90
-
-  # --- ST7789 driver settings ---
-  spi_port:     0
-  spi_cs:       0      # CE0
-  dc_pin:       25     # BCM GPIO 25  (board.D25)
-  # rst_pin:    ~      # not connected on most breakout boards
-  # backlight_pin: ~   # omit to leave backlight always on
-  spi_speed_hz: 64000000
-  invert:       true   # required by most ST7789 panels
-
-  # Adafruit 240×135 panel sits at offset (53, 40) in the ST7789
-  # controller's 320×240 framebuffer — required for correct addressing.
-  offset_left:  40
-  offset_top:   53
 
 rows:
   - name: app-header

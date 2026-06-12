@@ -11,11 +11,12 @@
 #   1. Verifies it is running on a Raspberry Pi / Linux
 #   2. Checks and installs required apt system packages
 #   3. Verifies that SPI is enabled (offers to enable it via raspi-config)
-#   4. Creates a Python virtual environment (.venv)
-#   5. Installs all required pip packages into .venv
-#   6. Copies the default config to ~/.config/clockish/clockish-config.yaml
-#   7. Ensures run-clockish.sh and edit-clockish-config.sh are executable
-#   8. Prints a final summary / next-steps message
+#   4. Prompts for which display driver(s) to install
+#   5. Creates a Python virtual environment (.venv)
+#   6. Installs all required pip packages into .venv
+#   7. Copies the default config to ~/.config/clockish/clockish.yaml
+#   8. Ensures run-clockish.sh and edit-clockish-config.sh are executable
+#   9. Prints a final summary / next-steps message
 #
 # Run as a regular user with sudo access (NOT as root).
 # =============================================================================
@@ -203,7 +204,71 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Virtual environment
+# 3. Display driver selection
+# ---------------------------------------------------------------------------
+section "Display driver selection"
+
+echo "  Which display driver(s) would you like to install?"
+echo "    1) ili9486  — ILI9486 SPI TFT  (MPI3501 / MHS3528 3.5\" RPi displays)"
+echo "    2) st7789   — ST7789 SPI TFT   (Adafruit 240×135, Pimoroni 240×240, etc)"
+echo "    3) all      — install both drivers"
+echo "    4) none     — skip (configure manually later)"
+echo ""
+read -r -p "  Enter choice [1/2/3/4]: " _DRIVER_CHOICE
+
+INSTALL_ILI9486=false
+INSTALL_ST7789=false
+case "$_DRIVER_CHOICE" in
+    1) INSTALL_ILI9486=true ;;
+    2) INSTALL_ST7789=true  ;;
+    3) INSTALL_ILI9486=true ; INSTALL_ST7789=true ;;
+    *) info "Skipping display driver install." ;;
+esac
+
+$INSTALL_ILI9486 && ok "Will install: ili9486 driver (pyili9486)"
+$INSTALL_ST7789  && ok "Will install: st7789 driver  (st7789 + gpiod + gpiodevice)"
+
+# ---------------------------------------------------------------------------
+# Display profile selection
+# ---------------------------------------------------------------------------
+# Build the list of available profiles based on selected drivers.
+# Each entry: "Label|relative/path/to/profile.yaml"
+_PROFILES=()
+if $INSTALL_ILI9486 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
+    _PROFILES+=(
+        "ILI9486  320×480 portrait-canvas, landscape on screen  (most ILI9486 configs) |configs/display/ili9486-portrait.yaml"
+        "ILI9486  480×320 landscape-canvas, landscape on screen (big-red, nixie, dseg) |configs/display/ili9486-landscape.yaml"
+    )
+fi
+if $INSTALL_ST7789 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
+    _PROFILES+=(
+        "ST7789   240×135 landscape  (Adafruit 1.14\" TFT #4383)                       |configs/display/st7789-240x135.yaml"
+    )
+fi
+
+SELECTED_PROFILE_SRC=""
+if [[ ${#_PROFILES[@]} -gt 0 ]]; then
+    echo ""
+    echo "  Select your display profile (sets width, height, rotation, and driver):"
+    for i in "${!_PROFILES[@]}"; do
+        echo "    $((i+1))) ${_PROFILES[$i]%%|*}"
+    done
+    echo "    $((${#_PROFILES[@]}+1))) Skip — I will configure display.yaml manually"
+    echo ""
+    read -r -p "  Enter choice [1-$((${#_PROFILES[@]}+1))]: " _PROFILE_CHOICE
+    if [[ "$_PROFILE_CHOICE" =~ ^[0-9]+$ ]] \
+        && [[ "$_PROFILE_CHOICE" -ge 1 ]] \
+        && [[ "$_PROFILE_CHOICE" -le ${#_PROFILES[@]} ]]; then
+        _entry="${_PROFILES[$((_PROFILE_CHOICE-1))]}"
+        SELECTED_PROFILE_SRC="$SCRIPT_DIR/${_entry##*|}"
+        ok "Display profile: ${_entry%%|*}"
+    else
+        warn "Skipping display profile — copy one from configs/display/ manually."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Virtual environment
 # ---------------------------------------------------------------------------
 section "Python virtual environment"
 
@@ -243,7 +308,7 @@ VENV_PY="$VENV_DIR/bin/python"
 VENV_PIP="$VENV_DIR/bin/pip"
 
 # ---------------------------------------------------------------------------
-# 4. Pip packages
+# 5. Pip packages
 # ---------------------------------------------------------------------------
 section "Python pip packages"
 
@@ -263,12 +328,16 @@ PIP_PACKAGES=(
 )
 
 # GPIO: rpi-lgpio is the recommended drop-in for RPi.GPIO on modern kernels.
-# It imports as RPi.GPIO so no code changes are needed.
-# lgpio is a system-level library that rpi-lgpio builds on.
 if [[ "$IS_RPI" == true ]]; then
     PIP_PACKAGES+=("rpi-lgpio>=0.6")
 else
     warn "Not on Raspberry Pi — skipping rpi-lgpio. GPIO will fail at runtime."
+fi
+
+# Display driver packages.
+if [[ "$IS_RPI" == true ]]; then
+    $INSTALL_ILI9486 && PIP_PACKAGES+=("pyili9486>=1.0.0")
+    $INSTALL_ST7789  && PIP_PACKAGES+=("st7789>=1.0.0" "gpiod>=2.0" "gpiodevice>=0.0.4")
 fi
 
 info "Installing pip packages..."
@@ -279,12 +348,15 @@ for pkg in "${PIP_PACKAGES[@]}"; do
 done
 
 # Install the clockish package itself (creates the `clockish` entry-point binary).
+# Include [st7789] extra when that driver was selected.
 info "Installing clockish package (pip install -e .) ..."
-"$VENV_PIP" install -e "$SCRIPT_DIR" $PIP_Q
+_CLOCKISH_TARGET="$SCRIPT_DIR"
+$INSTALL_ST7789 && _CLOCKISH_TARGET="${SCRIPT_DIR}[st7789]"
+"$VENV_PIP" install -e "$_CLOCKISH_TARGET" $PIP_Q
 ok "clockish package installed — entry point: $VENV_DIR/bin/clockish"
 
 # ---------------------------------------------------------------------------
-# 5. Verify key imports
+# 6. Verify key imports
 # ---------------------------------------------------------------------------
 section "Import verification"
 
@@ -312,7 +384,7 @@ fi
 
 
 # ---------------------------------------------------------------------------
-# 6. User config file
+# 7. User config file
 # ---------------------------------------------------------------------------
 section "User configuration"
 
@@ -334,8 +406,24 @@ else
     fi
 fi
 
+# Install the display profile to the user config directory.
+USER_DISPLAY_CFG="$USER_CFG_DIR/display.yaml"
+if [[ -f "$USER_DISPLAY_CFG" ]]; then
+    ok "Display profile already exists: $USER_DISPLAY_CFG"
+    info "  (not overwritten — edit it directly to change driver/rotation/pins)"
+elif [[ -n "${SELECTED_PROFILE_SRC:-}" && -f "$SELECTED_PROFILE_SRC" ]]; then
+    mkdir -p "$USER_CFG_DIR"
+    cp "$SELECTED_PROFILE_SRC" "$USER_DISPLAY_CFG"
+    ok "Display profile installed: $USER_DISPLAY_CFG"
+    info "  Edit this file to change driver, rotation, or pin assignments."
+else
+    warn "No display profile installed — clockish will not start until you create:"
+    warn "  $USER_DISPLAY_CFG"
+    info "  Copy one from:  configs/display/"
+fi
+
 # ---------------------------------------------------------------------------
-# 7. Font check
+# 8. Font check
 # ---------------------------------------------------------------------------
 section "Font check"
 
@@ -416,7 +504,7 @@ if [[ "$NIXIE_FOUND" == false ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 8. Helper scripts
+# 9. Helper scripts
 # ---------------------------------------------------------------------------
 section "Helper scripts"
 
@@ -432,7 +520,7 @@ chmod +x "$SCRIPT_DIR/uninstall.sh"
 ok "uninstall.sh is executable"
 
 # ---------------------------------------------------------------------------
-# 9. Summary
+# 10. Summary
 # ---------------------------------------------------------------------------
 section "Installation Summary"
 
@@ -443,8 +531,14 @@ else
 fi
 
 echo ""
-echo -e "${BOLD}Your config file:${RESET}"
-echo "    $HOME/.config/clockish/clockish-config.yaml"
+echo -e "${BOLD}Your config files:${RESET}"
+echo "    $HOME/.config/clockish/display.yaml     ← driver, width, height, rotation, pins"
+echo "    $HOME/.config/clockish/clockish.yaml    ← rows and panels layout"
+echo ""
+echo -e "${BOLD}To switch display layout (keep same display):${RESET}"
+echo "    clockish configs/big-red.yaml"
+echo "    clockish configs/nixie.yaml"
+echo "    # (display.yaml is loaded automatically from ~/.config/clockish/)"
 echo ""
 echo -e "${BOLD}To customise the display layout:${RESET}"
 echo "    ./edit-clockish-config.sh"
