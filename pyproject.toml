@@ -48,7 +48,7 @@ classifiers = [
 dependencies = [
     # Display rendering
     "Pillow>=12.0.0",
-    "numpy>=2.4.0",
+    "numpy>=1.21.0",
     # Config files
     "PyYAML>=6.0",
     # Timezone data (needed on systems without tzdata OS package, e.g. minimal Pi OS)
