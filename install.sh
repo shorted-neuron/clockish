@@ -202,6 +202,16 @@ if [[ "$IS_RPI" == true ]]; then
     else
         ok "User '$USER' is in the 'gpio' group."
     fi
+
+    # video group membership check (needed for /dev/fb0 framebuffer access)
+    if ! groups | grep -qw "video"; then
+        warn "User '$USER' is not in the 'video' group."
+        info "Adding $USER to video group (required for framebuffer /dev/fb0 access)..."
+        sudo usermod -aG video "$USER"
+        warn "Group change requires logout/login (or reboot) to take effect."
+    else
+        ok "User '$USER' is in the 'video' group."
+    fi
 else
     warn "Skipping SPI check (not a Raspberry Pi)."
 fi
@@ -212,24 +222,28 @@ fi
 section "Display driver selection"
 
 echo "  Which display driver(s) would you like to install?"
-echo "    1) ili9486  — ILI9486 SPI TFT  (MPI3501 / MHS3528 3.5\" RPi displays)"
-echo "    2) st7789   — ST7789 SPI TFT   (Adafruit 240×135, Pimoroni 240×240, etc)"
-echo "    3) all      — install both drivers"
-echo "    4) none     — skip (configure manually later)"
+echo "    1) ili9486      — ILI9486 SPI TFT        (MPI3501 / MHS3528 3.5\" RPi displays)"
+echo "    2) st7789       — ST7789 SPI TFT          (Adafruit 240×135, Pimoroni 240×240, etc)"
+echo "    3) framebuffer  — Linux /dev/fb0          (DSI ribbon-cable, HDMI — no extra packages)"
+echo "    4) all          — install all drivers"
+echo "    5) none         — skip (configure manually later)"
 echo ""
-read -r -p "  Enter choice [1/2/3/4]: " _DRIVER_CHOICE
+read -r -p "  Enter choice [1/2/3/4/5]: " _DRIVER_CHOICE
 
 INSTALL_ILI9486=false
 INSTALL_ST7789=false
+INSTALL_FB=false
 case "$_DRIVER_CHOICE" in
     1) INSTALL_ILI9486=true ;;
     2) INSTALL_ST7789=true  ;;
-    3) INSTALL_ILI9486=true ; INSTALL_ST7789=true ;;
+    3) INSTALL_FB=true      ;;
+    4) INSTALL_ILI9486=true ; INSTALL_ST7789=true ; INSTALL_FB=true ;;
     *) info "Skipping display driver install." ;;
 esac
 
-$INSTALL_ILI9486 && ok "Will install: ili9486 driver (pyili9486)"
-$INSTALL_ST7789  && ok "Will install: st7789 driver  (st7789 + gpiod + gpiodevice)"
+$INSTALL_ILI9486 && ok "Will install: ili9486 driver     (pyili9486)"
+$INSTALL_ST7789  && ok "Will install: st7789 driver      (st7789 + gpiod + gpiodevice)"
+$INSTALL_FB      && ok "Will install: framebuffer driver (no extra packages — uses /dev/fb0)"
 
 # ---------------------------------------------------------------------------
 # Display profile selection
@@ -246,6 +260,12 @@ fi
 if $INSTALL_ST7789 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
     _PROFILES+=(
         "ST7789   240×135 landscape  (Adafruit 1.14\" TFT #4383)                       |configs/display/st7789-240x135.yaml"
+    )
+fi
+if $INSTALL_FB || [[ "$_DRIVER_CHOICE" == "4" ]]; then
+    _PROFILES+=(
+        "Framebuffer  800×480   (Raspberry Pi 7\" Touch Display, DSI)                  |configs/display/framebuffer-800x480.yaml"
+        "Framebuffer  1920×1080 (HDMI or high-res DSI panel)                           |configs/display/framebuffer-1920x1080.yaml"
     )
 fi
 
