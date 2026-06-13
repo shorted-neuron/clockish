@@ -23,6 +23,9 @@
 
 set -euo pipefail
 
+# Project root — everything is relative to this.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ---------------------------------------------------------------------------
 # Verbose / quiet flag  (-v / --verbose)
 # Pass -v or --verbose to see full pip output; omit for terse install output.
@@ -272,7 +275,6 @@ fi
 # ---------------------------------------------------------------------------
 section "Python virtual environment"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 
 # If heavy packages (numpy, gpiod) are already installed at the system level
