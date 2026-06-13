@@ -223,8 +223,8 @@ section "Display driver selection"
 
 echo "  Which display driver(s) would you like to install?"
 echo "    1) ili9486      — ILI9486 SPI TFT        (MPI3501 / MHS3528 3.5\" RPi displays)"
-echo "    2) st7789       — ST7789 SPI TFT          (Adafruit 240×135, Pimoroni 240×240, etc)"
-echo "    3) framebuffer  — Linux /dev/fb0          (DSI ribbon-cable, HDMI — no extra packages)"
+echo "    2) st7789       — ST7789 SPI TFT         (Adafruit 240×135, Pimoroni 240×240, etc)"
+echo "    3) framebuffer  — Linux /dev/fb0         (DSI ribbon-cable, HDMI — no extra packages)"
 echo "    4) all          — install all drivers"
 echo "    5) none         — skip (configure manually later)"
 echo ""
@@ -430,18 +430,43 @@ fi
 
 # Install the display profile to the user config directory.
 USER_DISPLAY_CFG="$USER_CFG_DIR/display.yaml"
-if [[ -f "$USER_DISPLAY_CFG" ]]; then
-    ok "Display profile already exists: $USER_DISPLAY_CFG"
-    info "  (not overwritten — edit it directly to change driver/rotation/pins)"
-elif [[ -n "${SELECTED_PROFILE_SRC:-}" && -f "$SELECTED_PROFILE_SRC" ]]; then
+if [[ -z "${SELECTED_PROFILE_SRC:-}" || ! -f "$SELECTED_PROFILE_SRC" ]]; then
+    if [[ ! -f "$USER_DISPLAY_CFG" ]]; then
+        warn "No display profile installed — clockish will not start until you create:"
+        warn "  $USER_DISPLAY_CFG"
+        info "  Copy one from:  configs/display/"
+    else
+        ok "Display profile already exists: $USER_DISPLAY_CFG"
+        info "  (no new profile selected — leaving it unchanged)"
+    fi
+elif [[ ! -f "$USER_DISPLAY_CFG" ]]; then
+    # Fresh install — no existing file.
     mkdir -p "$USER_CFG_DIR"
     cp "$SELECTED_PROFILE_SRC" "$USER_DISPLAY_CFG"
     ok "Display profile installed: $USER_DISPLAY_CFG"
     info "  Edit this file to change driver, rotation, or pin assignments."
 else
-    warn "No display profile installed — clockish will not start until you create:"
-    warn "  $USER_DISPLAY_CFG"
-    info "  Copy one from:  configs/display/"
+    # File already exists — ask whether to replace it.
+    echo ""
+    warn "Display profile already exists: $USER_DISPLAY_CFG"
+    read -r -p "  Replace it with the selected profile? [y/N] " _REPLACE_REPLY
+    if [[ "${_REPLACE_REPLY,,}" == "y" ]]; then
+        _BACKUP="$USER_DISPLAY_CFG.$(date '+%Y%m%d-%H%M%S').bak"
+        cp "$USER_DISPLAY_CFG" "$_BACKUP"
+
+        if diff -q "$USER_DISPLAY_CFG" "$SELECTED_PROFILE_SRC" &>/dev/null; then
+            # Files are identical — no point keeping the backup.
+            rm -f "$_BACKUP"
+            cp "$SELECTED_PROFILE_SRC" "$USER_DISPLAY_CFG"
+            ok "Display profile updated — new profile is identical to the previous one."
+        else
+            cp "$SELECTED_PROFILE_SRC" "$USER_DISPLAY_CFG"
+            ok "Display profile updated: $USER_DISPLAY_CFG"
+            ok "Previous config backed up to: $_BACKUP"
+        fi
+    else
+        ok "Keeping existing display profile unchanged."
+    fi
 fi
 
 # ---------------------------------------------------------------------------
