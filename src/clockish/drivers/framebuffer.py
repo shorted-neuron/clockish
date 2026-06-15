@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import fcntl
 import mmap
+import os
 import struct
 import sys
 
@@ -213,8 +214,15 @@ class FramebufferDriver(DisplayDriver):
         """
         # Open /dev/tty0 in a separate try so we know unambiguously
         # whether the file handle was obtained before handling errors.
+        #
+        # /dev/tty0 permissions: crw--w---- root tty
+        # Group 'tty' has write-only (-w-), NOT read+write.
+        # Open O_WRONLY | O_NOCTTY — we only need to write escape sequences
+        # and issue ioctls; O_NOCTTY prevents the OS from making this the
+        # process's controlling terminal when run from an interactive shell.
         try:
-            tty = open('/dev/tty0', 'rb+', buffering=0)
+            fd  = os.open('/dev/tty0', os.O_WRONLY | os.O_NOCTTY)
+            tty = os.fdopen(fd, 'wb', buffering=0)
         except OSError as exc:
             print(
                 f"WARNING: cannot open /dev/tty0 ({exc}) — cursor suppression unavailable.\n"
