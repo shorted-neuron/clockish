@@ -1,0 +1,28 @@
+# ILI9486 — portrait canvas (320 × 480), hardware rotated to landscape
+# ---------------------------------------------------------------------------
+# Physical display: 3.5" SPI TFT wired to Raspberry Pi
+# Compatible hardware: MPI3501, MHS3528, and most generic ILI9486 RPi HATs
+#
+# The PIL canvas is drawn in portrait orientation (320 wide × 480 tall).
+# The ILI9486 controller rotates it 90° so it displays landscape on screen.
+# Use this profile with: clockish.yaml, debug.yaml, system-info.yaml,
+#                        vert-clocks.yaml, and any other 320×480 row config.
+#
+# To switch to true landscape layout (480 wide × 320 tall) instead,
+# use ili9486-landscape.yaml.
+# ---------------------------------------------------------------------------
+
+display:
+  driver:   ili9486
+  width:    320
+  height:   480
+  rotation: 90        # 90 = UPPER_RIGHT origin (landscape on screen)
+
+  # Optional overrides (defaults shown):
+  # sku:          MPI3501   # MPI3501 (RGB666) | MHS3528 (RGB565)
+  # spi_bus:      0
+  # spi_device:   0
+  # spi_speed_hz: 64000000
+  # dc_pin:       24        # BCM GPIO for Data/Command
+  # rst_pin:      25        # BCM GPIO for Reset
+

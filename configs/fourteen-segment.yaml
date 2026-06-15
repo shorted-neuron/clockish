@@ -43,10 +43,7 @@ fonts:
     file: DSEG14Classic-Regular.ttf
     size: 18
 
-display:
-  width:    480
-  height:   320
-  rotation: 180     # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
 
 rows:
   - name: clock

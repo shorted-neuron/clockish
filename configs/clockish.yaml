@@ -1,25 +1,9 @@
 # clockish.yaml - config
 # ---------------------------------------------------------------------------
 # System information display: local time + all available fact sources.
-# See clockish.yaml for full documentation.
+# Display settings are in display.yaml — see configs/display/ for profiles.
 # ---------------------------------------------------------------------------
 
-display:
-  # driver selects the hardware backend (default: ili9486).
-  # Other choices will be added here as new drivers are implemented.
-  driver:   ili9486
-
-  width:    320
-  height:   480
-  rotation: 90      # 0 / 90 / 180 / 270 degrees
-
-  # --- ILI9486 driver settings (all optional, values below are defaults) ---
-  # sku:          MPI3501   # MPI3501 (RGB666) | MHS3528 (RGB565)
-  # spi_bus:      0
-  # spi_device:   0
-  # spi_speed_hz: 64000000
-  # dc_pin:       24        # BCM GPIO number for Data/Command
-  # rst_pin:      25        # BCM GPIO number for Reset
 
 rows:
   - name: app-header

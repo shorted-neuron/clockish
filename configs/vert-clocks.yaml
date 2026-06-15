@@ -56,10 +56,7 @@
 # Font package suggestions:
 #  apt install fonts-ubuntu fonts-liberation fonts-noto-core fonts-croscore fonts-freefont-ttf
 
-display:
-  width:    320
-  height:   480
-  rotation: 90      # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
+# Display settings are in display.yaml — use configs/display/ili9486-portrait.yaml.
 
 rows:
   - name: utc-clock

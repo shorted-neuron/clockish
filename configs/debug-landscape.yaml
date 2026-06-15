@@ -1,13 +1,9 @@
-# debug.yaml — clockish config
+# debug-landscape.yaml — clockish config
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish.py
-# See clockish.yaml for full documentation.
+# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
 # ---------------------------------------------------------------------------
 
-display:
-  width:    480
-  height:   320
-  rotation: 180      # 0=UPPER_LEFT  90=UPPER_RIGHT  180=LOWER_RIGHT  270=LOWER_LEFT
 
 rows:
   - name: utc-clock

@@ -46,6 +46,20 @@ def _find_default_config() -> str:
     return os.path.normpath(candidates[1])
 
 
+def _find_display_profile(config_path: str | None) -> str | None:
+    """Search for a display profile YAML file alongside the config or in user dir."""
+    candidates = []
+    if config_path:
+        candidates.append(
+            os.path.join(os.path.dirname(os.path.abspath(config_path)), 'display.yaml')
+        )
+    candidates.append(os.path.expanduser('~/.config/clockish/display.yaml'))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Drawing
 # ---------------------------------------------------------------------------
@@ -175,6 +189,22 @@ def main() -> None:
 
     with open(cfg_path) as f:
         config = yaml.safe_load(f)
+
+    # Load display profile if not inline in the config.
+    if 'display' not in config:
+        profile_path = _find_display_profile(cfg_path)
+        if profile_path:
+            print(f"Loading display profile: {profile_path}")
+            with open(profile_path) as pf:
+                profile = yaml.safe_load(pf) or {}
+            if 'display' not in profile:
+                sys.exit(f"ERROR: display profile '{profile_path}' has no 'display:' section")
+            config['display'] = profile['display']
+        else:
+            sys.exit(
+                "ERROR: no 'display:' section in config and no display profile found.\n"
+                "  Tried: display.yaml alongside config, ~/.config/clockish/display.yaml"
+            )
 
     display_cfg = config.get('display', {})
     width  = int(display_cfg.get('width',  320))
