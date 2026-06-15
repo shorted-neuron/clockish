@@ -18,23 +18,34 @@ Framebuffer access requires the user to be in the ``video`` group:
 
 Console / cursor suppression
 -----------------------------
-The driver automatically puts the active virtual terminal (VT) into
-``KD_GRAPHICS`` mode when ``begin()`` is called.  This is the same
-mechanism used by X11, Wayland, SDL, and pygame — it instructs the
-kernel's ``fbcon`` driver to stop rendering VT text and the blinking
-cursor on top of the framebuffer.  The VT is restored to ``KD_TEXT``
-mode when ``close()`` is called.
+On ``begin()``, the driver puts the active VT into ``KD_GRAPHICS`` mode
+(the same mechanism used by X11, Wayland, SDL, and pygame).  This tells
+the kernel's ``fbcon`` driver to stop rendering text and the blinking
+cursor on top of the framebuffer.  ``KD_TEXT`` is restored on ``close()``.
 
-This means masking ``getty@tty1`` is sufficient for a clean display;
-no manual cursor-hiding or ``chvt`` tricks are needed.
+``/dev/tty0`` (the foreground VT, regardless of how the process was
+started) is opened ``O_WRONLY | O_NOCTTY`` to issue the ioctl.  On
+Raspberry Pi OS Trixie the device is ``crw-------`` (root-only), so
+cursor suppression works out of the box when the systemd service runs
+as root (the default when no ``User=`` directive is set).
 
-If you still want to suppress the boot splash/logo, add these to
-``/boot/firmware/cmdline.txt``::
+For non-root use, grant the ``tty`` group write access via a udev rule::
 
+    # /etc/udev/rules.d/99-tty0.rules
+    KERNEL=="tty0", GROUP="tty", MODE="0620"
+
+Reboot after adding the rule, and ensure the clockish user is in the
+``tty`` group.  If the open fails for any reason, a warning is printed
+and the display continues — only cursor suppression is skipped.
+
+To remove console text from the display, mask getty::
+
+    sudo systemctl mask getty@tty1
+
+For a fully silent boot (no splash, no pre-clockish cursor flash)::
+
+    # append to the single line in /boot/firmware/cmdline.txt:
     quiet logo.nologo vt.global_cursor_default=0
-
-The last parameter is a belt-and-suspenders fallback that disables the
-hardware cursor even before ``KD_GRAPHICS`` takes effect.
 
 Config keys (all optional — defaults listed below) under ``display:``
 in your display profile::
@@ -196,30 +207,15 @@ class FramebufferDriver(DisplayDriver):
 
     # ------------------------------------------------------------------
     def _enter_graphics_mode(self) -> None:
-        """Switch the active VT to KD_GRAPHICS mode.
+        """Switch the active VT to KD_GRAPHICS mode to suppress the cursor.
 
-        This instructs the kernel's fbcon driver to stop rendering the
-        VT cursor and text on top of the framebuffer — the same trick
-        used by X11, Wayland, SDL, and pygame.
-
-        /dev/tty0 always refers to the foreground VT regardless of where
-        the process was started (systemd service, SSH session, serial
-        console, etc.).  The user must be in the ``video`` or ``tty``
-        group — the same requirement as opening /dev/fb0 itself, so this
-        should always succeed in a correctly configured install.
-
-        If the open or ioctl fails (e.g. missing group membership), a
-        warning is printed and the display continues without cursor
-        suppression.
+        See the module docstring for full details on permissions, root
+        requirements, and the udev rule for non-root use.
         """
-        # Open /dev/tty0 in a separate try so we know unambiguously
-        # whether the file handle was obtained before handling errors.
-        #
-        # /dev/tty0 permissions: crw--w---- root tty
-        # Group 'tty' has write-only (-w-), NOT read+write.
-        # Open O_WRONLY | O_NOCTTY — we only need to write escape sequences
-        # and issue ioctls; O_NOCTTY prevents the OS from making this the
-        # process's controlling terminal when run from an interactive shell.
+        # Two separate try blocks so the error message can distinguish
+        # "couldn't open the device" from "open succeeded but ioctl failed".
+        # O_WRONLY | O_NOCTTY: we only write to tty0; O_NOCTTY prevents the
+        # kernel promoting it to the process's controlling terminal.
         try:
             fd  = os.open('/dev/tty0', os.O_WRONLY | os.O_NOCTTY)
             tty = os.fdopen(fd, 'wb', buffering=0)
