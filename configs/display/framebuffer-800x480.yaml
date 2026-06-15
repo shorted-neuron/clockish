@@ -12,8 +12,12 @@
 # Prerequisites:
 #   sudo usermod -aG video $USER   (log out and back in)
 #
-# To avoid terminal text appearing over clockish, run over SSH or see
-# the console-suppression notes in src/clockish/drivers/framebuffer.py.
+# The driver automatically switches the VT to KD_GRAPHICS mode on start,
+# which suppresses the blinking cursor and any console text overlay.
+# Masking getty@tty1 is enough for a clean display:
+#   sudo systemctl mask getty@tty1
+# For a fully silent boot also add to /boot/firmware/cmdline.txt:
+#   quiet logo.nologo vt.global_cursor_default=0
 #
 # Check your actual resolution first:
 #   fbset -i

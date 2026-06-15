@@ -16,24 +16,25 @@ which is already installed as a clockish dependency.
 Framebuffer access requires the user to be in the ``video`` group:
     sudo usermod -aG video $USER   (then log out and back in)
 
-Console / terminal overlap
---------------------------
-By default the Pi boots into a text console on ``/dev/tty1`` which is
-displayed on top of anything written to the framebuffer.  To give
-clockish a clean framebuffer run it over SSH, or suppress the console
-overlay before starting::
+Console / cursor suppression
+-----------------------------
+The driver automatically puts the active virtual terminal (VT) into
+``KD_GRAPHICS`` mode when ``begin()`` is called.  This is the same
+mechanism used by X11, Wayland, SDL, and pygame — it instructs the
+kernel's ``fbcon`` driver to stop rendering VT text and the blinking
+cursor on top of the framebuffer.  The VT is restored to ``KD_TEXT``
+mode when ``close()`` is called.
 
-    # Hide the cursor and switch to an empty VT
-    sudo sh -c 'echo -n "\\033[?25l" > /dev/tty1'
-    sudo chvt 2          # switch to virtual terminal 2 (blank)
-    clockish             # now clockish owns /dev/fb0 cleanly
-    sudo chvt 1          # restore when done
+This means masking ``getty@tty1`` is sufficient for a clean display;
+no manual cursor-hiding or ``chvt`` tricks are needed.
 
-Alternatively, add ``logo.nologo quiet`` to the kernel command line in
-``/boot/firmware/cmdline.txt`` and mask ``getty@tty1`` so no console
-text appears at all::
+If you still want to suppress the boot splash/logo, add these to
+``/boot/firmware/cmdline.txt``::
 
-    sudo systemctl mask getty@tty1
+    quiet logo.nologo vt.global_cursor_default=0
+
+The last parameter is a belt-and-suspenders fallback that disables the
+hardware cursor even before ``KD_GRAPHICS`` takes effect.
 
 Config keys (all optional — defaults listed below) under ``display:``
 in your display profile::
@@ -66,6 +67,7 @@ from clockish.drivers.base import DisplayDriver
 
 # Linux ioctl codes for framebuffer
 _FBIOGET_VSCREENINFO = 0x4600
+_FBIOBLANK           = 0x4611
 
 # struct fb_var_screeninfo field offsets (all __u32, so same on 32-bit and 64-bit)
 _OFF_XRES       = 0
@@ -76,6 +78,11 @@ _OFF_BPP        = 24
 _OFF_RED_OFF    = 32   # red.offset   (bit position of red channel)
 _OFF_GREEN_OFF  = 44   # green.offset
 _OFF_BLUE_OFF   = 56   # blue.offset
+
+# VT / console ioctl codes — suppress the kernel cursor
+_KDSETMODE  = 0x4B3A   # set VT mode
+_KD_TEXT    = 0x00     # normal text mode (restore on exit)
+_KD_GRAPHICS = 0x01    # graphics mode — fbcon stops rendering cursor + text
 
 
 class FramebufferDriver(DisplayDriver):
@@ -92,6 +99,7 @@ class FramebufferDriver(DisplayDriver):
         self._cfg     = cfg
         self._fb      = None
         self._mm      = None
+        self._tty     = None   # handle to /dev/tty0 for KD_GRAPHICS mode
         # These will be overwritten by begin() from the actual framebuffer.
         self._width   = int(cfg.get('width',  800))
         self._height  = int(cfg.get('height', 480))
@@ -178,7 +186,71 @@ class FramebufferDriver(DisplayDriver):
             f"Framebuffer: {device}  {self._width}×{self._height}  "
             f"{self._bpp}bpp  R<<{self._red_off} G<<{self._green_off} B<<{self._blue_off}"
         )
+
+        # Put the active VT into graphics mode so fbcon stops drawing
+        # the blinking cursor (and any text) on top of our framebuffer.
+        self._enter_graphics_mode()
+
         return self
+
+    # ------------------------------------------------------------------
+    def _enter_graphics_mode(self) -> None:
+        """Switch the active VT to KD_GRAPHICS mode.
+
+        This instructs the kernel's fbcon driver to stop rendering the
+        VT cursor and text on top of the framebuffer — the same trick
+        used by X11, Wayland, SDL, and pygame.
+
+        /dev/tty0 always refers to the foreground VT regardless of where
+        the process was started (systemd service, SSH session, serial
+        console, etc.).  The user must be in the ``video`` or ``tty``
+        group — the same requirement as opening /dev/fb0 itself, so this
+        should always succeed in a correctly configured install.
+
+        If the open or ioctl fails (e.g. missing group membership), a
+        warning is printed and the display continues without cursor
+        suppression.
+        """
+        # Open /dev/tty0 in a separate try so we know unambiguously
+        # whether the file handle was obtained before handling errors.
+        try:
+            tty = open('/dev/tty0', 'rb+', buffering=0)
+        except OSError as exc:
+            print(
+                f"WARNING: cannot open /dev/tty0 ({exc}) — cursor suppression unavailable.\n"
+                f"  Ensure the clockish user is in the 'tty' or 'video' group.",
+                file=sys.stderr,
+            )
+            self._tty = None
+            return
+
+        # tty is open; now configure it.  If anything here fails, close
+        # the handle cleanly and carry on without cursor suppression.
+        try:
+            tty.write(b'\033[?25l')                      # ANSI hide cursor (belt-and-suspenders)
+            fcntl.ioctl(tty, _KDSETMODE, _KD_GRAPHICS)  # fbcon hands off the framebuffer
+            self._tty = tty
+        except OSError as exc:
+            print(
+                f"WARNING: KDSETMODE KD_GRAPHICS failed ({exc}) — cursor suppression unavailable.",
+                file=sys.stderr,
+            )
+            try:
+                tty.close()
+            except OSError:
+                pass
+            self._tty = None
+
+    def _leave_graphics_mode(self) -> None:
+        """Restore the VT to KD_TEXT mode on exit."""
+        if self._tty is not None:
+            try:
+                fcntl.ioctl(self._tty, _KDSETMODE, _KD_TEXT)
+                self._tty.write(b'\033[?25h')   # restore cursor
+                self._tty.close()
+            except OSError:
+                pass
+            self._tty = None
 
     # ------------------------------------------------------------------
     def display(self, image: Image.Image) -> None:
@@ -214,15 +286,14 @@ class FramebufferDriver(DisplayDriver):
 
     def idle(self, state: bool = True) -> None:
         """Blank (``True``) or unblank (``False``) the framebuffer console."""
-        # FBIOBLANK = 0x4611; value 1 = blank, 0 = unblank
-        _FBIOBLANK = 0x4611
         try:
             fcntl.ioctl(self._fb, _FBIOBLANK, 1 if state else 0)
         except OSError:
             pass   # not all framebuffer drivers support FBIOBLANK
 
     def close(self) -> None:
-        """Unmap the framebuffer and close the device."""
+        """Restore the VT, unmap the framebuffer, and close the device."""
+        self._leave_graphics_mode()
         if self._mm is not None:
             self._mm.close()
             self._mm = None
