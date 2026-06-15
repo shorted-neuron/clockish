@@ -4,7 +4,8 @@
 #
 # Usage:
 #   chmod +x install.sh
-#   ./install.sh
+#   ./install.sh           # normal (terse pip output)
+#   ./install.sh --verbose # show full pip output  (-v also works)
 #
 # What this script does:
 #   1. Verifies it is running on a Raspberry Pi / Linux
@@ -20,6 +21,21 @@
 # =============================================================================
 
 set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Verbose / quiet flag  (-v / --verbose)
+# Pass -v or --verbose to see full pip output; omit for terse install output.
+# ---------------------------------------------------------------------------
+VERBOSE=false
+PIP_Q="--quiet"
+for _arg in "$@"; do
+    case "$_arg" in
+        -v|--verbose)
+            VERBOSE=true
+            PIP_Q=""
+            ;;
+    esac
+done
 
 # ---------------------------------------------------------------------------
 # Colour helpers
@@ -194,18 +210,32 @@ section "Python virtual environment"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 
+# If heavy packages (numpy, gpiod) are already installed at the system level
+# via apt, pass --system-site-packages so the venv inherits them instead of
+# letting pip recompile/download them (numpy in particular takes a long time).
+VENV_SYSTEM_FLAG=""
+if python3 -c "import numpy" 2>/dev/null; then
+    VENV_SYSTEM_FLAG="--system-site-packages"
+    ok "System numpy detected — venv will use --system-site-packages"
+    info "  (apt-installed packages such as python3-numpy will be visible inside the venv)"
+else
+    info "System numpy not found — creating isolated venv (numpy will be pip-installed)"
+fi
+
 if [[ -d "$VENV_DIR" ]]; then
     ok ".venv already exists at $VENV_DIR"
     read -r -p "  Re-create .venv from scratch? [y/N] " REPLY
     if [[ "${REPLY,,}" == "y" ]]; then
         info "Removing existing .venv..."
         rm -rf "$VENV_DIR"
-        python3 -m venv "$VENV_DIR"
+        # shellcheck disable=SC2086
+        python3 -m venv $VENV_SYSTEM_FLAG "$VENV_DIR"
         ok ".venv re-created."
     fi
 else
     info "Creating .venv at $VENV_DIR ..."
-    python3 -m venv "$VENV_DIR"
+    # shellcheck disable=SC2086
+    python3 -m venv $VENV_SYSTEM_FLAG "$VENV_DIR"
     ok ".venv created."
 fi
 
@@ -218,15 +248,18 @@ VENV_PIP="$VENV_DIR/bin/pip"
 section "Python pip packages"
 
 info "Upgrading pip..."
-"$VENV_PIP" install --upgrade pip --quiet
+"$VENV_PIP" install --upgrade pip $PIP_Q
 
-# Core packages required by ILI9486.py and clockish
+# Core packages required by clockish.
+# numpy is intentionally absent here — it is either inherited from the system
+# python3-numpy apt package (when the venv was created with --system-site-packages)
+# or pulled in automatically as a pyproject.toml dependency of clockish itself.
 PIP_PACKAGES=(
     "Pillow>=12.0.0"         # image rendering
-    # "numpy>=2.0.0"         # array ops in ILI9486.py, fulfilled by system package python3-numpy
     "spidev>=3.6"            # SPI bus interface
     "PyYAML>=6.0"            # clockish.yaml parsing
     "tzdata>=2024.1"         # IANA timezone database for zoneinfo (fallback when system tzdata absent)
+    "types-seaborn>=0.13.2"  # satisfies pre-existing system dep conflict (requires matplotlib, pandas-stubs)
 )
 
 # GPIO: rpi-lgpio is the recommended drop-in for RPi.GPIO on modern kernels.
@@ -241,13 +274,13 @@ fi
 info "Installing pip packages..."
 for pkg in "${PIP_PACKAGES[@]}"; do
     info "  pip install \"$pkg\""
-    "$VENV_PIP" install "$pkg" --quiet
+    "$VENV_PIP" install "$pkg" $PIP_Q
     ok "  installed: $pkg"
 done
 
 # Install the clockish package itself (creates the `clockish` entry-point binary).
 info "Installing clockish package (pip install -e .) ..."
-"$VENV_PIP" install -e "$SCRIPT_DIR" --quiet
+"$VENV_PIP" install -e "$SCRIPT_DIR" $PIP_Q
 ok "clockish package installed — entry point: $VENV_DIR/bin/clockish"
 
 # ---------------------------------------------------------------------------
@@ -277,10 +310,6 @@ if [[ "$IS_RPI" == true ]]; then
     check_import "RPi.GPIO"   "RPi.GPIO (via rpi-lgpio)"
 fi
 
-# Verify the local pyili9486 package is importable
-PYTHONPATH="$SCRIPT_DIR/src" "$VENV_PY" -c "from pyili9486.colors import BY_NAME" 2>/dev/null \
-    && ok "  import pyili9486.colors" \
-    || { error "  import pyili9486.colors  [FAILED]"; IMPORT_ERRORS=$((IMPORT_ERRORS + 1)); }
 
 # ---------------------------------------------------------------------------
 # 6. User config file
@@ -445,7 +474,8 @@ echo "  • Font errors?          sudo apt install fonts-dejavu-core
   • 7-seg font missing?   sudo apt install fonts-dseg
   • Nixie font missing?   bash scripts/download-nixie-font.sh"
 echo "  • RPi.GPIO missing?     source .venv/bin/activate && pip install rpi-lgpio"
-echo "  • numpy/Pillow?         source .venv/bin/activate && pip install 'Pillow>=12' 'numpy>=2'"
+echo "  • numpy/Pillow slow?    sudo apt install python3-numpy  (then re-run install.sh)"
+echo "  • numpy missing?        source .venv/bin/activate && pip install 'numpy>=2.4'"
 echo "  • Service not starting? sudo journalctl -u clockish -n 50"
 echo ""
 
