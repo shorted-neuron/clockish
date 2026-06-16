@@ -27,7 +27,7 @@
 fonts:
   nixiegiant:
     file: NixieOne-Regular.ttf
-    size: 225
+    size: 220
   nixiehuge:
     file: NixieOne-Regular.ttf
     size: 64
@@ -42,13 +42,12 @@ fonts:
 
 rows:
   - name: clock
-    height: 200
+    height: 220
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
         time_format: 12h
-        label: "am/pm"
         colors:
           # time: gold            # classic warm nixie yellow-orange
           # time: darkorange      # deeper amber
@@ -56,10 +55,9 @@ rows:
           time: darkorange
           label:  rust
         time_font: nixiegiant
-        label_font: nixiehuge
 
   - name: divider-1
-    height: 19
+    height: 9
     panels:
       - type: divider
         height: 1
@@ -69,20 +67,20 @@ rows:
     height: 48
     panels:
       - type: date
-        width: 70%
+        width: 60%
         justify: left
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
           date: darkorange
         date_font: nixiemed
-      - type: date
+      - type: clock
         justify: center
         timezone: US/Mountain
-        date_format: ":%S"
+        time_format: ":%S"
         colors:
           time: burntsienna
-        date_font: nixiemed
+        time_font: nixiemed
       - type: fact
         source: cpu
         justify: right
@@ -90,7 +88,7 @@ rows:
         font: nixiemed
 
   - name: divider-2
-    height: 19
+    height: 9
     panels:
       - type: divider
         height: 1
