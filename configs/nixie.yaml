@@ -106,13 +106,15 @@ rows:
         width: 18%
         source: wifi_status
         color: rust
-        font: small
+        font: nixiesmall
       - type: fact
         source: hostname
         color: rust
-        font: small
+        font: nixiesmall
       - type: fact
         source: ip
         color: rust
-        font: small
+        font: nixiesmall
+      # - type: debug
+      #   color: rust
 
