@@ -45,15 +45,23 @@ rows:
     height: 220
     panels:
       - type: clock
+        # width: 85% # uncomment if using the am/pm indicator below
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         colors:
           # time: darkorange      # classic warm nixie yellow-orange
-          # time: burntsienna     # deeper amber
+          time: burntsienna       # deeper amber
           # time: orange          # bright amber
-          time: darkorange
         time_font: nixiegiant
+      # - type: clock
+      #   width: 15%
+      #   justify: center
+      #   timezone: US/Mountain
+      #   time_format: "%p"
+      #   colors:
+      #     time: burntsienna
+      #   time_font: nixiehuge
 
   - name: divider-1
     height: 9
@@ -66,25 +74,19 @@ rows:
     height: 48
     panels:
       - type: date
-        width: 60%
-        justify: left
+        justify: center
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
           date: darkorange
         date_font: nixiemed
-      - type: clock
-        justify: center
-        timezone: US/Mountain
-        time_format: ":%S"
-        colors:
-          time: burntsienna
-        time_font: nixiemed
-      - type: fact
-        source: cpu
-        justify: right
-        color: darkorange
-        font: nixiemed
+#      - type: date
+#        justify: center
+#        timezone: US/Mountain
+#        date_format: ":%S"
+#        colors:
+#          time: burntsienna
+#        date_font: nixiemed
 
   - name: divider-2
     height: 9
@@ -93,25 +95,39 @@ rows:
         height: 1
         color: rust
 
-  - name: wifi-info
+  - name: info
     height: 34
     panels:
       - type: wifi_graphic
         width: 44
         color: burntsienna
       - type: fact
-        width: 18%
+        width: 15%
         source: wifi_status
         color: rust
         font: nixiesmall
       - type: fact
+        width: 15%
         source: hostname
         color: rust
         font: nixiesmall
       - type: fact
         source: ip
+        width: 20%
         color: rust
         font: nixiesmall
-      # - type: debug
-      #   color: rust
+      - type: fact
+        width: 10%
+        justify: center
+        source: cpu
+        color: rust
+        font: nixiesmall
+      - type: fact
+        source: ntp_all
+        color: rust
+        font: nixiesmall
+      - type: debug
+        width: 30%
+        color: rust
+        font: small
 

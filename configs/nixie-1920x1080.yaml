@@ -53,7 +53,6 @@ rows:
           # time: darkorange      # classic warm nixie yellow-orange
           time: burntsienna       # deeper amber
           # time: orange          # bright amber
-          label:  rust
         time_font: nixiegiant
       # - type: clock
       #   width: 15%
@@ -75,35 +74,19 @@ rows:
     height: 100
     panels:
       - type: date
-        width: 60%
-        justify: left
+        justify: center
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
-          date: rust
+          date: darkorange
         date_font: nixiemed
-      - type: clock
-        width: 15%
-        justify: center
-        timezone: US/Mountain
-        time_format: "%-I:%M:%S"
-        colors:
-          time: rust
-        time_font: nixiemed
-      - type: clock
-        width: 5%
-        justify: center
-        timezone: US/Mountain
-        time_format: "%p"
-        colors:
-          time: rust
-        time_font: nixiesmall
-      - type: fact
-        width: 20%
-        source: cpu
-        justify: right
-        color: rust
-        font: nixiesmall
+#      - type: date
+#        justify: center
+#        timezone: US/Mountain
+#        date_format: ":%S"
+#        colors:
+#          time: burntsienna
+#        date_font: nixiemed
 
   - name: divider-2
     height: 19
@@ -119,16 +102,24 @@ rows:
         width: 44
         color: burntsienna
       - type: fact
-        #width: 18%
+        width: 15%
         source: wifi_status
         color: rust
         font: nixiesmall
       - type: fact
+        width: 15%
         source: hostname
         color: rust
         font: nixiesmall
       - type: fact
         source: ip
+        width: 20%
+        color: rust
+        font: nixiesmall
+      - type: fact
+        width: 10%
+        justify: center
+        source: cpu
         color: rust
         font: nixiesmall
       - type: fact

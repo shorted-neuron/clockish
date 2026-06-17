@@ -45,25 +45,23 @@ rows:
     height: 296
     panels:
       - type: clock
+        # width: 85% # uncomment if using the am/pm indicator below
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         colors:
-          # time: gold            # classic warm nixie yellow-orange
-          # time: darkorange      # deeper amber
+          # time: darkorange      # classic warm nixie yellow-orange
+          time: burntsienna       # deeper amber
           # time: orange          # bright amber
-          time: darkorange
-          label:  rust
         time_font: nixiegiant
-
-      - type: clock
-        justify: center
-        width: 1
-        timezone: US/Mountain
-        time_format: "%p"
-        colors:
-          time:   darkred
-        time_font: nixiesmall
+      # - type: clock
+      #   width: 15%
+      #   justify: center
+      #   timezone: US/Mountain
+      #   time_format: "%p"
+      #   colors:
+      #     time: burntsienna
+      #   time_font: nixiehuge
 
   - name: divider-1
     height: 13
@@ -97,7 +95,7 @@ rows:
         height: 1
         color: rust
 
-  - name: wifi-info
+  - name: info
     height: 80
     panels:
       - type: wifi_graphic
@@ -124,8 +122,12 @@ rows:
         source: cpu
         color: rust
         font: nixiesmall
-      - type: debug
-        justify: right
+      - type: fact
+        source: ntp_all
         color: rust
         font: nixiesmall
+      - type: debug
+        width: 30%
+        color: rust
+        font: small
 
