@@ -107,13 +107,13 @@ rows:
         color: rust
         font: nixiesmall
       - type: fact
-        width: 15%
+      #  width: 15%
         source: hostname
         color: rust
         font: nixiesmall
       - type: fact
+      #  width: 20%
         source: ip
-        width: 20%
         color: rust
         font: nixiesmall
       - type: fact
@@ -123,11 +123,12 @@ rows:
         color: rust
         font: nixiesmall
       - type: fact
+      #  width: 15%
         source: ntp_all
         color: rust
         font: nixiesmall
-      - type: debug
-        width: 30%
-        color: rust
-        font: small
+      # - type: debug
+      #   width: 30%
+      #   color: rust
+      #   font: small
 
