@@ -47,13 +47,12 @@ rows:
       - type: clock
         justify: center
         timezone: US/Mountain
-        time_format: 12h
+        time_format: "%-I:%M"
         colors:
-          # time: gold            # classic warm nixie yellow-orange
-          # time: darkorange      # deeper amber
+          # time: darkorange      # classic warm nixie yellow-orange
+          # time: burntsienna     # deeper amber
           # time: orange          # bright amber
           time: darkorange
-          label:  rust
         time_font: nixiegiant
 
   - name: divider-1
