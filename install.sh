@@ -451,7 +451,12 @@ else
     warn "Display profile already exists: $USER_DISPLAY_CFG"
     read -r -p "  Replace it with the selected profile? [y/N] " _REPLACE_REPLY
     if [[ "${_REPLACE_REPLY,,}" == "y" ]]; then
-        _BACKUP="$USER_DISPLAY_CFG.$(date '+%Y%m%d-%H%M%S').bak"
+        # Extract driver name from profile path (e.g., 'ili9486', 'st7789', 'framebuffer')
+        # Profile paths follow the pattern: configs/display/{driver}-{resolution}.yaml
+        _PROFILE_FILENAME=$(basename "$SELECTED_PROFILE_SRC")
+        _DRIVER_NAME="${_PROFILE_FILENAME%%-*}"  # strip everything after the first dash
+        
+        _BACKUP="$USER_DISPLAY_CFG.$_DRIVER_NAME.$(date '+%Y%m%d-%H%M%S').bak"
         cp "$USER_DISPLAY_CFG" "$_BACKUP"
 
         if diff -q "$USER_DISPLAY_CFG" "$SELECTED_PROFILE_SRC" &>/dev/null; then
