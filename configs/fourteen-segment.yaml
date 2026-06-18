@@ -117,3 +117,4 @@ rows:
         font_size: tiny
       - type: debug
         color: forestgreen
+        font: debug

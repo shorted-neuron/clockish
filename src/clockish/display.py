@@ -257,15 +257,12 @@ def _get_font(name: str) -> ImageFont.FreeTypeFont:
             _FONTS[_scale_name] = ImageFont.truetype(_scale_font_path, _px)
     if name not in _FONTS:
         # Try to load a custom font defined in the config's 'fonts:' section.
-        # Each entry looks like:
-        #   fonts:
-        #     myfont:
-        #       file: SomeName-Regular.ttf
-        #       size: 120        # or "12%" (% of display height)
+        # Entries with both 'file' and 'size' are loaded here; file-only entries
+        # are resolved at layout time by _init_layout() and should not reach here.
         custom = _config.get('fonts', {}).get(name)
-        if custom:
+        if custom and isinstance(custom, dict) and 'size' in custom:
             font_path = _find_font(custom.get('file', 'DejaVuSans.ttf'))
-            size_px = _resolve_dimension(custom.get('size', '12%'), height)
+            size_px = _resolve_dimension(custom['size'], height)
             _FONTS[name] = ImageFont.truetype(font_path, size_px)
         else:
             return _FONTS.get('normal', ImageFont.load_default())
@@ -711,25 +708,29 @@ def _measure_rows(rows: list) -> list:
 # ---------------------------------------------------------------------------
 _LAYOUT: list = []   # list of (row_dict, y, row_height_px)
 
-# Font keys that support the special value 'auto'.
-_AUTO_FONT_KEYS = ('font_size',)
-
-# Fraction of row height used when a font key is set to 'auto'.
+# Fraction of row height used when font_size is 'auto'.
 _AUTO_FONT_FRACTION = 0.75
 
 
 def _init_layout() -> None:
-    """Pre-compute row layout and resolve 'auto' font references in panel dicts.
+    """Pre-compute row layout and resolve font references in panel dicts.
 
-    Called once during module init, after fonts and config are fully loaded.
-    Results are stored in _LAYOUT so that show_rows() never re-computes row
-    heights or re-emits the height-overflow warning.
+    Two ways to specify a font on a panel:
 
-    font: auto  (also accepted on any font_size key) means "size this font
-    to ~75% of the parent row height, using the config's default_font".  The
-    resolved font is registered in _FONTS under a synthetic name (e.g.
-    '_auto_32') and the panel dict is updated in-place so the renderer just
-    calls _get_font() normally.
+      font_size: <name|%|px|auto>
+        Uses default_font (or DejaVu) as the typeface.  Named scale names
+        (giant, huge, …) are pre-loaded at startup.  'auto' sizes to 75% of
+        the row height.  '%' and integer values resolve against display height.
+
+      font: <name>   [+ font_size: <name|%|px|auto>]
+        'name' is a key in the fonts: section (file-only entry) or the
+        built-in 'debug' alias (always DejaVuSans, immune to default_font).
+        Size comes from font_size: if given, otherwise defaults to 'auto'.
+        At init time the panel dict is rewritten: font_size: receives the
+        resolved synthetic key and font: is consumed.
+
+    All resolved fonts are registered in _FONTS under synthetic names so
+    renderers just call _get_font(p.get('font_size', 'normal')) as usual.
     """
     global _LAYOUT
     rows = _config.get('rows', [])
@@ -738,18 +739,58 @@ def _init_layout() -> None:
     _default_font_file = _config.get('default_font')
     _auto_path = _find_font(_default_font_file) if _default_font_file else _FONT_PATH
 
+    # Map font reference names → resolved TTF paths.
+    # 'debug' is always DejaVuSans regardless of default_font.
+    _font_files: dict = {'debug': _FONT_PATH}
+    for fname, fentry in _config.get('fonts', {}).items():
+        if isinstance(fentry, dict) and 'file' in fentry:
+            _font_files[fname] = _find_font(fentry['file'])
+
+    def _resolve_size(font_size_raw, rh: int) -> int:
+        """Resolve a font_size value to pixels (floor, never round up)."""
+        if font_size_raw is None or font_size_raw == 'auto':
+            return max(1, int(rh * _AUTO_FONT_FRACTION))
+        if isinstance(font_size_raw, str) and font_size_raw.endswith('%'):
+            return max(1, int(height * float(font_size_raw[:-1]) / 100))
+        if isinstance(font_size_raw, str) and font_size_raw in BUILTIN_FONT_SCALE:
+            return max(1, int(height * BUILTIN_FONT_SCALE[font_size_raw]))
+        f = float(font_size_raw)
+        if 0.0 < f <= 1.0:
+            return max(1, int(height * f))
+        return max(1, int(f))
+
     for r, ry, rh in layout:
         for p in r.get('panels', []):
-            for key in _AUTO_FONT_KEYS:
-                if p.get(key) == 'auto':
-                    auto_name = f'_auto_{rh}'
-                    if auto_name not in _FONTS:
-                        px = max(1, int(rh * _AUTO_FONT_FRACTION))
-                        _FONTS[auto_name] = ImageFont.truetype(_auto_path, px)
-                        if DEBUG:
-                            print(f"auto font '{auto_name}': {px}px "
-                                  f"({_AUTO_FONT_FRACTION*100:.0f}% of {rh}px row)")
-                    p[key] = auto_name
+            font_ref  = p.get('font')      # which TTF file to use
+            font_size = p.get('font_size') # size spec
+
+            if font_ref is not None:
+                # font: attribute specified — resolve (file, size) → synthetic key
+                file_path = _font_files.get(font_ref, _auto_path)
+                size_px   = _resolve_size(font_size, rh)
+                file_stem = os.path.splitext(os.path.basename(file_path))[0]
+                syn_name  = f'_res_{file_stem}_{size_px}'
+                if syn_name not in _FONTS:
+                    _FONTS[syn_name] = ImageFont.truetype(file_path, size_px)
+                    if DEBUG:
+                        print(f"  font '{font_ref}' -> {os.path.basename(file_path)} "
+                              f"{size_px}px  (key={syn_name})")
+                p['font_size'] = syn_name
+                del p['font']   # consumed; renderers only use font_size
+
+            elif font_size == 'auto':
+                # No font: but font_size: auto — default_font at row-relative size
+                auto_name = f'_auto_{rh}'
+                if auto_name not in _FONTS:
+                    px = max(1, int(rh * _AUTO_FONT_FRACTION))
+                    _FONTS[auto_name] = ImageFont.truetype(_auto_path, px)
+                    if DEBUG:
+                        print(f"  auto font '{auto_name}': {px}px "
+                              f"({_AUTO_FONT_FRACTION*100:.0f}% of {rh}px row)")
+                p['font_size'] = auto_name
+
+            # Named scale, explicit %, or integer with no font: →
+            # handled by _get_font() at render time using default_font.
 
     _LAYOUT = layout
 

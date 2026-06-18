@@ -32,12 +32,8 @@ orientation: landscape
 # other panels (date text, info rows) fall back to DejaVu Sans via the
 # built-in named scale sizes.
 fonts:
-  seg7-clock:
+  dseg7:
     file: DSEG7Classic-Italic.ttf
-    size: "42%"
-  seg7-secs:
-    file: DSEG7Classic-Italic.ttf
-    size: "10%"
 
 rows:
   - name: clock
@@ -49,7 +45,8 @@ rows:
         time_format: "%-I:%M"
         # time_format: 24h        # 24h looks most authentic on a 7-seg display
         color: ff0000
-        font_size: seg7-clock
+        font: dseg7
+        font_size: auto
 
   - name: divider-1
     height: "1%"
@@ -72,7 +69,8 @@ rows:
         timezone: US/Mountain
         time_format: 24hs
         color: burntsienna
-        font_size: seg7-secs
+        font: dseg7
+        font_size: 10%
 
   - name: divider-2
     height: "1%"
