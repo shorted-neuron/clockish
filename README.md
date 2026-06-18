@@ -46,7 +46,7 @@ Tested displays:
 
 ## Requirements
 
-- Python 3.9 or newer
+- Python 3.11 or newer
 - Raspberry Pi OS Bookworm / Ubuntu 22.04+ (for hardware features)
 - On Windows: most features work in a normal venv; GPIO / I²C stubs are skipped
 
@@ -278,6 +278,35 @@ Or don't, no one really cares.  Fork this if you like, but see the [LICENSE](LIC
 
 There are mistakes in here.  Some might matter to you, so you're welcome to submit PRs to fix or improve things.
 PRs should be small, focused, and deliver meaningful benefit to the project.  Meaningful is determined solely by the authors and authorized maintainers.
+
+**Note:** Fork PRs require maintainer approval before CI/CD workflows run.
+
+### Testing & CI/CD
+
+All pull requests are automatically tested with GitHub Actions, which runs:
+- **pre-commit hooks**: file hygiene, YAML linting, config validation
+- **pytest**: unit tests with coverage reporting
+- **ruff**: code linting and style checks
+- **mypy**: type checking
+
+Coverage reports are attached to each workflow run as artifacts. You can also run these locally:
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run pre-commit on all files
+pre-commit run --all-files
+
+# Run pytest
+pytest --cov=src/clockish
+
+# Run ruff
+ruff check .
+
+# Run mypy
+mypy src/clockish
+```
 
 
 ---

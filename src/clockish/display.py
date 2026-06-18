@@ -594,7 +594,7 @@ def _font_height(f: ImageFont.FreeTypeFont) -> int:
         return ascent + descent
     except AttributeError:
         bbox = f.getbbox("Ag|")
-        return bbox[3] - bbox[1]
+        return int(bbox[3] - bbox[1])
 
 def _center_y(py: int, ph: int, ink_top: int, ink_h: int) -> int:
     """Compute the y coordinate to pass to PIL's draw.text() so that the
@@ -616,7 +616,7 @@ def _center_y(py: int, ph: int, ink_top: int, ink_h: int) -> int:
 def _font_ink_top(f: ImageFont.FreeTypeFont) -> int:
     """Return the y offset from the cell top to the first ink pixel."""
     try:
-        return f.getbbox("Ag|")[1]
+        return int(f.getbbox("Ag|")[1])
     except Exception:
         return 0
 
@@ -811,7 +811,7 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
     _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify)
 
     if label_str:
-        time_w = time_f.getbbox(time_str)[2]
+        time_w = int(time_f.getbbox(time_str)[2])
         _draw_text_line(d, px + time_w + 6, py, pw, ph, label_str, time_f, color, justify='left')
 
 
