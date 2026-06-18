@@ -328,8 +328,17 @@ else
     ok ".venv created."
 fi
 
+# Verify the venv was created successfully before we try to use it.
+[[ ! -f "$VENV_DIR/bin/activate" ]] \
+    && die "venv creation failed: $VENV_DIR/bin/activate not found."
+
+# Resolve the Python binary -- 'python' is standard but some Debian venvs
+# only create 'python3'.  Using the binary directly (not the pip script)
+# avoids shebang-interpreter failures when the symlink names are inconsistent.
 VENV_PY="$VENV_DIR/bin/python"
-VENV_PIP="$VENV_DIR/bin/pip"
+[[ ! -x "$VENV_PY" ]] && VENV_PY="$VENV_DIR/bin/python3"
+[[ ! -x "$VENV_PY" ]] && die "venv Python binary not found at $VENV_DIR/bin/ -- venv may be incomplete."
+ok "venv Python: $VENV_PY"
 
 # Patch all activation scripts to export PYTHONUTF8=1.
 # This ensures Python uses UTF-8 for open() and stdio on every platform
@@ -345,7 +354,7 @@ bash "$SCRIPT_DIR/scripts/patch-venv-utf8.sh" "$VENV_DIR" \
 section "Python pip packages"
 
 info "Upgrading pip..."
-"$VENV_PIP" install --upgrade pip $PIP_Q
+"$VENV_PY" -m pip install --upgrade pip $PIP_Q
 
 # Core packages required by clockish.
 # numpy is intentionally absent here  --  it is either inherited from the system
@@ -375,7 +384,7 @@ fi
 info "Installing pip packages..."
 for pkg in "${PIP_PACKAGES[@]}"; do
     info "  pip install \"$pkg\""
-    "$VENV_PIP" install "$pkg" $PIP_Q
+    "$VENV_PY" -m pip install "$pkg" $PIP_Q
     ok "  installed: $pkg"
 done
 
@@ -384,7 +393,7 @@ done
 info "Installing clockish package (pip install -e .) ..."
 _CLOCKISH_TARGET="$SCRIPT_DIR"
 $INSTALL_ST7789 && _CLOCKISH_TARGET="${SCRIPT_DIR}[st7789]"
-"$VENV_PIP" install -e "$_CLOCKISH_TARGET" $PIP_Q
+"$VENV_PY" -m pip install -e "$_CLOCKISH_TARGET" $PIP_Q
 ok "clockish package installed  --  entry point: $VENV_DIR/bin/clockish"
 
 # ---------------------------------------------------------------------------
