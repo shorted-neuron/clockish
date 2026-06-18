@@ -1,9 +1,11 @@
+---
 # debug-landscape.yaml  --  clockish config
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish.py
 # Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml.
 # ---------------------------------------------------------------------------
 
+orientation: landscape
 
 rows:
   - name: utc-clock
@@ -14,25 +16,20 @@ rows:
         width: 40%
         timezone: UTC
         time_format: 24h
-        colors:
-          time:   lime
-          label:  lime
-        time_font: huge
+        color: lime
+        font_size: huge
       - type: date
         width: 25%
         timezone: UTC
         date_format: ":%S UTC"
-        colors:
-          date:   lime
-          label:  lime
-        time_font: huge
+        color: lime
+        font_size: huge
       - type: date
         width: 35%
         timezone: UTC
         date_format: "%a %b %-d, %Y"
-        colors:
-          date: darklime
-        date_font: small
+        color: darklime
+        font_size: small
 
   - name: divider-1
     height: 3
@@ -51,17 +48,14 @@ rows:
         timezone: America/Denver
         label: "DEN"
         time_format: 12h
-        colors:
-          time:   ff0000
-          label:  darkred
-        time_font: big
-        label_font: normal
+        color: ff0000
+        font_size: big
+
       - type: date
         timezone: America/Denver
         date_format: " %a, %B %-d"
-        colors:
-          date: slate
-        date_font: normal
+        color: slate
+        font_size: normal
 
   - name: ist-clock
     height: 36
@@ -72,11 +66,8 @@ rows:
         timezone: Asia/Kolkata
         label: "IST"
         time_format: 12h
-        colors:
-          time:   brown
-          label:  brown
-        time_font: big
-        label_font: small
+        color: brown
+        font_size: big
       - type: clock
         width: 30%
         justify: right
@@ -94,14 +85,14 @@ rows:
       - type: text
         label: "Time sync status:"
         color: white
-        font: small
+        font_size: small
         background: black
         width: 60%
       - type: fact
         source: ntp_all
         label: " is "
         color: black
-        font: small
+        font_size: small
         background: darkred
 
   - name: ip-disk
@@ -111,12 +102,12 @@ rows:
         source: hostname
         label: "host: "
         color: lime
-        font: small
+        font_size: small
       - type: fact
         source: ip
         label: "ip "
         color: grey
-        font: small
+        font_size: small
 
   - name: cpu-mem
     height: 26
@@ -126,10 +117,11 @@ rows:
         source: cpu
         label: "cpu: "
         color: yellow
-        font: small
-      - type: memory_stats
+        font_size: small
+      - type: fact
+        source: mem
         color: purple
-        font: small
+        font_size: small
 
   - name: debug
     height: 60
@@ -140,5 +132,4 @@ rows:
       - type: fact
         label: v
         source: version
-        font: small
-
+        font_size: small
