@@ -279,6 +279,8 @@ Or don't, no one really cares.  Fork this if you like, but see the [LICENSE](LIC
 There are mistakes in here.  Some might matter to you, so you're welcome to submit PRs to fix or improve things.
 PRs should be small, focused, and deliver meaningful benefit to the project.  Meaningful is determined solely by the authors and authorized maintainers.
 
+**Note:** Fork PRs require maintainer approval before CI/CD workflows run.
+
 ### Testing & CI/CD
 
 All pull requests are automatically tested with GitHub Actions, which runs:
