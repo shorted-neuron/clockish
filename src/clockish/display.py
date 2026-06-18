@@ -759,7 +759,7 @@ def _init_layout() -> None:
             return max(1, int(height * f))
         return max(1, int(f))
 
-    for r, ry, rh in layout:
+    for row_idx, (r, ry, rh) in enumerate(layout):
         for p in r.get('panels', []):
             font_ref  = p.get('font')      # which TTF file to use
             font_size = p.get('font_size') # size spec
@@ -795,6 +795,11 @@ def _init_layout() -> None:
 
             # Named scale, explicit %, or integer with no font: →
             # handled by _get_font() at render time using default_font.
+
+        # Pre-compute panel widths here so the warning fires only once at startup.
+        panels = r.get('panels', [])
+        if panels:
+            r['_widths'] = _resolve_panel_widths(panels, width, row_idx)
 
     _LAYOUT = layout
 
@@ -1125,7 +1130,7 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
     row_img  = Image.new("RGB", (rw, rh), row_bg)
     row_draw = ImageDraw.Draw(row_img)
 
-    widths = _resolve_panel_widths(panels, rw, row_idx)
+    widths = r.get('_widths') or _resolve_panel_widths(panels, rw, row_idx)
     if DEBUG_LAYOUT:
         auto_px = max(1, int(rh * _AUTO_FONT_FRACTION))
         print(f"row {row_idx} '{row_name}': ry={ry} rh={rh} rw={rw}  "
