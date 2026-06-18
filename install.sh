@@ -106,6 +106,8 @@ APT_PACKAGES=(
     fonts-dejavu-core
     # 7-segment display font  --  used by configs/seven-segment.yaml
     fonts-dseg
+    # YAML linter  --  used by clockish-validate for style checks
+    yamllint
     # swig is needed to build rpi-lgpio later
     swig
     # python3-swiglpk # unknown if needed

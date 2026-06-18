@@ -394,7 +394,7 @@ def _validate_yamllint(path: str) -> list[ValidationIssue]:
         return [ValidationIssue(
             'WARNING', path,
             "yamllint not installed  --  YAML style checks skipped. "
-            "Install with: pip install 'clockish[validate]'  or  pip install yamllint",
+            "Install with: pip install yamllint  (or re-run install.sh)",
         )]
 
     cfg_path = _find_yamllint_config()
