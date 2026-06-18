@@ -488,38 +488,76 @@ class TestFontsSection:
 
 
 # ---------------------------------------------------------------------------
-# Spot-checks on existing configs known to have issues
+# Spot-checks on deprecated patterns
 # ---------------------------------------------------------------------------
-
+# inline dicts test validator *behaviour* regardless of real config files
 class TestExistingConfigsSpotCheck:
-    """Verify that configs with known deprecated patterns produce the expected findings."""
+    """Verify that known deprecated patterns produce the expected findings."""
 
-    def test_clockish_yaml_has_deprecation_warnings(self) -> None:
-        """clockish.yaml uses time_font:, colors:, and font: <scale>  --  all should warn."""
-        result = validate_config_file(_config_path('clockish.yaml'), run_yamllint=False)
+    def test_time_font_and_colors_dict_detected(self) -> None:
+        """Simulates the old clockish.yaml / debug.yaml pattern."""
+        cfg = {
+            'orientation': 'landscape',
+            'rows': [{
+                'name': 'clock', 'height': 56,
+                'panels': [{
+                    'type': 'clock',
+                    'timezone': 'local',
+                    'time_format': '24hs',
+                    'colors': {'time': 'white', 'label': 'grey'},
+                    'time_font': 'big',
+                }],
+            }],
+        }
+        result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
-        assert any('time_font' in m or 'colors' in m or 'font_size' in m for m in msgs), \
-            f"Expected deprecation warnings for clockish.yaml but got none.\nWarnings: {msgs}"
+        assert any('time_font' in m for m in msgs)
+        assert any('colors' in m for m in msgs)
 
-    def test_debug_yaml_has_deprecation_warnings(self) -> None:
-        """debug.yaml uses time_font:, label_font:, colors:  --  all should warn."""
-        result = validate_config_file(_config_path('debug.yaml'), run_yamllint=False)
+    def test_label_font_detected(self) -> None:
+        """Simulates the old debug.yaml / landscape-demo.yaml pattern."""
+        cfg = {
+            'orientation': 'landscape',
+            'rows': [{
+                'name': 'clock', 'height': 64,
+                'panels': [{
+                    'type': 'clock',
+                    'timezone': 'America/Denver',
+                    'label': 'DEN',
+                    'time_format': '12h',
+                    'colors': {'time': 'ff0000', 'label': 'darkred'},
+                    'time_font': 'big',
+                    'label_font': 'normal',
+                }],
+            }],
+        }
+        result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
-        assert any('time_font' in m or 'label_font' in m or 'colors' in m for m in msgs), \
-            f"Expected deprecation warnings for debug.yaml but got none.\nWarnings: {msgs}"
+        assert any('label_font' in m for m in msgs)
 
-    def test_big_red_yaml_missing_orientation_errors(self) -> None:
-        """big-red.yaml has no 'orientation' key  --  should be an ERROR."""
-        result = validate_config_file(_config_path('big-red.yaml'), run_yamllint=False)
-        assert result.has_errors, \
-            "big-red.yaml should have errors (missing orientation)"
+    def test_missing_orientation_errors(self) -> None:
+        """Simulates the old config pattern (no orientation key)."""
+        cfg = {
+            'rows': [{
+                'name': 'clock', 'height': 170,
+                'panels': [{'type': 'clock', 'timezone': 'US/Mountain'}],
+            }],
+        }
+        result = validate_config_dict(cfg)
+        assert result.has_errors, "Missing orientation should be an ERROR"
 
-    def test_landscape_demo_has_deprecation_warnings(self) -> None:
-        """landscape-demo.yaml uses time_font:, label_font:, colors:  --  should warn."""
-        result = validate_config_file(_config_path('landscape-demo.yaml'), run_yamllint=False)
+    def test_font_scale_name_as_font_ref_detected(self) -> None:
+        """Simulates the old pattern of font: small (should be font_size: small)."""
+        cfg = {
+            'orientation': 'landscape',
+            'rows': [{
+                'name': 'info', 'height': 34,
+                'panels': [{'type': 'fact', 'source': 'hostname', 'font': 'small'}],
+            }],
+        }
+        result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
-        assert any('time_font' in m or 'colors' in m for m in msgs), \
-            f"Expected deprecation warnings for landscape-demo.yaml.\nWarnings: {msgs}"
+        assert any('font_size' in m for m in msgs)
 
 
 # ---------------------------------------------------------------------------

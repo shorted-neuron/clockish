@@ -394,7 +394,7 @@ def _validate_yamllint(path: str) -> list[ValidationIssue]:
         return [ValidationIssue(
             'WARNING', path,
             "yamllint not installed  --  YAML style checks skipped. "
-            "Install with: pip install 'clockish[validate]'",
+            "Install with: pip install 'clockish[validate]'  or  pip install yamllint",
         )]
 
     cfg_path = _find_yamllint_config()
@@ -462,7 +462,7 @@ def _validate_schema(config: dict, file_path: str) -> list[ValidationIssue]:
         return [ValidationIssue(
             'WARNING', file_path,
             "jsonschema not installed  --  structural schema checks skipped. "
-            "Install with: pip install 'clockish[validate]'",
+            "Install with: pip install jsonschema",
         )]
 
     issues: list[ValidationIssue] = []
