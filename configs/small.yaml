@@ -1,9 +1,11 @@
-# small-info.yaml  --  clockish config
+---
+# small.yaml  --  clockish config
 # ---------------------------------------------------------------------------
 # Layout for a small 240x135 ST7789 display (e.g. Adafruit 1.14" TFT #4383).
 # Display settings are in display.yaml  --  use configs/display/st7789-240x135.yaml.
 # ---------------------------------------------------------------------------
 
+orientation: landscape
 
 rows:
   - name: app-header
@@ -14,13 +16,13 @@ rows:
         # justify: center
         label: "clockish"
         color: silver
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         source: version
         label: "default"
         color: grey
-        font: small
+        font_size: small
 
   - name: local-clock
     height: 30
@@ -29,10 +31,8 @@ rows:
         # justify: center
         timezone: local
         time_format: 24hs
-        colors:
-          time:   white
-          label:  grey
-        time_font: small
+        color: white
+        font_size: small
 
   - name: network
     height: 28
@@ -44,13 +44,13 @@ rows:
         source: hostname
         # label: "default"
         color: yellow
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         source: ip
         # label: "default"
         color: silver
-        font: tiny
+        font_size: tiny
 
 # - name: wifi-status
 #   height: 24
@@ -64,13 +64,13 @@ rows:
 #       # justify: center
 #       source: wifi_status
 #       color: lime
-#       font: tiny
+#       font_size: tiny
 #     - type: fact
 #       # justify: center
 #       source: wifi_ssid
 #       label: "default"
 #       color: darklime
-#       font: tiny
+#       font_size: tiny
 
   - name: cpu
     height: 26
@@ -80,11 +80,10 @@ rows:
         source: cpu
         label: "default"
         color: yellow
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         source: cpu_load
         label: "default"
         color: darkyellow
-        font: small
-
+        font_size: small
