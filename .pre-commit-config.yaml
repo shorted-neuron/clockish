@@ -66,6 +66,7 @@ repos:
       - id: clockish-validate
         name: clockish-validate (schema + deprecations)
         entry: python -m clockish.config_validator --no-yamllint
-        language: system
+        language: python
+        additional_dependencies: ["."]
         files: ^configs/(?!display/|clockish-config\.schema).*\.yaml$
         pass_filenames: true
