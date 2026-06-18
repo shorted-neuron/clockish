@@ -1,15 +1,15 @@
-# seven-segment.yaml — clockish config for red 7-segment-style clock
+# seven-segment.yaml  --  clockish config for red 7-segment-style clock
 # ---------------------------------------------------------------------------
 # Requires the DSEG7Classic font (SIL OFL 1.1 license).
 # Install one of these ways:
 #
-#   Option A — apt package (Debian / Raspberry Pi OS / Ubuntu):
+#   Option A  --  apt package (Debian / Raspberry Pi OS / Ubuntu):
 #     sudo apt install fonts-dseg
 #
-#   Option B — vendor the font into third_party/dseg/:
+#   Option B  --  vendor the font into third_party/dseg/:
 #     bash scripts/download-dseg-font.sh
 #
-# DSEG7 is digits/symbols only — date text and info rows use DejaVu Sans.
+# DSEG7 is digits/symbols only  --  date text and info rows use DejaVu Sans.
 #
 # Font variants available once installed (change file: in fonts: below):
 #   DSEG7Classic-Regular.ttf   <- authentic look: ghost/"off" segments visible
@@ -44,7 +44,7 @@ rows:
         timezone: US/Mountain
         time_format: "%-I:%M"
         # time_format: 24h        # 24h looks most authentic on a 7-seg display
-        color: red
+        color: ff0000
         font: dseg7
         font_size: auto
 

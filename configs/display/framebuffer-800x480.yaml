@@ -1,13 +1,13 @@
-# Raspberry Pi Official 7" Touch Display (DSI) — 800 × 480
+# Raspberry Pi Official 7" Touch Display (DSI)  --  800 x 480
 # ---------------------------------------------------------------------------
 # Connects via the DSI ribbon-cable connector, no SPI/GPIO needed.
 # The display appears as /dev/fb0 automatically at boot.
 #
 # Compatible with:
-#   Raspberry Pi Touch Display  (2013 original, 800×480)
-#   Raspberry Pi Touch Display 2 (2024, 800×480 default mode)
+#   Raspberry Pi Touch Display  (2013 original, 800x480)
+#   Raspberry Pi Touch Display 2 (2024, 800x480 default mode)
 #
-# No extra pip packages required — uses the Linux kernel framebuffer.
+# No extra pip packages required  --  uses the Linux kernel framebuffer.
 #
 # Prerequisites:
 #   sudo usermod -aG video $USER   (log out and back in)

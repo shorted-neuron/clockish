@@ -36,7 +36,7 @@
 #             Remove or comment out to disable.
 #
 # Timezones: any IANA name e.g. "UTC", "America/Denver", "America/New_York",
-#            "Europe/London", "Asia/Tokyo"  — or "local" for system local time.
+#            "Europe/London", "Asia/Tokyo"   --  or "local" for system local time.
 #
 # Colors: any name from pyili9486.colors  (case-insensitive)
 #
@@ -45,7 +45,7 @@
 #   label: default -> built-in default label for that source (e.g. "ip ", "signal ")
 #   label: "foo "  -> custom prefix string
 #
-# justify: center (default), left, or right  — horizontal alignment within panel cell
+# justify: center (default), left, or right   --  horizontal alignment within panel cell
 #
 # time_format:
 #   12h  ->  "1:23 PM"      (%-I:%M %p  on Linux)
@@ -56,7 +56,7 @@
 # Font package suggestions:
 #  apt install fonts-ubuntu fonts-liberation fonts-noto-core fonts-croscore fonts-freefont-ttf
 
-# Display settings are in display.yaml — use configs/display/ili9486-portrait.yaml.
+# Display settings are in display.yaml  --  use configs/display/ili9486-portrait.yaml.
 
 rows:
   - name: utc-clock

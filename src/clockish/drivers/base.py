@@ -23,7 +23,7 @@ class DisplayDriver(ABC):
     ----------
     1. Instantiate with the ``display`` config dict:
            driver = MyDriver(display_cfg)
-    2. Call :meth:`begin` — opens SPI/I2C/USB, sets up GPIO, returns *self*:
+    2. Call :meth:`begin`  --  opens SPI/I2C/USB, sets up GPIO, returns *self*:
            driver = driver.begin()
     3. Call :meth:`display` once per frame to push a PIL image.
     4. Call :meth:`close` when done to release hardware resources.
@@ -33,7 +33,7 @@ class DisplayDriver(ABC):
     """
 
     # ------------------------------------------------------------------
-    # Abstract interface — subclasses MUST override these
+    # Abstract interface  --  subclasses MUST override these
     # ------------------------------------------------------------------
 
     @abstractmethod
@@ -56,7 +56,7 @@ class DisplayDriver(ABC):
         ...
 
     # ------------------------------------------------------------------
-    # Optional hooks — subclasses MAY override these
+    # Optional hooks  --  subclasses MAY override these
     # ------------------------------------------------------------------
 
     def idle(self, state: bool = True) -> None:
@@ -66,7 +66,7 @@ class DisplayDriver(ABC):
         """
 
     def close(self) -> None:
-        """Release hardware resources (SPI bus, GPIO lines, file handles, …).
+        """Release hardware resources (SPI bus, GPIO lines, file handles, ...).
 
         Called once on clean shutdown.  No-op by default.
         """

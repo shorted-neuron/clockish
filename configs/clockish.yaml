@@ -1,7 +1,7 @@
 # clockish.yaml - config
 # ---------------------------------------------------------------------------
 # System information display: local time + all available fact sources.
-# Display settings are in display.yaml — see configs/display/ for profiles.
+# Display settings are in display.yaml  --  see configs/display/ for profiles.
 # ---------------------------------------------------------------------------
 
 

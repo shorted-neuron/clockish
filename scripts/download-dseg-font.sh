@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# download-dseg-font.sh — download the DSEG 7-segment font into third_party/dseg/
+# download-dseg-font.sh  --  download the DSEG 7-segment font into third_party/dseg/
 # ---------------------------------------------------------------------------
 # DSEG is an open-source 7-segment / 14-segment TrueType font by keshikan.
 # License: SIL Open Font License 1.1  (https://scripts.sil.org/OFL)
@@ -25,13 +25,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEST_DIR="${PROJECT_ROOT}/third_party/dseg"
 
-echo "==> Downloading DSEG v${DSEG_VERSION} from GitHub…"
+echo "==> Downloading DSEG v${DSEG_VERSION} from GitHub..."
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
 curl -fsSL -o "${TMP_DIR}/${DSEG_ZIP}" "${DSEG_URL}"
 
-echo "==> Extracting…"
+echo "==> Extracting..."
 unzip -q "${TMP_DIR}/${DSEG_ZIP}" -d "${TMP_DIR}/dseg-extracted"
 
 # The zip contains a nested directory like "DSEG-font-0.46/".

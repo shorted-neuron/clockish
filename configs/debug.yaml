@@ -1,7 +1,7 @@
-# debug.yaml — clockish config
+# debug.yaml  --  clockish config
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish
-# Display settings are in display.yaml — use configs/display/ili9486-portrait.yaml.
+# Display settings are in display.yaml  --  use configs/display/ili9486-portrait.yaml.
 # ---------------------------------------------------------------------------
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-clockish-corners — display offset / framing calibration tool.
+clockish-corners  --  display offset / framing calibration tool.
 
 Draws single-pixel right-angle corner markers at all four corners of the
 display plus a centre crosshair.  If the offsets in your config are correct,

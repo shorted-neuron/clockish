@@ -5,7 +5,7 @@ from clockish.platform_utils import is_windows, is_linux
 
 
 def test_platform_detection_does_not_crash():
-    """Basic smoke test — just make sure the helpers run without error."""
+    """Basic smoke test  --  just make sure the helpers run without error."""
     from clockish import platform_utils
     # One of these must be True on any supported platform
     assert platform_utils.is_windows() or platform_utils.is_linux() or True

@@ -1,7 +1,7 @@
-# debug-landscape.yaml — clockish config
+# debug-landscape.yaml  --  clockish config
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish.py
-# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
+# Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml.
 # ---------------------------------------------------------------------------
 
 

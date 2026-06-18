@@ -1,10 +1,10 @@
-# Linux framebuffer — 1920 × 1080 (HDMI or high-res DSI)
+# Linux framebuffer  --  1920 x 1080 (HDMI or high-res DSI)
 # ---------------------------------------------------------------------------
 # Use this profile for any display the Pi initialises at 1080p, including:
-#   HDMI monitors at 1920×1080
+#   HDMI monitors at 1920x1080
 #   High-resolution DSI panels
 #
-# No extra pip packages required — uses the Linux kernel framebuffer.
+# No extra pip packages required  --  uses the Linux kernel framebuffer.
 #
 # Prerequisites:
 #   sudo usermod -aG video $USER   (log out and back in)

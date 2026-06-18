@@ -1,5 +1,5 @@
 """
-Entry point — allows `python -m clockish` as well as the `clockish` CLI command
+Entry point  --  allows `python -m clockish` as well as the `clockish` CLI command
 (the latter is configured in pyproject.toml [project.scripts]).
 """
 import sys

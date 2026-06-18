@@ -1,7 +1,7 @@
-# nixie.yaml — clockish config for a nixie-tube-style clock
+# nixie.yaml  --  clockish config for a nixie-tube-style clock
 # ---------------------------------------------------------------------------
 # Requires the Nixie One font (SIL OFL 1.1 license).
-# Nixie One is a Google Font by Jovanny Lemonad — a faithful recreation of
+# Nixie One is a Google Font by Jovanny Lemonad  --  a faithful recreation of
 # the warm, glowing cathode style of vintage Nixie tube displays.
 #
 # Install:
@@ -19,10 +19,10 @@
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Orientation hint — landscape | portrait | square
-#   landscape: aspect ratio ≥ ~1.5  (e.g. 480x320, 800x480, 1920x1080)
-#   portrait:  aspect ratio ≤ ~0.7  (e.g. 320x480)
-#   square:    aspect ratio ≈ 1.0
+# Orientation hint  --  landscape | portrait | square
+#   landscape: aspect ratio >= ~1.5  (e.g. 480x320, 800x480, 1920x1080)
+#   portrait:  aspect ratio <= ~0.7  (e.g. 320x480)
+#   square:    aspect ratio ~ 1.0
 #
 # This hint is informational; it helps users pick the right config for their
 # display.  All row heights and font sizes below are percentages of the
@@ -31,35 +31,35 @@
 orientation: landscape
 
 # ---------------------------------------------------------------------------
-# default_font — TTF file used for all built-in scale font names.
+# default_font  --  TTF file used for all built-in scale font names.
 #
 # When set, every standard font name (giant, huge, big, med, normal, small,
 # tiny, micro) is loaded from this file at the appropriate percentage of the
-# display height — no explicit 'fonts:' section is needed for a single
+# display height  --  no explicit 'fonts:' section is needed for a single
 # typeface.  The file is searched in all subdirectories of third_party/.
 # ---------------------------------------------------------------------------
 default_font: NixieOne-Regular.ttf
 
 # ---------------------------------------------------------------------------
-# Built-in font scale (% of display height) — for reference:
+# Built-in font scale (% of display height)  --  for reference:
 #
-#   giant  ≈ 68%   big    ≈ 30%   small  ≈  8%
-#   huge   ≈ 45%   med    ≈ 20%   tiny   ≈  5%
-#                  normal ≈ 12%   micro  ≈  3%
+#   giant  ~ 68%   big    ~ 30%   small  ~  8%
+#   huge   ~ 45%   med    ~ 20%   tiny   ~  5%
+#                  normal ~ 12%   micro  ~  3%
 #
 # Example pixel sizes at common display heights:
-#   height 320px (480×320):    giant≈218  normal≈38  tiny≈16
-#   height 480px (800×480):    giant≈326  normal≈58  tiny≈24
-#   height 1080px (1920×1080): giant≈734  normal≈130 tiny≈54
+#   height 320px (480x320):    giant~218  normal~38  tiny~16
+#   height 480px (800x480):    giant~326  normal~58  tiny~24
+#   height 1080px (1920x1080): giant~734  normal~130 tiny~54
 #
 # You can still define a 'fonts:' section for custom overrides or additional
 # named fonts.  Sizes may be integer pixels or percentage strings like "10%".
 # ---------------------------------------------------------------------------
 
-# Display settings are in a display profile — pair with one of:
-#   configs/display/ili9486-landscape.yaml     (480×320 SPI display)
-#   configs/display/framebuffer-800x480.yaml   (800×480 framebuffer)
-#   configs/display/framebuffer-1920x1080.yaml (1920×1080 framebuffer)
+# Display settings are in a display profile  --  pair with one of:
+#   configs/display/ili9486-landscape.yaml     (480x320 SPI display)
+#   configs/display/framebuffer-800x480.yaml   (800x480 framebuffer)
+#   configs/display/framebuffer-1920x1080.yaml (1920x1080 framebuffer)
 
 rows:
   - name: clock
