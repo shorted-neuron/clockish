@@ -24,4 +24,3 @@ display:
   # spi_speed_hz: 64000000
   # dc_pin:       24        # BCM GPIO for Data/Command
   # rst_pin:      25        # BCM GPIO for Reset
-
