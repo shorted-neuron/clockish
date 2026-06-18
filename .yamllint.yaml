@@ -34,3 +34,8 @@ rules:
   octal-values:
     forbid-implicit-octal: true
     forbid-explicit-octal: true
+
+  # allow space after colons for readability, but not require it
+  colons:
+    max-spaces-after: 20
+    level: warning
