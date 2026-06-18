@@ -62,7 +62,7 @@ rows:
         timezone: US/Mountain
         time_format: 24hs
         color: seagreen
-        font_size: normal
+        font_size: small
 
   - name: divider-2
     height: "1%"
