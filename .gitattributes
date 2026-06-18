@@ -37,7 +37,7 @@
 # Windows-only artifacts — keep their native CRLF
 *.bat       text eol=crlf
 *.cmd       text eol=crlf
-*.ps1       text eol=crlf
+*.ps1       text eol=lf
 
 # True binary files — never mangle
 *.png       binary
