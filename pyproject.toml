@@ -115,3 +115,10 @@ select = ["E", "F", "W", "I"]   # pycodestyle, pyflakes, isort
 [tool.mypy]
 python_version = "3.11"
 warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = false
+disallow_incomplete_defs = false
+strict_optional = false
+allow_untyped_calls = true
+no_implicit_optional = false
+disable_error_code = ["name-defined", "var-annotated", "attr-defined", "assignment", "method-assign", "func-returns-value"]

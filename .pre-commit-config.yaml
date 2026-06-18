@@ -1,3 +1,4 @@
+---
 # .pre-commit-config.yaml  --  pre-commit hook configuration for clockish
 # ---------------------------------------------------------------------------
 # Setup (one-time, after cloning):
@@ -68,3 +69,17 @@ repos:
         additional_dependencies: ["jsonschema>=4.17", "PyYAML>=6.0"]
         files: ^configs/(?!display/|clockish-config\.schema).*\.yaml$
         pass_filenames: true
+
+  # ---------------------------------------------------------------------------
+  # Type checking with mypy
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (type checking)
+        entry: mypy src/clockish
+        language: python
+        additional_dependencies: ["mypy"]
+        args: ["--ignore-missing-imports", "--no-check-untyped-defs"]
+        files: ^src/clockish/.*\.py$
+        pass_filenames: false
