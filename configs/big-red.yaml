@@ -9,14 +9,14 @@ orientation: landscape
 
 rows:
   - name: clock
-    height: 50%
+    height: 45%
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         color: red
-        font_size: giant
+        font_size: huge
 
       - type: clock
         justify: center
@@ -24,7 +24,7 @@ rows:
         timezone: US/Mountain
         time_format: "%p"
         color: darkred
-        font_size: normal
+        font_size: med
 
   - name: divider-1
     height: 2%
@@ -41,7 +41,7 @@ rows:
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         color: darkred
-        font_size: med
+        font_size: normal
 
   - name: divider-1
     height: 2%
@@ -69,16 +69,15 @@ rows:
         source: wifi_ssid
         label: "SSID "
         color: darkred
-        font_size: small
+        font_size: tiny
       - type: fact
         # justify: center
         width: 20%
         source: wifi_signal
-        label: "sig: "
         color: dimred
         font_size: small
       - type: fact
-        # justify: center
+        justify: right
         width: 18%
         source: wifi_quality
         label: "q:"
@@ -93,12 +92,12 @@ rows:
         justify: left
         source: hostname
         color: brown
-        font_size: small
+        font_size: tiny
       - type: fact
         width: 33%
         justify: center
         source: ip
         color: brown
-        font_size: small
+        font_size: tiny
       - type: debug
         color: chocolate
