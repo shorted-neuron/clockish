@@ -1159,6 +1159,23 @@ def _init() -> None:
     # --- Config ------------------------------------------------------------
     _config = _load_config(_args.config)
 
+    # Validate config at startup: print all issues; errors are prominent but
+    # do NOT abort startup (clockish will attempt to run in a degraded state).
+    try:
+        from clockish.config_validator import validate_config_dict as _validate_cfg
+        _cfg_path = _args.config or _DEFAULT_CONFIG
+        _vr = _validate_cfg(_config, path=_cfg_path, run_yamllint=False)
+        if _vr.issues:
+            _vr.print_summary(file=sys.stderr)
+            if _vr.has_errors:
+                print(
+                    "WARNING: config has errors (listed above). "
+                    "clockish will attempt to continue but may behave unexpectedly.",
+                    file=sys.stderr,
+                )
+    except Exception as _ve:
+        print(f"WARNING: config validation failed unexpectedly: {_ve}", file=sys.stderr)
+
     if 'display' not in _config:
         _profile_path = _find_display_profile(_args.config)
         if _profile_path:

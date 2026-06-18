@@ -51,6 +51,8 @@ dependencies = [
     "numpy>=1.21.0",
     # Config files
     "PyYAML>=6.0",
+    # Config schema validation (used at startup + ad-hoc via clockish-validate)
+    "jsonschema>=4.17",
     # Timezone data (needed on systems without tzdata OS package, e.g. minimal Pi OS)
     "tzdata>=2024.1",
     # pyili9486  --  ILI9486 SPI display driver (Pi only; pulls in spidev which is Linux-only)
@@ -74,6 +76,7 @@ dev = [
     "pytest-cov",
     "ruff",          # linter + formatter
     "mypy",          # type checker
+    "yamllint>=1.35",  # YAML style linting (used by clockish-validate --yamllint)
 ]
 
 # -- CLI entry points ----------------------------------------------------------
@@ -85,6 +88,7 @@ clockish-depth   = "clockish.colordepth:main"
 clockish-test    = "clockish.colortest:main"
 clockish-fonts   = "clockish.fontdemo:main"
 clockish-corners = "clockish.cornertest:main"
+clockish-validate = "clockish.config_validator:main"
 
 # -- Where to find packages ----------------------------------------------------
 [tool.hatch.build.targets.wheel]

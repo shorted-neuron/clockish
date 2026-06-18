@@ -1,0 +1,37 @@
+# .yamllint.yaml  --  yamllint configuration for clockish
+# ---------------------------------------------------------------------------
+# Applied automatically by:
+#   clockish-validate configs/*.yaml        (Python API)
+#   pre-commit (if configured in .pre-commit-config.yaml)
+#
+# Reference: https://yamllint.readthedocs.io/en/stable/configuration.html
+# ---------------------------------------------------------------------------
+
+extends: default
+
+rules:
+  # Allow longer lines (comments and date_format strings get long)
+  line-length:
+    max: 120
+    level: warning
+
+  # Don't require '---' document start marker
+  document-start:
+    level: warning
+
+  # Clockish configs use 'true'/'false' as booleans; allow yaml 1.1 truthy values
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
+
+  # Allow comments anywhere without strict indentation rules
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+
+
+  # Percentage strings like "55%" look like octal to some parsers but are fine here
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+
