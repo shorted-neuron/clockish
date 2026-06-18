@@ -296,8 +296,6 @@ if DEBUG:
     print("Font metrics:")
     dump_font_metrics()
 
-# Pre-compute layout and resolve 'auto' font references once at startup.
-_init_layout()
 
 
 # ---------------------------------------------------------------------------
@@ -754,6 +752,12 @@ def _init_layout() -> None:
                     p[key] = auto_name
 
     _LAYOUT = layout
+
+
+# Pre-compute layout and resolve 'auto' font references once at startup.
+# Must be called after: font aliases (populates _FONTS), _resolve_colors (resolves
+# color fields), and all helper functions used by _measure_rows/_init_layout.
+_init_layout()
 
 
 # ---------------------------------------------------------------------------
