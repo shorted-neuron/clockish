@@ -34,14 +34,10 @@ WARNING
 
 Dependencies
 ------------
-Required (already in clockish main deps):
+Required:
     PyYAML     --  config loading
-
-Optional but strongly recommended:
-    jsonschema  --  schema validation; added to clockish[validate] and dev extras.
-                 If not installed, schema checks are skipped with a notice.
-    yamllint    --  YAML style lint; dev / CI only.
-                 If not installed, lint checks are skipped with a notice.
+    jsonschema  --  schema validation; required dep (pyproject.toml main deps).
+    yamllint    --  YAML style lint; required dep (also available as apt: yamllint).
 """
 from __future__ import annotations
 
