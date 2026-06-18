@@ -12,88 +12,67 @@
 # Unlike DSEG7, the 14-segment font supports the full alphabet — so the date
 # row is rendered in 14-seg style too, giving a full VFD display look.
 #
-# Font variants available once installed (set the 'file:' key below):
-#   DSEG14Classic-Regular.ttf   ← authentic look: ghost/"off" segments visible
+# Font variants available once installed (change default_font below):
+#   DSEG14Classic-Regular.ttf   <- authentic look: ghost/"off" segments visible
 #   DSEG14Classic-Bold.ttf
-#   DSEG14Classic-Italic.ttf    ← nice retro slant
+#   DSEG14Classic-Italic.ttf    <- nice retro slant
 #   DSEG14Classic-BoldItalic.ttf
-#   DSEG14Modern-Regular.ttf    ← cleaner look: no ghost segments
+#   DSEG14Modern-Regular.ttf    <- cleaner look: no ghost segments
 #   DSEG14Modern-Bold.ttf
+#
+# The 'file' is searched in:
+#   /usr/share/fonts/truetype/dseg/  (apt install fonts-dseg)
+#   third_party/dseg/                (scripts/download-dseg-font.sh)
 #
 # See also: https://github.com/keshikan/DSEG
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Custom fonts — maps a config name to a TTF file + size.
-# The 'file' is searched in:
-#   /usr/share/fonts/truetype/dseg/  (apt install fonts-dseg)
-#   third_party/dseg/                (scripts/download-dseg-font.sh)
-# ---------------------------------------------------------------------------
-fonts:
-  seg14giant:
-    file: DSEG14Classic-Italic.ttf
-    size: 128
-  seg14huge:
-    file: DSEG14Classic-Regular.ttf
-    size: 64
-  seg14med:
-    file: DSEG14Classic-Regular.ttf
-    size: 32
-  seg14small:
-    file: DSEG14Classic-Regular.ttf
-    size: 18
-
-# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
+orientation: landscape
+default_font: DSEG14Classic-Italic.ttf
 
 rows:
   - name: clock
-    height: 175
+    height: "55%"
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
         time_format: 24h
-        colors:
-          # time: lawngreen       # bright VFD green
-          # time: brightgreen
-          # time: aqua            # blue-green VFD tint
-          time: lawngreen
-        time_font: seg14giant
+        color: lawngreen
+        font_size: huge
 
   - name: divider-1
-    height: 4
+    height: "1%"
     panels:
       - type: divider
         height: 1
         color: seagreen
 
   - name: date
-    height: 48
+    height: "15%"
     panels:
       - type: date
         justify: left
         timezone: US/Mountain
         date_format: "%a, %B %-d"   # 14-seg handles letters — no need to fall back to DejaVu
-        colors:
-          date: medspringgreen
-        date_font: seg14med
+        color: medspringgreen
+        font_size: normal
       - type: clock
         justify: right
         timezone: US/Mountain
         time_format: 24hs
-        colors:
-          time: seagreen
-        time_font: seg14med
+        color: seagreen
+        font_size: normal
 
   - name: divider-2
-    height: 4
+    height: "1%"
     panels:
       - type: divider
         height: 1
         color: seagreen
 
   - name: wifi-info
-    height: 34
+    height: "11%"
     panels:
       - type: wifi_graphic
         width: 50
@@ -102,40 +81,39 @@ rows:
         width: 20%
         source: wifi_status
         color: seagreen
-        font: seg14small
+        font_size: tiny
       - type: fact
         width: 20%
         source: wifi_ssid
         color: forestgreen
-        font: seg14small
+        font_size: tiny
       - type: fact
         width: 35%
         source: wifi_signal
         # label: "sig: "
         color: forestgreen
-        font: seg14small
+        font_size: tiny
       - type: fact
         width: 18%
         source: wifi_quality
         label: "q:"
         color: forestgreen
-        font: seg14small
+        font_size: tiny
 
   - name: host-ip
-    height: 39
+    height: "12%"
     panels:
       - type: fact
         width: 30%
         justify: left
         source: hostname
         color: seagreen
-        font: seg14small
+        font_size: tiny
       - type: fact
         width: 38%
         justify: center
         source: ip
         color: seagreen
-        font: seg14small
+        font_size: tiny
       - type: debug
         color: forestgreen
-
