@@ -1,0 +1,33 @@
+# Raspberry Pi Official 7" Touch Display (DSI) — 800 × 480
+# ---------------------------------------------------------------------------
+# Connects via the DSI ribbon-cable connector, no SPI/GPIO needed.
+# The display appears as /dev/fb0 automatically at boot.
+#
+# Compatible with:
+#   Raspberry Pi Touch Display  (2013 original, 800×480)
+#   Raspberry Pi Touch Display 2 (2024, 800×480 default mode)
+#
+# No extra pip packages required — uses the Linux kernel framebuffer.
+#
+# Prerequisites:
+#   sudo usermod -aG video $USER   (log out and back in)
+#
+# The driver automatically switches the VT to KD_GRAPHICS mode on start,
+# which suppresses the blinking cursor and any console text overlay.
+# Masking getty@tty1 is enough for a clean display:
+#   sudo systemctl mask getty@tty1
+# For a fully silent boot also add to /boot/firmware/cmdline.txt:
+#   quiet logo.nologo vt.global_cursor_default=0
+#
+# Check your actual resolution first:
+#   fbset -i
+#   cat /sys/class/graphics/fb0/virtual_size
+# ---------------------------------------------------------------------------
+
+display:
+  driver:   framebuffer
+  device:   /dev/fb0
+  width:    800
+  height:   480
+  rotation: 0
+

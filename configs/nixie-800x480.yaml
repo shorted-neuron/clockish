@@ -27,91 +27,105 @@
 fonts:
   nixiegiant:
     file: NixieOne-Regular.ttf
-    size: 220
+    size: 300
   nixiehuge:
     file: NixieOne-Regular.ttf
-    size: 64
+    size: 128
   nixiemed:
     file: NixieOne-Regular.ttf
-    size: 32
+    size: 64
   nixiesmall:
     file: NixieOne-Regular.ttf
-    size: 18
+    size: 24
 
 # Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
 
 rows:
   - name: clock
-    height: 220
+    height: 296
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         colors:
-          # time: darkorange      # classic warm nixie yellow-orange
-          # time: burntsienna     # deeper amber
+          # time: gold            # classic warm nixie yellow-orange
+          # time: darkorange      # deeper amber
           # time: orange          # bright amber
           time: darkorange
+          label:  rust
         time_font: nixiegiant
 
+      - type: clock
+        justify: center
+        width: 1
+        timezone: US/Mountain
+        time_format: "%p"
+        colors:
+          time:   darkred
+        time_font: nixiesmall
+
   - name: divider-1
-    height: 9
+    height: 13
     panels:
       - type: divider
         height: 1
         color: rust
 
   - name: date
-    height: 48
+    height: 78
     panels:
       - type: date
-        width: 60%
-        justify: left
+        justify: center
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
           date: darkorange
         date_font: nixiemed
-      - type: clock
-        justify: center
-        timezone: US/Mountain
-        time_format: ":%S"
-        colors:
-          time: burntsienna
-        time_font: nixiemed
-      - type: fact
-        source: cpu
-        justify: right
-        color: darkorange
-        font: nixiemed
+#      - type: date
+#        justify: center
+#        timezone: US/Mountain
+#        date_format: ":%S"
+#        colors:
+#          time: burntsienna
+#        date_font: nixiemed
 
   - name: divider-2
-    height: 9
+    height: 13
     panels:
       - type: divider
         height: 1
         color: rust
 
   - name: wifi-info
-    height: 34
+    height: 80
     panels:
       - type: wifi_graphic
         width: 44
         color: burntsienna
       - type: fact
-        width: 18%
+        width: 15%
         source: wifi_status
         color: rust
         font: nixiesmall
       - type: fact
+        width: 15%
         source: hostname
         color: rust
         font: nixiesmall
       - type: fact
         source: ip
+        width: 20%
         color: rust
         font: nixiesmall
-      # - type: debug
-      #   color: rust
+      - type: fact
+        width: 10%
+        justify: center
+        source: cpu
+        color: rust
+        font: nixiesmall
+      - type: debug
+        justify: right
+        color: rust
+        font: nixiesmall
 

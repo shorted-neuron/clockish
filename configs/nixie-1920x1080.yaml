@@ -1,4 +1,4 @@
-# nixie.yaml — clockish config for a nixie-tube-style clock
+# fullscreen-clock.yaml — clockish config for a full screen HD 1920x1080 display
 # ---------------------------------------------------------------------------
 # Requires the Nixie One font (SIL OFL 1.1 license).
 # Nixie One is a Google Font by Jovanny Lemonad — a faithful recreation of
@@ -27,43 +27,52 @@
 fonts:
   nixiegiant:
     file: NixieOne-Regular.ttf
-    size: 220
+    size: 900
   nixiehuge:
     file: NixieOne-Regular.ttf
-    size: 64
+    size: 128
   nixiemed:
     file: NixieOne-Regular.ttf
-    size: 32
+    size: 64
   nixiesmall:
     file: NixieOne-Regular.ttf
-    size: 18
+    size: 32
 
-# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
+# Display settings are in display.yaml — use configs/display/framebuffer-1920x1080.yaml
 
 rows:
   - name: clock
-    height: 220
+    height: 900
     panels:
       - type: clock
+        # width: 85% # uncomment if using the am/pm indicator below
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         colors:
           # time: darkorange      # classic warm nixie yellow-orange
-          # time: burntsienna     # deeper amber
+          time: burntsienna       # deeper amber
           # time: orange          # bright amber
-          time: darkorange
+          label:  rust
         time_font: nixiegiant
+      # - type: clock
+      #   width: 15%
+      #   justify: center
+      #   timezone: US/Mountain
+      #   time_format: "%p"
+      #   colors:
+      #     time: burntsienna
+      #   time_font: nixiehuge
 
   - name: divider-1
-    height: 9
+    height: 19
     panels:
       - type: divider
         height: 1
         color: rust
 
   - name: date
-    height: 48
+    height: 100
     panels:
       - type: date
         width: 60%
@@ -71,36 +80,46 @@ rows:
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         colors:
-          date: darkorange
+          date: rust
         date_font: nixiemed
       - type: clock
+        width: 15%
         justify: center
         timezone: US/Mountain
-        time_format: ":%S"
+        time_format: "%-I:%M:%S"
         colors:
-          time: burntsienna
+          time: rust
         time_font: nixiemed
+      - type: clock
+        width: 5%
+        justify: center
+        timezone: US/Mountain
+        time_format: "%p"
+        colors:
+          time: rust
+        time_font: nixiesmall
       - type: fact
+        width: 20%
         source: cpu
         justify: right
-        color: darkorange
-        font: nixiemed
+        color: rust
+        font: nixiesmall
 
   - name: divider-2
-    height: 9
+    height: 19
     panels:
       - type: divider
         height: 1
         color: rust
 
-  - name: wifi-info
-    height: 34
+  - name: info
+    height: 42
     panels:
       - type: wifi_graphic
         width: 44
         color: burntsienna
       - type: fact
-        width: 18%
+        #width: 18%
         source: wifi_status
         color: rust
         font: nixiesmall
@@ -112,6 +131,12 @@ rows:
         source: ip
         color: rust
         font: nixiesmall
-      # - type: debug
-      #   color: rust
+      - type: fact
+        source: ntp_all
+        color: rust
+        font: nixiesmall
+      - type: debug
+        width: 30%
+        color: rust
+        font: small
 
