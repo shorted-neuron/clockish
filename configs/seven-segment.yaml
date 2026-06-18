@@ -44,7 +44,7 @@ rows:
         timezone: US/Mountain
         time_format: "%-I:%M"
         # time_format: 24h        # 24h looks most authentic on a 7-seg display
-        color: ff0000
+        color: red
         font: dseg7
         font_size: auto
 

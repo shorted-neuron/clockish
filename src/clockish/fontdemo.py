@@ -60,7 +60,7 @@ image = Image.new("RGB", (WIDTH, HEIGHT))
 draw  = ImageDraw.Draw(image)
 
 # ---------------------------------------------------------------------------
-# Standard font scale â€” mirrors clockish/display.py BUILTIN_FONT_SCALE.
+# Standard font scale  --  mirrors clockish/display.py BUILTIN_FONT_SCALE.
 # Each name maps to a fraction of the display HEIGHT.
 # This is the single source of truth for the demo; if you change it in
 # display.py, update it here too (or import it once display.py has no
@@ -157,7 +157,7 @@ def _build_available_fonts() -> list:
 AVAILABLE_FONTS = _build_available_fonts()
 
 # ---------------------------------------------------------------------------
-# Background color cycle â€” dark colors from the named palette
+# Background color cycle  --  dark colors from the named palette
 # ---------------------------------------------------------------------------
 _BG_NAMES = ['BLACK', 'DARKGREY', 'NAVY', 'DIMRED', 'DARKGREEN',
              'TEAL', 'INDIGO', 'DIMPURPLE', 'DIMGREY', 'RUST']
@@ -211,18 +211,18 @@ def render_color_page(size: int, color_offset: int,
 
     draw.rectangle((0, 0, WIDTH - 1, HEIGHT - 1), fill=BY_NAME['BLACK'])
 
-    # Row 1 â€” control hints
+    # Row 1  --  control hints
     draw.rectangle((0, 0, WIDTH - 1, 16), fill=BY_NAME['DARKGREY'])
     draw.text((2, 0),
               f"size={size}px +/-  Spc=more  h/l=pg  f=font  Enter=smp  Q=quit",
               font=label_font, fill=BY_NAME['SILVER'])
 
-    # Row 2 â€” current font name in WHITE (prominent)
+    # Row 2  --  current font name in WHITE (prominent)
     draw.rectangle((0, 18, WIDTH - 1, 35), fill=(30, 30, 60))
     name_f = label_font
     draw.text((2, 18), font_display_name, font=name_f, fill=BY_NAME['WHITE'])
 
-    # Row 3 â€” size / metrics info
+    # Row 3  --  size / metrics info
     label = f"size={size}px  h={fh}px  {len(PALETTE)} colors"
     draw.rectangle((0, 36, WIDTH - 1, 36 + label_h - 1), fill=BY_NAME['DIMGREY'])
     draw.text((2, 36), label, font=label_font, fill=BY_NAME['GOLD'])
@@ -260,8 +260,8 @@ def font_height(f):
 def render_page(bg_name, bg_rgb, fonts_list=None, font_display_name: str = ""):
     """Draw all font scale samples onto the display.
 
-    fonts_list â€” list of (name, pct_str, size_px, font_obj); defaults to FONTS.
-    font_display_name â€” typeface label shown in the header bar.
+    fonts_list  --  list of (name, pct_str, size_px, font_obj); defaults to FONTS.
+    font_display_name  --  typeface label shown in the header bar.
     """
     if fonts_list is None:
         fonts_list = FONTS
@@ -288,21 +288,21 @@ def render_page(bg_name, bg_rgb, fonts_list=None, font_display_name: str = ""):
         draw.text((2, y), label, font=label_font, fill=BY_NAME['GOLD'])
         y += label_h
 
-        # Time-style sample â€” WHITE, most clock-relevant
+        # Time-style sample  --  WHITE, most clock-relevant
         draw.text((2, y), SAMPLE_TIME, font=f, fill=BY_NAME['WHITE'])
         y += fh + PADDING
 
-        # Alphabet sample â€” CYAN
+        # Alphabet sample  --  CYAN
         if y + fh + PADDING < HEIGHT - 4:
             draw.text((2, y), SAMPLE_TEXT, font=f, fill=BY_NAME['CYAN'])
             y += fh + PADDING
 
-        # Digit sample â€” ORANGE
+        # Digit sample  --  ORANGE
         if y + fh + PADDING < HEIGHT - 4:
             draw.text((2, y), SAMPLE_DIGITS, font=f, fill=BY_NAME['ORANGE'])
             y += fh + PADDING
 
-        # Divider â€” DARKGREY
+        # Divider  --  DARKGREY
         if y < HEIGHT - 4:
             draw.rectangle((0, y, WIDTH - 1, y), fill=BY_NAME['DARKGREY'])
             y += 2
@@ -323,8 +323,8 @@ _TITLE_COLORS = ['CYAN', 'ORANGE', 'BRIGHTGREEN', 'PINK', 'YELLOW',
 
 HELP_LINES = [
     ("Enter",   "next background color"),
-    ("Spc/l/â†’", "colors - next page"),
-    ("h/â†",     "colors - prev page"),
+    ("Spc/l/->", "colors - next page"),
+    ("h/<-",     "colors - prev page"),
     ("+",       "colors - font size +1px"),
     ("-",       "colors - font size -1px"),
     ("f",       "colors - cycle font"),
@@ -358,12 +358,12 @@ def render_help():
     sep_y = y_title + title_fh + 6
     draw.rectangle((0, sep_y, WIDTH - 1, sep_y), fill=BY_NAME['DARKGREY'])
 
-    # Scale table: show name â†’ pct â†’ px for current display
+    # Scale table: show name -> pct -> px for current display
     scale_font  = loaded.get('micro', label_font)
     scale_fh    = font_height(scale_font) + 2
     y_scale     = sep_y + 4
 
-    draw.text((2, y_scale), f"Display: {WIDTH}Ã—{HEIGHT}  Scale reference:", font=scale_font,
+    draw.text((2, y_scale), f"Display: {WIDTH}x{HEIGHT}  Scale reference:", font=scale_font,
               fill=BY_NAME['GOLD'])
     y_scale += scale_fh
     for name, frac in BUILTIN_FONT_SCALE.items():
@@ -419,7 +419,7 @@ def get_keypress():
 
 def main():
     print()
-    print(f"fontdemo â€” built-in font scale for clockish  (display {WIDTH}Ã—{HEIGHT})")
+    print(f"fontdemo  --  built-in font scale for clockish  (display {WIDTH}x{HEIGHT})")
     print("=" * 55)
     print(f"  {'name':<8} {'scale':>5}  {'pixels':>6}  {'cell_h':>6}")
     print(f"  {'-'*8} {'-'*5}  {'-'*6}  {'-'*6}")
@@ -430,8 +430,8 @@ def main():
     print("Controls:")
     print("  Enter        = next background color  (font sample mode)")
     print("  n            = font mode: cycle typeface (preview default_font options)")
-    print("  Space / l /â†’ = color demo mode  (next page of colors)")
-    print("  h / â†        = color mode: prev page of colors")
+    print("  Space / l /-> = color demo mode  (next page of colors)")
+    print("  h / <-        = color mode: prev page of colors")
     print("  + / -        = color mode: increase / decrease font size by 1px")
     print("  f            = color mode: cycle through available fonts")
     print("  ?            = help screen")
@@ -456,7 +456,7 @@ def main():
         per = _colors_per_page_px(color_size, fpath)
         page_start = color_offset % len(PALETTE)
         page_end   = (page_start + per - 1) % len(PALETTE)
-        print(f"Color mode  font={fname}  size={color_size}px  colors {page_start}â€“{page_end} of {len(PALETTE)}")
+        print(f"Color mode  font={fname}  size={color_size}px  colors {page_start} - {page_end} of {len(PALETTE)}")
         render_color_page(color_size, color_offset % len(PALETTE), fname, fpath)
 
     print()
