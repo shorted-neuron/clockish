@@ -9,26 +9,24 @@ build-backend = "hatchling.build"
 # =============================================================================
 [project]
 name = "clockish"
-version = "26.6.3"
+version = "26.6.4"
 description = "Clockish is a customizable _whatever_ display for Raspberry Pi with a PIL compatible display driver."
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 # Put your own name/email here
 authors = [
     { name = "shorted.neuron", email = "55761404+shorted-neuron@users.noreply.github.com" },
 ]
 
-keywords = ["raspberry-pi", "clock"]   # update as appropriate
+keywords = ["raspberry-pi", "clock", "lcd", "display"]   # update as appropriate
 
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",   # change if needed
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Operating System :: POSIX :: Linux",
 ]
@@ -109,11 +107,11 @@ addopts = "--tb=short"
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]   # pycodestyle, pyflakes, isort
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.11"
 warn_unused_configs = true

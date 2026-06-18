@@ -46,7 +46,7 @@ Tested displays:
 
 ## Requirements
 
-- Python 3.9 or newer
+- Python 3.11 or newer
 - Raspberry Pi OS Bookworm / Ubuntu 22.04+ (for hardware features)
 - On Windows: most features work in a normal venv; GPIO / I²C stubs are skipped
 
