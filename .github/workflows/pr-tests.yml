@@ -1,0 +1,83 @@
+name: PR Tests
+
+on:
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test & Lint (Python 3.11)
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Checkout and setup
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # -----------------------------------------------------------------------
+      # Cache pip dependencies
+      # -----------------------------------------------------------------------
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # -----------------------------------------------------------------------
+      # Install dependencies
+      # -----------------------------------------------------------------------
+      - name: Install project with dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # -----------------------------------------------------------------------
+      # Pre-commit hooks (file hygiene, yamllint, clockish-validate)
+      # -----------------------------------------------------------------------
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
+
+      # -----------------------------------------------------------------------
+      # Pytest with coverage report
+      # -----------------------------------------------------------------------
+      - name: Run pytest with coverage
+        run: |
+          pytest \
+            --cov=src/clockish \
+            --cov-report=html:htmlcov \
+            --cov-report=term-short
+
+      # -----------------------------------------------------------------------
+      # Upload coverage report as artifact
+      # -----------------------------------------------------------------------
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-html
+          path: htmlcov/
+          retention-days: 30
+
+      # -----------------------------------------------------------------------
+      # Ruff lint check with GitHub annotations (warnings, not blocking)
+      # -----------------------------------------------------------------------
+      - name: Run ruff check (with PR annotations)
+        if: always()
+        run: |
+          ruff check . --output-format=github || true
+
+      # -----------------------------------------------------------------------
+      # MyPy type checking
+      # -----------------------------------------------------------------------
+      - name: Run mypy type checker
+        if: always()
+        run: mypy src/clockish
