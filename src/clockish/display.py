@@ -239,11 +239,11 @@ def _resolve_dimension(raw, base: int) -> int:
       int / float > 1.0  — direct pixel value (rounded to int)
     """
     if isinstance(raw, str) and raw.endswith('%'):
-        return max(1, round(base * float(raw[:-1]) / 100))
+        return max(1, int(base * float(raw[:-1]) / 100))
     f = float(raw)
     if 0.0 <= f <= 1.0:
-        return max(1, round(base * f))
-    return max(1, round(f))
+        return max(1, int(base * f))
+    return max(1, int(f))
 
 
 def _get_font(name: str) -> ImageFont.FreeTypeFont:
@@ -253,7 +253,7 @@ def _get_font(name: str) -> ImageFont.FreeTypeFont:
         _default_font_file = _config.get('default_font')
         _scale_font_path = _find_font(_default_font_file) if _default_font_file else _FONT_PATH
         for _scale_name, _fraction in BUILTIN_FONT_SCALE.items():
-            _px = max(1, round(height * _fraction))
+            _px = max(1, int(height * _fraction))
             _FONTS[_scale_name] = ImageFont.truetype(_scale_font_path, _px)
     if name not in _FONTS:
         # Try to load a custom font defined in the config's 'fonts:' section.
@@ -744,7 +744,7 @@ def _init_layout() -> None:
                 if p.get(key) == 'auto':
                     auto_name = f'_auto_{rh}'
                     if auto_name not in _FONTS:
-                        px = max(1, round(rh * _AUTO_FONT_FRACTION))
+                        px = max(1, int(rh * _AUTO_FONT_FRACTION))
                         _FONTS[auto_name] = ImageFont.truetype(_auto_path, px)
                         if DEBUG:
                             print(f"auto font '{auto_name}': {px}px "
@@ -1090,8 +1090,10 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
 
     widths = _resolve_panel_widths(panels, rw, row_idx)
     if DEBUG_LAYOUT:
+        auto_px = max(1, int(rh * _AUTO_FONT_FRACTION))
         print(f"row {row_idx} '{row_name}': ry={ry} rh={rh} rw={rw}  "
-              f"panels={len(panels)} widths={widths}")
+              f"panels={len(panels)} widths={widths}  "
+              f"auto={auto_px}px ({_AUTO_FONT_FRACTION*100:.0f}% of {rh}px)")
     px = 0
     for p, pw in zip(panels, widths):
         if DEBUG_LAYOUT:
