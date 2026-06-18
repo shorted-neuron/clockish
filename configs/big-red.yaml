@@ -9,7 +9,7 @@ orientation: landscape
 
 rows:
   - name: clock
-    height: 170
+    height: 50%
     panels:
       - type: clock
         justify: center
@@ -27,14 +27,14 @@ rows:
         font_size: normal
 
   - name: divider-1
-    height: 5
+    height: 2%
     panels:
       - type: divider
         height: 1
         color: dimred
 
   - name: date
-    height: 42
+    height: 15%
     panels:
       - type: date
         justify: center
@@ -44,14 +44,14 @@ rows:
         font_size: med
 
   - name: divider-1
-    height: 5
+    height: 2%
     panels:
       - type: divider
         height: 1
         color: dimred
 
   - name: wifi-info
-    height: 34
+    height: 15%
     panels:
       - type: wifi_graphic
         width: 44
@@ -86,7 +86,7 @@ rows:
         font_size: small
 
   - name: host-ip
-    height: 46
+    height: 20%
     panels:
       - type: fact
         width: 24%

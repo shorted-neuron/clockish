@@ -52,21 +52,18 @@ repos:
   # ---------------------------------------------------------------------------
   # clockish schema + deprecation validation
   #
-  # Runs clockish-validate on every staged config file under configs/ except:
-  #   configs/display/           --  display profiles (different schema)
-  #   configs/clockish-config.schema.yaml  --  the JSON Schema file itself
-  #
-  # Uses language: python so pre-commit manages an isolated environment.
-  # additional_dependencies: ["."] installs the local clockish package
-  # (and pulls in jsonschema from pyproject.toml main deps automatically).
+  # Runs config_validator.py directly as a script -- no clockish package install
+  # needed. The module only imports stdlib + yaml + jsonschema, all provided by
+  # additional_dependencies below. (additional_dependencies: ["."] does NOT work
+  # because pre-commit's pip runs from its cache dir, not the repo root.)
   # --no-yamllint: yamllint already ran in the hook above.
   # ---------------------------------------------------------------------------
   - repo: local
     hooks:
       - id: clockish-validate
         name: clockish-validate (schema + deprecations)
-        entry: python -m clockish.config_validator --no-yamllint
+        entry: python src/clockish/config_validator.py --no-yamllint
         language: python
-        additional_dependencies: ["."]
+        additional_dependencies: ["jsonschema>=4.17", "PyYAML>=6.0"]
         files: ^configs/(?!display/|clockish-config\.schema).*\.yaml$
         pass_filenames: true
