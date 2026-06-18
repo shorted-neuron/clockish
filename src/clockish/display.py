@@ -796,11 +796,6 @@ def _init_layout() -> None:
             # Named scale, explicit %, or integer with no font: →
             # handled by _get_font() at render time using default_font.
 
-        # Pre-compute panel widths here so the warning fires only once at startup.
-        panels = r.get('panels', [])
-        if panels:
-            r['_widths'] = _resolve_panel_widths(panels, width, row_idx)
-
     _LAYOUT = layout
 
 
@@ -1110,6 +1105,14 @@ def _resolve_panel_widths(panels: list, row_w: int, row_idx: int) -> list[int]:
             file=sys.stderr,
         )
     return widths
+
+
+# Pre-compute panel widths once so the warning fires only once at startup.
+# Must run after _resolve_panel_widths is defined (hence not inside _init_layout).
+for _row_idx, (_r, _ry, _rh) in enumerate(_LAYOUT):
+    _panels = _r.get('panels', [])
+    if _panels:
+        _r['_widths'] = _resolve_panel_widths(_panels, width, _row_idx)
 
 
 def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
