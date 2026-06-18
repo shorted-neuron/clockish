@@ -1016,7 +1016,7 @@ def _render_debug_panel(p: dict, px: int, py: int, pw: int, ph: int,
                          timings: dict, t0: float, d: ImageDraw.ImageDraw) -> None:
     prep_ms = (time.perf_counter() - t0) * 1000
     row_h   = ph // 4
-    font_h  = _font_height(tiny)
+    f       = _get_font(p.get('font_size', 'micro'))
     steps   = list(timings.items())
     half    = len(steps) // 2 + len(steps) % 2
     lines = [
@@ -1028,11 +1028,7 @@ def _render_debug_panel(p: dict, px: int, py: int, pw: int, ph: int,
     c = p.get('color', _C_BROWN)
     for i, line in enumerate(lines):
         y = py + row_h * i
-        #if i == 0 and font_h > ph:
-        #    break
-        #if i > 0 and row_h < font_h:
-        #    break
-        d.text((px, y), line, font=tiny, fill=c)
+        d.text((px, y), line, font=f, fill=c)
 
 
 def _dispatch_panel(p: dict, px: int, py: int, pw: int, ph: int,
