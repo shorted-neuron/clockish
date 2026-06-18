@@ -1,9 +1,11 @@
+---
 # clockish.yaml - config
 # ---------------------------------------------------------------------------
 # System information display: local time + all available fact sources.
 # Display settings are in display.yaml  --  see configs/display/ for profiles.
 # ---------------------------------------------------------------------------
 
+orientation: portrait
 
 rows:
   - name: app-header
@@ -14,7 +16,7 @@ rows:
         # justify: center
         label: "clockish.py"
         color: silver
-        font: normal
+        font_size: normal
 
   - name: app-version
     height: 30
@@ -25,7 +27,7 @@ rows:
         source: version
         label: "default"
         color: grey
-        font: small
+        font_size: small
 
   - name: divider-1
     height: 5
@@ -42,10 +44,8 @@ rows:
         # justify: center
         timezone: local
         time_format: 24hs
-        colors:
-          time:   white
-          label:  grey
-        time_font: big
+        color: white
+        font_size: big
 
   - name: local-date
     height: 36
@@ -54,13 +54,14 @@ rows:
         # justify: center
         timezone: local
         date_format: "%a, %B %-d %Y"
-        colors:
-          date: pink
-        date_font: normal
+        color: pink
+        font_size: normal
 
   - name: blank-1
     height: 6
     background: black
+    panels:
+      - type: blank
 
   - name: help1
     height: 40
@@ -70,7 +71,7 @@ rows:
         # justify: center
         label: "check the docs"
         color: black
-        font: normal
+        font_size: normal
 
   - name: help2
     height: 40
@@ -80,11 +81,13 @@ rows:
         # justify: center
         label: "to configure!"
         color: black
-        font: normal
+        font_size: normal
 
   - name: blank-2
     height: 6
     background: black
+    panels:
+      - type: blank
 
   - name: network
     height: 28
@@ -95,17 +98,19 @@ rows:
         source: hostname
         label: "default"
         color: yellow
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         source: ip
         # label: "default"
         color: cyan
-        font: small
+        font_size: small
 
   - name: blank-3
     height: 6
     background: black
+    panels:
+      - type: blank
 
   - name: wifi-status
     height: 44
@@ -120,13 +125,13 @@ rows:
         # justify: center
         source: wifi_status
         color: lime
-        font: normal
+        font_size: normal
       - type: fact
         # justify: center
         source: wifi_ssid
         label: "default"
         color: darklime
-        font: normal
+        font_size: normal
 
 # - name: wifi-signal
 #   height: 26
@@ -136,17 +141,19 @@ rows:
 #       source: wifi_signal
 #       label: "default"
 #       color: yellow
-#       font: small
+#       font_size: small
 #     - type: fact
 #       # justify: center
 #       source: wifi_quality
 #       label: "default"
 #       color: darkyellow
-#       font: small
+#       font_size: small
 
   - name: blank-4
     height: 6
     background: black
+    panels:
+      - type: blank
 
 # - name: ntp
 #   height: 26
@@ -156,13 +163,13 @@ rows:
 #       source: ntp_status
 #       label: "default"
 #       color: cyan
-#       font: small
+#       font_size: small
 #     - type: fact
 #       # justify: center
 #       source: ntp_upstream
 #       label: "default"
 #       color: steelblue
-#       font: small
+#       font_size: small
 
 # - name: divider-3
 #   height: 3
@@ -179,13 +186,13 @@ rows:
         source: cpu
         label: "default"
         color: yellow
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         source: cpu_load
         label: "default"
         color: darkyellow
-        font: small
+        font_size: small
 
 # - name: memory
 #   height: 26
@@ -195,7 +202,7 @@ rows:
 #       source: mem
 #       label: "default"
 #       color: purple
-#       font: small
+#       font_size: small
 
 # - name: disk
 #   height: 26
@@ -205,7 +212,7 @@ rows:
 #       source: disk
 #       label: "default"
 #       color: green
-#       font: small
+#       font_size: small
 
 # - name: temp
 #   height: 27
@@ -215,7 +222,7 @@ rows:
 #       source: temp
 #       label: "default"
 #       color: orange
-#       font: small
+#       font_size: small
 
   - name: divider-3
     height: 5
@@ -232,7 +239,7 @@ rows:
         source: uptime
         label: "default"
         color: grey
-        font: small
+        font_size: small
 
   - name: config
     height: 26
@@ -242,7 +249,7 @@ rows:
         source: config_file
         label: "config: "
         color: pink
-        font: small
+        font_size: small
 
   - name: debug
     height: 52
