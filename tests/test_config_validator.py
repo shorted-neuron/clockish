@@ -381,6 +381,24 @@ class TestUnknownKeys:
         msgs = [i.message for i in result.warnings]
         assert any('blink' in m for m in msgs)
 
+    @pytest.mark.parametrize('panel_type', sorted(KNOWN_PANEL_TYPES))
+    def test_known_panel_type_no_warning(self, panel_type: str) -> None:
+        """Verify that all known panel types are valid and don't trigger unknown-type warnings."""
+        # Minimal panel config for this type
+        panel_cfg = {'type': panel_type}
+        if panel_type == 'fact':
+            panel_cfg['source'] = 'hostname'  # fact requires source
+
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [panel_cfg],
+        }])
+        result = validate_config_dict(cfg)
+        # No unknown-panel-type warning
+        type_warns = [i for i in result.warnings if 'unknown panel type' in i.message]
+        assert not type_warns, \
+            f"Known panel type '{panel_type}' triggered unknown-type warning: {type_warns}"
+
     def test_unknown_panel_type_warns(self) -> None:
         cfg = _minimal_config(rows=[{
             'name': 'r', 'height': 40,
