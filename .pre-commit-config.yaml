@@ -31,6 +31,7 @@ repos:
       - id: trailing-whitespace
         exclude: '\.md$'         # markdown: trailing spaces mean <br>, leave them alone
       - id: end-of-file-fixer
+        exclude: '^\.idea/'      # IDE config: let the IDE manage its files
       - id: mixed-line-ending
         args: [--fix=lf]         # enforce LF everywhere (matches .editorconfig)
       - id: check-merge-conflict
