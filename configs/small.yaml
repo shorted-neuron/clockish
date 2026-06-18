@@ -1,7 +1,7 @@
-# small-info.yaml — clockish config
+# small-info.yaml  --  clockish config
 # ---------------------------------------------------------------------------
-# Layout for a small 240×135 ST7789 display (e.g. Adafruit 1.14" TFT #4383).
-# Display settings are in display.yaml — use configs/display/st7789-240x135.yaml.
+# Layout for a small 240x135 ST7789 display (e.g. Adafruit 1.14" TFT #4383).
+# Display settings are in display.yaml  --  use configs/display/st7789-240x135.yaml.
 # ---------------------------------------------------------------------------
 
 

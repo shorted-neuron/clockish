@@ -4,15 +4,15 @@ clockish.drivers.st7789
 Display driver for ST7789-based SPI TFT screens (Pimoroni ``st7789`` library).
 
 Tested with:
-  * Adafruit 1.14" 240×135 Color TFT (product #4383) — the ST7789 controller
-    internally manages a 320×240 framebuffer; the visible panel is addressed via
+  * Adafruit 1.14" 240x135 Color TFT (product #4383)  --  the ST7789 controller
+    internally manages a 320x240 framebuffer; the visible panel is addressed via
     ``offset_left`` / ``offset_top``.
-  * Pimoroni 240×240 round-corner displays
+  * Pimoroni 240x240 round-corner displays
 
 Library: https://github.com/pimoroni/st7789-python
-Install: ``pip install st7789``  (Pi only — requires gpiod / spidev)
+Install: ``pip install st7789``  (Pi only  --  requires gpiod / spidev)
 
-Config keys (all optional — defaults listed below) under ``display:`` in YAML:
+Config keys (all optional  --  defaults listed below) under ``display:`` in YAML:
 
 .. code-block:: yaml
 
@@ -35,13 +35,13 @@ Config keys (all optional — defaults listed below) under ``display:`` in YAML:
       invert:       true       # colour inversion (required by most ST7789 panels)
 
       # Image rotation applied in software before sending pixels.
-      # NOTE: the Pimoroni library only supports rotation ∈ {0, 180} for
-      # non-square panels (width ≠ height).  Use 0 for landscape panels
-      # such as the Adafruit 240×135 — the hardware already renders them
-      # landscape.  For square panels (240×240) 90/270 are also valid.
+      # NOTE: the Pimoroni library only supports rotation  in  {0, 180} for
+      # non-square panels (width != height).  Use 0 for landscape panels
+      # such as the Adafruit 240x135  --  the hardware already renders them
+      # landscape.  For square panels (240x240) 90/270 are also valid.
       rotation:     0
 
-Adafruit 1.14" 240×135 example:
+Adafruit 1.14" 240x135 example:
 
 .. code-block:: yaml
 
@@ -127,8 +127,8 @@ class ST7789Driver(DisplayDriver):
         if self._width != self._height and rotation in (90, 270):
             import sys
             print(
-                f"WARNING: ST7789 driver — rotation={rotation} is not supported for "
-                f"non-square panels ({self._width}×{self._height}).  "
+                f"WARNING: ST7789 driver  --  rotation={rotation} is not supported for "
+                f"non-square panels ({self._width}x{self._height}).  "
                 "Falling back to rotation=0.  "
                 "Set 'rotation: 0' or 'rotation: 180' in your config to silence this warning.",
                 file=sys.stderr,

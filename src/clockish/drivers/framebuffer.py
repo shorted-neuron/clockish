@@ -4,12 +4,12 @@ clockish.drivers.framebuffer
 Display driver for any Linux framebuffer device (``/dev/fb0``).
 
 Works with:
-  * Raspberry Pi Official 7" DSI Touch Display (800×480)
-  * Raspberry Pi Touch Display 2 (800×480)
+  * Raspberry Pi Official 7" DSI Touch Display (800x480)
+  * Raspberry Pi Touch Display 2 (800x480)
   * HDMI monitors (any resolution the Pi initialises at boot)
   * Any display that the Pi kernel exposes as ``/dev/fb*``
 
-No extra pip packages are required — the driver uses only Python's
+No extra pip packages are required  --  the driver uses only Python's
 standard library (``fcntl``, ``mmap``, ``struct``) plus ``numpy``,
 which is already installed as a clockish dependency.
 
@@ -36,7 +36,7 @@ For non-root use, grant the ``tty`` group write access via a udev rule::
 
 Reboot after adding the rule, and ensure the clockish user is in the
 ``tty`` group.  If the open fails for any reason, a warning is printed
-and the display continues — only cursor suppression is skipped.
+and the display continues  --  only cursor suppression is skipped.
 
 To remove console text from the display, mask getty::
 
@@ -47,7 +47,7 @@ For a fully silent boot (no splash, no pre-clockish cursor flash)::
     # append to the single line in /boot/firmware/cmdline.txt:
     quiet logo.nologo vt.global_cursor_default=0
 
-Config keys (all optional — defaults listed below) under ``display:``
+Config keys (all optional  --  defaults listed below) under ``display:``
 in your display profile::
 
     display:
@@ -91,10 +91,10 @@ _OFF_RED_OFF    = 32   # red.offset   (bit position of red channel)
 _OFF_GREEN_OFF  = 44   # green.offset
 _OFF_BLUE_OFF   = 56   # blue.offset
 
-# VT / console ioctl codes — suppress the kernel cursor
+# VT / console ioctl codes  --  suppress the kernel cursor
 _KDSETMODE  = 0x4B3A   # set VT mode
 _KD_TEXT    = 0x00     # normal text mode (restore on exit)
-_KD_GRAPHICS = 0x01    # graphics mode — fbcon stops rendering cursor + text
+_KD_GRAPHICS = 0x01    # graphics mode  --  fbcon stops rendering cursor + text
 
 
 class FramebufferDriver(DisplayDriver):
@@ -144,13 +144,13 @@ class FramebufferDriver(DisplayDriver):
             sys.exit(
                 f"ERROR: framebuffer device not found: {device}\n"
                 f"  Check that:\n"
-                f"    • The display is physically connected\n"
-                f"    • The Raspberry Pi has booted successfully\n"
-                f"    • The device node exists: ls -la {device}"
+                f"    - The display is physically connected\n"
+                f"    - The Raspberry Pi has booted successfully\n"
+                f"    - The device node exists: ls -la {device}"
             )
         except PermissionError:
             sys.exit(
-                f"ERROR: cannot access {device} — permission denied.\n"
+                f"ERROR: cannot access {device}  --  permission denied.\n"
                 f"  The user must be in the 'video' group:\n"
                 f"    sudo usermod -aG video $USER\n"
                 f"  Then log out and back in (or reboot) for the change to take effect.\n"
@@ -171,7 +171,7 @@ class FramebufferDriver(DisplayDriver):
             self._fb = open(device, 'rb+')
         except PermissionError:
             sys.exit(
-                f"ERROR: cannot open {device} — permission denied.\n"
+                f"ERROR: cannot open {device}  --  permission denied.\n"
                 f"  Add yourself to the video group:  sudo usermod -aG video $USER\n"
                 f"  Then log out and back in (or reboot)."
             )
@@ -182,7 +182,7 @@ class FramebufferDriver(DisplayDriver):
             )
 
         # --- Read hardware geometry and pixel format via ioctl ----------
-        vinfo = bytearray(160)   # fb_var_screeninfo is ≤ 160 bytes
+        vinfo = bytearray(160)   # fb_var_screeninfo is <= 160 bytes
         try:
             fcntl.ioctl(self._fb, _FBIOGET_VSCREENINFO, vinfo)
 
@@ -206,13 +206,13 @@ class FramebufferDriver(DisplayDriver):
             if cfg_w and cfg_w != xres:
                 print(
                     f"WARNING: display profile width={cfg_w} but {device} reports "
-                    f"{xres}px wide — update your display profile.",
+                    f"{xres}px wide  --  update your display profile.",
                     file=sys.stderr,
                 )
             if cfg_h and cfg_h != yres:
                 print(
                     f"WARNING: display profile height={cfg_h} but {device} reports "
-                    f"{yres}px tall — update your display profile.",
+                    f"{yres}px tall  --  update your display profile.",
                     file=sys.stderr,
                 )
             self._width  = xres
@@ -235,7 +235,7 @@ class FramebufferDriver(DisplayDriver):
         )
 
         print(
-            f"Framebuffer: {device}  {self._width}×{self._height}  "
+            f"Framebuffer: {device}  {self._width}x{self._height}  "
             f"{self._bpp}bpp  R<<{self._red_off} G<<{self._green_off} B<<{self._blue_off}"
         )
 
@@ -261,7 +261,7 @@ class FramebufferDriver(DisplayDriver):
             tty = os.fdopen(fd, 'wb', buffering=0)
         except OSError as exc:
             print(
-                f"WARNING: cannot open /dev/tty0 ({exc}) — cursor suppression unavailable.\n"
+                f"WARNING: cannot open /dev/tty0 ({exc})  --  cursor suppression unavailable.\n"
                 f"  Ensure the clockish user is in the 'tty' or 'video' group.",
                 file=sys.stderr,
             )
@@ -276,7 +276,7 @@ class FramebufferDriver(DisplayDriver):
             self._tty = tty
         except OSError as exc:
             print(
-                f"WARNING: KDSETMODE KD_GRAPHICS failed ({exc}) — cursor suppression unavailable.",
+                f"WARNING: KDSETMODE KD_GRAPHICS failed ({exc})  --  cursor suppression unavailable.",
                 file=sys.stderr,
             )
             try:

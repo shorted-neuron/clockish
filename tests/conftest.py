@@ -1,5 +1,5 @@
 """
-conftest.py — pytest fixtures available to all tests.
+conftest.py  --  pytest fixtures available to all tests.
 
 Add shared fixtures here (e.g. mock GPIO, temporary config files, etc.)
 """

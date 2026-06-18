@@ -1,5 +1,5 @@
 """
-clockish — top-level package.
+clockish  --  top-level package.
 
 Import public API here so consumers can write:
     from clockish import SomeClass

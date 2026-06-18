@@ -18,7 +18,7 @@ from pyili9486 import ILI9486, Origin, SKU
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
 
 # ---------------------------------------------------------------------------
-# Hardware configuration — adjust to match your wiring
+# Hardware configuration  --  adjust to match your wiring
 # ---------------------------------------------------------------------------
 SPI_BUS    = 0
 SPI_DEVICE = 0
@@ -100,7 +100,7 @@ def show_page(color_subset):
 
     # Header
     draw.rectangle((0, 0, WIDTH - 1, 38), fill="#FFFFFF")
-    draw.text((4, 4), "Color visibility test — see terminal", font=smallfont, fill="#000000")
+    draw.text((4, 4), "Color visibility test  --  see terminal", font=smallfont, fill="#000000")
 
     y = 40
     for name, hex_color in color_subset:

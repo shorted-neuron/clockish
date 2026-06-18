@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""render_preview.py — Render each panel-config to a PNG file without hardware.
+"""render_preview.py  --  Render each panel-config to a PNG file without hardware.
 
 Usage:
     python render_preview.py [--outdir docs/previews] [config ...]
@@ -54,7 +54,7 @@ _spidev_mod = types.ModuleType("spidev")
 _spidev_mod.SpiDev = _SpiDevStub
 sys.modules["spidev"] = _spidev_mod
 
-# --- pyili9486 stub (replaces ILI9486 — display.py imports from pyili9486) ---
+# --- pyili9486 stub (replaces ILI9486  --  display.py imports from pyili9486) ---
 class _SKUStub:
     MPI3501 = 'MPI3501'
     MHS3528 = 'MHS3528'
@@ -110,11 +110,11 @@ _real_open = _builtins.open
 _PROC_STUBS: dict[str, str] = {
     "/proc/uptime":    "123456.78 234567.89\n",
     "/proc/stat":      "cpu  100 0 50 800 20 5 5 0 0 0\n",
-    # total=960 MB (983040 kB), available=648 MB (663552 kB) → used=312 MB
+    # total=960 MB (983040 kB), available=648 MB (663552 kB) -> used=312 MB
     "/proc/meminfo":   "MemTotal:         983040 kB\nMemAvailable:     663552 kB\n",
     # /proc/net/wireless: two header lines then one data line per interface.
     # Columns (after split): 0=iface 1=status 2=quality 3=signal(dBm) 4=noise
-    # quality "57." → 57/70  signal "-57." → -57 dBm (3 of 4 bars in the graphic)
+    # quality "57." -> 57/70  signal "-57." -> -57 dBm (3 of 4 bars in the graphic)
     "/proc/net/wireless": (
         "Inter-| sta-|   Quality        |   Discarded packets               | Missed | WEP\n"
         " face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | mode\n"
@@ -225,13 +225,13 @@ _ImageFont.truetype = _patched_truetype
 import clockish.display as _ppd
 
 # ---------------------------------------------------------------------------
-# Preview data patches — replace live system calls with canned values so
+# Preview data patches  --  replace live system calls with canned values so
 # every preview looks realistic regardless of the host machine.
 # ---------------------------------------------------------------------------
 _ppd.get_ip_address      = lambda: "192.168.1.42"
 _ppd.get_hostname        = lambda: "raspberrypi"
 # get_cpu_percent() diffs two /proc/stat reads; the static stub makes delta=0
-# so it always returns 0.0 — override it directly instead.
+# so it always returns 0.0  --  override it directly instead.
 _ppd.get_cpu_percent     = lambda: 6.8
 # disp= value in the debug panel comes from this module-level variable.
 _ppd._last_display_ms    = 198.0
@@ -256,7 +256,7 @@ if _platform.system() != "Linux":
                 v = v.replace(src, dst)
             _ppd._TIME_FORMATS[k] = v
 
-    # os.getloadavg is not available on Windows — stub it
+    # os.getloadavg is not available on Windows  --  stub it
     import os as _os
     if not hasattr(_os, 'getloadavg'):
         _os.getloadavg = lambda: (0.0, 0.0, 0.0)
@@ -265,7 +265,7 @@ if _platform.system() != "Linux":
 # Rendering helpers
 # ---------------------------------------------------------------------------
 
-# Linux strftime %-X (no-pad) directives → padded equivalents for Windows/macOS
+# Linux strftime %-X (no-pad) directives -> padded equivalents for Windows/macOS
 _NO_PAD_MAP = {
     '%-d': '%d', '%-m': '%m', '%-H': '%H', '%-I': '%I',
     '%-M': '%M', '%-S': '%S', '%-j': '%j', '%-y': '%y',
@@ -392,7 +392,7 @@ def main() -> None:
         print("No config files found.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Rendering {len(configs)} config(s) → {args.outdir}/")
+    print(f"Rendering {len(configs)} config(s) -> {args.outdir}/")
     for cfg_path in configs:
         name    = os.path.splitext(os.path.basename(cfg_path))[0]
         out     = os.path.join(args.outdir, f"{name}.png")

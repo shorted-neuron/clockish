@@ -67,7 +67,7 @@ def show_page(swatches, page_num, total_pages):
     # Header
     draw.rectangle((0, 0, WIDTH - 1, header_h - 1), fill=(20, 20, 20))
     draw.text((4, 2),  "Color Chart", font=font, fill=(255, 255, 255))
-    draw.text((4, 20), f"Page {page_num}/{total_pages}  —  Enter=next  Q=quit",
+    draw.text((4, 20), f"Page {page_num}/{total_pages}   --   Enter=next  Q=quit",
               font=tinyfont, fill=(160, 160, 160))
 
     y = header_h
@@ -111,7 +111,7 @@ def get_keypress():
 
 def show_all_at_once():
     """
-    Show every color as a tiny strip — a visual density overview.
+    Show every color as a tiny strip  --  a visual density overview.
     One pixel row per color (or a few rows if height allows).
     """
     draw.rectangle((0, 0, WIDTH - 1, HEIGHT - 1), fill=(0, 0, 0))
@@ -125,7 +125,7 @@ def show_all_at_once():
             break
     # Label
     draw.rectangle((0, 0, WIDTH - 1, 18), fill=(0, 0, 0))
-    draw.text((4, 1), f"All {n} colors — Enter to continue", font=tinyfont, fill=(255, 255, 255))
+    draw.text((4, 1), f"All {n} colors  --  Enter to continue", font=tinyfont, fill=(255, 255, 255))
     lcd.display(image, rotation)
 
 

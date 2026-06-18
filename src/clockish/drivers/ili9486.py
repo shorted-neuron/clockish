@@ -4,10 +4,10 @@ clockish.drivers.ili9486
 Display driver for ILI9486-based SPI TFT screens wired to a Raspberry Pi.
 
 Tested with:
-  * MPI3501  — 3.5" RPi display, RGB666 pixel format
-  * MHS3528  — 3.5" RPi display, RGB565 pixel format
+  * MPI3501   --  3.5" RPi display, RGB666 pixel format
+  * MHS3528   --  3.5" RPi display, RGB565 pixel format
 
-Config keys (all optional — defaults listed below) go under the ``display:``
+Config keys (all optional  --  defaults listed below) go under the ``display:``
 section of your YAML config:
 
 .. code-block:: yaml
@@ -25,7 +25,7 @@ section of your YAML config:
       rst_pin:      25       # BCM GPIO number for Reset
 
 Hardware dependencies (Pi-only, installed automatically on Pi via pyproject.toml):
-  * pyili9486  — https://github.com/SirLefti/Python_ILI9486
+  * pyili9486   --  https://github.com/SirLefti/Python_ILI9486
   * spidev
   * rpi-lgpio  (or RPi.GPIO)
 """
@@ -63,7 +63,7 @@ def _try_import():
         ) from exc
 
 
-# Maps user-facing rotation degrees → pyili9486 Origin corner constants.
+# Maps user-facing rotation degrees -> pyili9486 Origin corner constants.
 _ROTATION_TO_ORIGIN_NAME = {
     0:   "UPPER_LEFT",
     90:  "UPPER_RIGHT",

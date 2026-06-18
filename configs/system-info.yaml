@@ -1,7 +1,7 @@
-# system-info.yaml — clockish config
+# system-info.yaml  --  clockish config
 # ---------------------------------------------------------------------------
 # System information display: local time + all available fact sources.
-# Display settings are in display.yaml — use configs/display/ili9486-portrait.yaml.
+# Display settings are in display.yaml  --  use configs/display/ili9486-portrait.yaml.
 # ---------------------------------------------------------------------------
 
 

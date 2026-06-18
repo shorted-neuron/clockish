@@ -1,7 +1,7 @@
-# big-red.yaml — clockish config for a big red clock perhaps for your bedroom
+# big-red.yaml  --  clockish config for a big red clock perhaps for your bedroom
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish
-# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
+# Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml.
 # ---------------------------------------------------------------------------
 
 

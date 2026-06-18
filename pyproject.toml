@@ -33,15 +33,15 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
 ]
 
-# ── Runtime dependencies ───────────────────────────────────────────────────────
+# -- Runtime dependencies -------------------------------------------------------
 # Add packages here.  Use platform markers for Pi-only hardware libs so the
 # package can still be installed and tested on Windows.
 #
 # Example:
 # Pi architecture values:
-#   armv6l  — Pi 1, Pi Zero (1st gen)          ← don't forget this one!
-#   armv7l  — Pi 2, Pi 3, Pi 4 (32-bit OS)
-#   aarch64 — Pi 3, Pi 4, Pi 5 (64-bit OS), Ubuntu on Pi
+#   armv6l   --  Pi 1, Pi Zero (1st gen)          <- don't forget this one!
+#   armv7l   --  Pi 2, Pi 3, Pi 4 (32-bit OS)
+#   aarch64  --  Pi 3, Pi 4, Pi 5 (64-bit OS), Ubuntu on Pi
 #
 #   "RPi.GPIO>=0.7.1; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'"
 #   "smbus2>=0.4"
@@ -53,14 +53,14 @@ dependencies = [
     "PyYAML>=6.0",
     # Timezone data (needed on systems without tzdata OS package, e.g. minimal Pi OS)
     "tzdata>=2024.1",
-    # pyili9486 — ILI9486 SPI display driver (Pi only; pulls in spidev which is Linux-only)
+    # pyili9486  --  ILI9486 SPI display driver (Pi only; pulls in spidev which is Linux-only)
     # Source: https://github.com/SirLefti/Python_ILI9486
     "pyili9486>=1.0.0; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
-    # GPIO — rpi-lgpio is the recommended modern backend; RPi.GPIO also works as a drop-in
+    # GPIO  --  rpi-lgpio is the recommended modern backend; RPi.GPIO also works as a drop-in
     "rpi-lgpio>=0.6; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
 ]
 
-# ── Optional / development dependencies ───────────────────────────────────────
+# -- Optional / development dependencies ---------------------------------------
 [project.optional-dependencies]
 # ST7789-based displays (Pimoroni library + its GPIO/SPI dependencies)
 # Install: pip install clockish[st7789]
@@ -76,7 +76,7 @@ dev = [
     "mypy",          # type checker
 ]
 
-# ── CLI entry points ──────────────────────────────────────────────────────────
+# -- CLI entry points ----------------------------------------------------------
 [project.scripts]
 clockish         = "clockish.display:main"
 clockish-preview = "clockish.render_preview:main"
@@ -86,7 +86,7 @@ clockish-test    = "clockish.colortest:main"
 clockish-fonts   = "clockish.fontdemo:main"
 clockish-corners = "clockish.cornertest:main"
 
-# ── Where to find packages ────────────────────────────────────────────────────
+# -- Where to find packages ----------------------------------------------------
 [tool.hatch.build.targets.wheel]
 packages = ["src/clockish"]
 

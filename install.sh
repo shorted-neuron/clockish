@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# install.sh  —  Bootstrap script for clockish.py
+# install.sh   --   Bootstrap script for clockish.py
 #
 # Usage:
 #   chmod +x install.sh
@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-# Project root — everything is relative to this.
+# Project root  --  everything is relative to this.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ if grep -qi "raspberry" /proc/cpuinfo 2>/dev/null || \
     ok "Running on Raspberry Pi: $RPI_MODEL"
 else
     IS_RPI=false
-    warn "Not detected as a Raspberry Pi — GPIO/SPI checks will be skipped."
+    warn "Not detected as a Raspberry Pi  --  GPIO/SPI checks will be skipped."
 fi
 
 # Python version check (need 3.11+)
@@ -96,22 +96,22 @@ APT_PACKAGES=(
     python3-pip
     python3-dev
     python3-venv          # needed to create .venv
-    python3-numpy         # packaged version of numpy (for PIL) — much faster to install than via pip
+    python3-numpy         # packaged version of numpy (for PIL)  --  much faster to install than via pip
     # Pillow native dependencies
     libopenjp2-7          # JPEG 2000 support
     libfreetype6          # TrueType font rendering
     libjpeg-dev           # JPEG support
     zlib1g-dev            # PNG / zlib support
-    # Font files — DejaVuSans.ttf is the default font used by clockish
+    # Font files  --  DejaVuSans.ttf is the default font used by clockish
     fonts-dejavu-core
-    # 7-segment display font — used by configs/seven-segment.yaml
+    # 7-segment display font  --  used by configs/seven-segment.yaml
     fonts-dseg
     # swig is needed to build rpi-lgpio later
     swig
     # python3-swiglpk # unknown if needed
     # lgpio / GPIO system library (needed by rpi-lgpio pip package)
     python3-libgpiod
-    # Timezone database — required by zoneinfo (used for multi-timezone clocks)
+    # Timezone database  --  required by zoneinfo (used for multi-timezone clocks)
     tzdata
     # Useful utilities already installed but listed for completeness
     git
@@ -175,7 +175,7 @@ if [[ "$IS_RPI" == true ]]; then
         read -r -p "  Enable SPI now automatically? [y/N] " REPLY
         if [[ "${REPLY,,}" == "y" ]]; then
             sudo raspi-config nonint do_spi 0
-            warn "SPI enabled — a REBOOT IS REQUIRED before SPI will work."
+            warn "SPI enabled  --  a REBOOT IS REQUIRED before SPI will work."
             warn "After rebooting, re-run this script or just run clockish"
             NEEDS_REBOOT=true
         else
@@ -222,11 +222,11 @@ fi
 section "Display driver selection"
 
 echo "  Which display driver(s) would you like to install?"
-echo "    1) ili9486      — ILI9486 SPI TFT        (MPI3501 / MHS3528 3.5\" RPi displays)"
-echo "    2) st7789       — ST7789 SPI TFT         (Adafruit 240×135, Pimoroni 240×240, etc)"
-echo "    3) framebuffer  — Linux /dev/fb0         (DSI ribbon-cable, HDMI — no extra packages)"
-echo "    4) all          — install all drivers"
-echo "    5) none         — skip (configure manually later)"
+echo "    1) ili9486       --  ILI9486 SPI TFT        (MPI3501 / MHS3528 3.5\" RPi displays)"
+echo "    2) st7789        --  ST7789 SPI TFT         (Adafruit 240x135, Pimoroni 240x240, etc)"
+echo "    3) framebuffer   --  Linux /dev/fb0         (DSI ribbon-cable, HDMI  --  no extra packages)"
+echo "    4) all           --  install all drivers"
+echo "    5) none          --  skip (configure manually later)"
 echo ""
 read -r -p "  Enter choice [1/2/3/4/5]: " _DRIVER_CHOICE
 
@@ -243,7 +243,7 @@ esac
 
 $INSTALL_ILI9486 && ok "Will install: ili9486 driver     (pyili9486)"
 $INSTALL_ST7789  && ok "Will install: st7789 driver      (st7789 + gpiod + gpiodevice)"
-$INSTALL_FB      && ok "Will install: framebuffer driver (no extra packages — uses /dev/fb0)"
+$INSTALL_FB      && ok "Will install: framebuffer driver (no extra packages  --  uses /dev/fb0)"
 
 # ---------------------------------------------------------------------------
 # Display profile selection
@@ -253,19 +253,19 @@ $INSTALL_FB      && ok "Will install: framebuffer driver (no extra packages — 
 _PROFILES=()
 if $INSTALL_ILI9486 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
     _PROFILES+=(
-        "ILI9486  320×480 portrait-canvas, landscape on screen  (most ILI9486 configs) |configs/display/ili9486-portrait.yaml"
-        "ILI9486  480×320 landscape-canvas, landscape on screen (big-red, nixie, dseg) |configs/display/ili9486-landscape.yaml"
+        "ILI9486  320x480 portrait-canvas, landscape on screen  (most ILI9486 configs) |configs/display/ili9486-portrait.yaml"
+        "ILI9486  480x320 landscape-canvas, landscape on screen (big-red, nixie, dseg) |configs/display/ili9486-landscape.yaml"
     )
 fi
 if $INSTALL_ST7789 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
     _PROFILES+=(
-        "ST7789   240×135 landscape  (Adafruit 1.14\" TFT #4383)                       |configs/display/st7789-240x135.yaml"
+        "ST7789   240x135 landscape  (Adafruit 1.14\" TFT #4383)                       |configs/display/st7789-240x135.yaml"
     )
 fi
 if $INSTALL_FB || [[ "$_DRIVER_CHOICE" == "4" ]]; then
     _PROFILES+=(
-        "Framebuffer  800×480   (Raspberry Pi 7\" Touch Display, DSI)                  |configs/display/framebuffer-800x480.yaml"
-        "Framebuffer  1920×1080 (HDMI or high-res DSI panel)                           |configs/display/framebuffer-1920x1080.yaml"
+        "Framebuffer  800x480   (Raspberry Pi 7\" Touch Display, DSI)                  |configs/display/framebuffer-800x480.yaml"
+        "Framebuffer  1920x1080 (HDMI or high-res DSI panel)                           |configs/display/framebuffer-1920x1080.yaml"
     )
 fi
 
@@ -276,7 +276,7 @@ if [[ ${#_PROFILES[@]} -gt 0 ]]; then
     for i in "${!_PROFILES[@]}"; do
         echo "    $((i+1))) ${_PROFILES[$i]%%|*}"
     done
-    echo "    $((${#_PROFILES[@]}+1))) Skip — I will configure display.yaml manually"
+    echo "    $((${#_PROFILES[@]}+1))) Skip  --  I will configure display.yaml manually"
     echo ""
     read -r -p "  Enter choice [1-$((${#_PROFILES[@]}+1))]: " _PROFILE_CHOICE
     if [[ "$_PROFILE_CHOICE" =~ ^[0-9]+$ ]] \
@@ -286,7 +286,7 @@ if [[ ${#_PROFILES[@]} -gt 0 ]]; then
         SELECTED_PROFILE_SRC="$SCRIPT_DIR/${_entry##*|}"
         ok "Display profile: ${_entry%%|*}"
     else
-        warn "Skipping display profile — copy one from configs/display/ manually."
+        warn "Skipping display profile  --  copy one from configs/display/ manually."
     fi
 fi
 
@@ -303,10 +303,10 @@ VENV_DIR="$SCRIPT_DIR/.venv"
 VENV_SYSTEM_FLAG=""
 if python3 -c "import numpy" 2>/dev/null; then
     VENV_SYSTEM_FLAG="--system-site-packages"
-    ok "System numpy detected — venv will use --system-site-packages"
+    ok "System numpy detected  --  venv will use --system-site-packages"
     info "  (apt-installed packages such as python3-numpy will be visible inside the venv)"
 else
-    info "System numpy not found — creating isolated venv (numpy will be pip-installed)"
+    info "System numpy not found  --  creating isolated venv (numpy will be pip-installed)"
 fi
 
 if [[ -d "$VENV_DIR" ]]; then
@@ -338,7 +338,7 @@ info "Upgrading pip..."
 "$VENV_PIP" install --upgrade pip $PIP_Q
 
 # Core packages required by clockish.
-# numpy is intentionally absent here — it is either inherited from the system
+# numpy is intentionally absent here  --  it is either inherited from the system
 # python3-numpy apt package (when the venv was created with --system-site-packages)
 # or pulled in automatically as a pyproject.toml dependency of clockish itself.
 PIP_PACKAGES=(
@@ -353,7 +353,7 @@ PIP_PACKAGES=(
 if [[ "$IS_RPI" == true ]]; then
     PIP_PACKAGES+=("rpi-lgpio>=0.6")
 else
-    warn "Not on Raspberry Pi — skipping rpi-lgpio. GPIO will fail at runtime."
+    warn "Not on Raspberry Pi  --  skipping rpi-lgpio. GPIO will fail at runtime."
 fi
 
 # Display driver packages.
@@ -375,7 +375,7 @@ info "Installing clockish package (pip install -e .) ..."
 _CLOCKISH_TARGET="$SCRIPT_DIR"
 $INSTALL_ST7789 && _CLOCKISH_TARGET="${SCRIPT_DIR}[st7789]"
 "$VENV_PIP" install -e "$_CLOCKISH_TARGET" $PIP_Q
-ok "clockish package installed — entry point: $VENV_DIR/bin/clockish"
+ok "clockish package installed  --  entry point: $VENV_DIR/bin/clockish"
 
 # ---------------------------------------------------------------------------
 # 6. Verify key imports
@@ -416,7 +416,7 @@ DEFAULT_CFG="$SCRIPT_DIR/configs/clockish.yaml"
 
 if [[ -f "$USER_CFG" ]]; then
     ok "User config already exists: $USER_CFG"
-    info "  (not overwritten — edit it with: ./edit-clockish-config.sh)"
+    info "  (not overwritten  --  edit it with: ./edit-clockish-config.sh)"
 else
     if [[ -f "$DEFAULT_CFG" ]]; then
         mkdir -p "$USER_CFG_DIR"
@@ -424,7 +424,7 @@ else
         ok "Default config copied to $USER_CFG"
         info "  Edit it to customise your layout: ./edit-clockish-config.sh"
     else
-        warn "Default config not found at $DEFAULT_CFG — skipping user config copy."
+        warn "Default config not found at $DEFAULT_CFG  --  skipping user config copy."
     fi
 fi
 
@@ -432,21 +432,21 @@ fi
 USER_DISPLAY_CFG="$USER_CFG_DIR/display.yaml"
 if [[ -z "${SELECTED_PROFILE_SRC:-}" || ! -f "$SELECTED_PROFILE_SRC" ]]; then
     if [[ ! -f "$USER_DISPLAY_CFG" ]]; then
-        warn "No display profile installed — clockish will not start until you create:"
+        warn "No display profile installed  --  clockish will not start until you create:"
         warn "  $USER_DISPLAY_CFG"
         info "  Copy one from:  configs/display/"
     else
         ok "Display profile already exists: $USER_DISPLAY_CFG"
-        info "  (no new profile selected — leaving it unchanged)"
+        info "  (no new profile selected  --  leaving it unchanged)"
     fi
 elif [[ ! -f "$USER_DISPLAY_CFG" ]]; then
-    # Fresh install — no existing file.
+    # Fresh install  --  no existing file.
     mkdir -p "$USER_CFG_DIR"
     cp "$SELECTED_PROFILE_SRC" "$USER_DISPLAY_CFG"
     ok "Display profile installed: $USER_DISPLAY_CFG"
     info "  Edit this file to change driver, rotation, or pin assignments."
 else
-    # File already exists — ask whether to replace it.
+    # File already exists  --  ask whether to replace it.
     echo ""
     warn "Display profile already exists: $USER_DISPLAY_CFG"
     read -r -p "  Replace it with the selected profile? [y/N] " _REPLACE_REPLY
@@ -460,10 +460,10 @@ else
         cp "$USER_DISPLAY_CFG" "$_BACKUP"
 
         if diff -q "$USER_DISPLAY_CFG" "$SELECTED_PROFILE_SRC" &>/dev/null; then
-            # Files are identical — no point keeping the backup.
+            # Files are identical  --  no point keeping the backup.
             rm -f "$_BACKUP"
             cp "$SELECTED_PROFILE_SRC" "$USER_DISPLAY_CFG"
-            ok "Display profile updated — new profile is identical to the previous one."
+            ok "Display profile updated  --  new profile is identical to the previous one."
         else
             cp "$SELECTED_PROFILE_SRC" "$USER_DISPLAY_CFG"
             ok "Display profile updated: $USER_DISPLAY_CFG"
@@ -530,7 +530,7 @@ for d in "${DSEG_SEARCH_DIRS[@]}"; do
 done
 
 if [[ "$DSEG_FOUND" == false ]]; then
-    warn "DSEG7Classic-Regular.ttf not found — seven-segment.yaml and fourteen-segment.yaml will not work."
+    warn "DSEG7Classic-Regular.ttf not found  --  seven-segment.yaml and fourteen-segment.yaml will not work."
     info "It should have been installed above via fonts-dseg."
     info "If it's missing, try:  sudo apt install fonts-dseg"
 fi
@@ -551,7 +551,7 @@ for d in "${NIXIE_SEARCH_DIRS[@]}"; do
 done
 
 if [[ "$NIXIE_FOUND" == false ]]; then
-    warn "NixieOne-Regular.ttf not found — nixie.yaml will not work."
+    warn "NixieOne-Regular.ttf not found  --  nixie.yaml will not work."
     info "Install with:  bash scripts/download-nixie-font.sh"
 fi
 
@@ -561,7 +561,7 @@ fi
 section "Helper scripts"
 
 # SCRIPT_DIR is the project root (install.sh now lives at the repo root).
-# Both helper scripts are committed to the repo — just ensure they're executable.
+# Both helper scripts are committed to the repo  --  just ensure they're executable.
 chmod +x "$SCRIPT_DIR/run-clockish.sh"
 ok "run-clockish.sh is executable"
 
@@ -579,13 +579,13 @@ section "Installation Summary"
 if [[ $IMPORT_ERRORS -eq 0 ]]; then
     ok "All checks passed!"
 else
-    warn "$IMPORT_ERRORS import check(s) failed — see errors above."
+    warn "$IMPORT_ERRORS import check(s) failed  --  see errors above."
 fi
 
 echo ""
 echo -e "${BOLD}Your config files:${RESET}"
-echo "    $HOME/.config/clockish/display.yaml     ← driver, width, height, rotation, pins"
-echo "    $HOME/.config/clockish/clockish.yaml    ← rows and panels layout"
+echo "    $HOME/.config/clockish/display.yaml     <- driver, width, height, rotation, pins"
+echo "    $HOME/.config/clockish/clockish.yaml    <- rows and panels layout"
 echo ""
 echo -e "${BOLD}To switch display layout (keep same display):${RESET}"
 echo "    clockish configs/big-red.yaml"
@@ -614,14 +614,14 @@ if [[ "${NEEDS_REBOOT:-false}" == true ]]; then
 fi
 
 echo -e "${BOLD}Troubleshooting tips:${RESET}"
-echo "  • SPI not working?      sudo raspi-config nonint do_spi 0 && sudo reboot"
-echo "  • Permission denied?    sudo usermod -aG spi,gpio \$USER  then reboot"
-echo "  • Font errors?          sudo apt install fonts-dejavu-core
-  • 7-seg font missing?   sudo apt install fonts-dseg
-  • Nixie font missing?   bash scripts/download-nixie-font.sh"
-echo "  • RPi.GPIO missing?     source .venv/bin/activate && pip install rpi-lgpio"
-echo "  • numpy/Pillow slow?    sudo apt install python3-numpy  (then re-run install.sh)"
-echo "  • numpy missing?        source .venv/bin/activate && pip install 'numpy>=2.4'"
-echo "  • Service not starting? sudo journalctl -u clockish -n 50"
+echo "  - SPI not working?      sudo raspi-config nonint do_spi 0 && sudo reboot"
+echo "  - Permission denied?    sudo usermod -aG spi,gpio \$USER  then reboot"
+echo "  - Font errors?          sudo apt install fonts-dejavu-core
+  - 7-seg font missing?   sudo apt install fonts-dseg
+  - Nixie font missing?   bash scripts/download-nixie-font.sh"
+echo "  - RPi.GPIO missing?     source .venv/bin/activate && pip install rpi-lgpio"
+echo "  - numpy/Pillow slow?    sudo apt install python3-numpy  (then re-run install.sh)"
+echo "  - numpy missing?        source .venv/bin/activate && pip install 'numpy>=2.4'"
+echo "  - Service not starting? sudo journalctl -u clockish -n 50"
 echo ""
 

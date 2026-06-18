@@ -1,15 +1,15 @@
-# fourteen-segment.yaml — clockish config for a VFD-style 14-segment clock
+# fourteen-segment.yaml  --  clockish config for a VFD-style 14-segment clock
 # ---------------------------------------------------------------------------
 # Requires the DSEG14Classic font (SIL OFL 1.1 license).
 # Install one of these ways:
 #
-#   Option A — apt package (Debian / Raspberry Pi OS / Ubuntu):
+#   Option A  --  apt package (Debian / Raspberry Pi OS / Ubuntu):
 #     sudo apt install fonts-dseg
 #
-#   Option B — vendor the font into third_party/dseg/:
+#   Option B  --  vendor the font into third_party/dseg/:
 #     bash scripts/download-dseg-font.sh
 #
-# Unlike DSEG7, the 14-segment font supports the full alphabet — so the date
+# Unlike DSEG7, the 14-segment font supports the full alphabet  --  so the date
 # row is rendered in 14-seg style too, giving a full VFD display look.
 #
 # Font variants available once installed (change default_font below):
@@ -54,7 +54,7 @@ rows:
       - type: date
         justify: left
         timezone: US/Mountain
-        date_format: "%a, %B %-d"   # 14-seg handles letters — no need to fall back to DejaVu
+        date_format: "%a, %B %-d"   # 14-seg handles letters  --  no need to fall back to DejaVu
         color: medspringgreen
         font_size: normal
       - type: clock

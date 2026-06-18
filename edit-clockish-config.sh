@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# edit-clockish-config.sh — open the clockish config in your preferred editor.
+# edit-clockish-config.sh  --  open the clockish config in your preferred editor.
 #
 # Usage:
 #   ./edit-clockish-config.sh              # auto-detect config location
@@ -14,7 +14,7 @@ PROJECT_ROOT="$SCRIPT_DIR"
 # Resolve the config file
 # ---------------------------------------------------------------------------
 if [[ $# -gt 0 ]]; then
-    # Explicit path supplied — use it directly
+    # Explicit path supplied  --  use it directly
     CONFIG_FILE="$1"
     if [[ ! -f "$CONFIG_FILE" ]]; then
         echo "ERROR: file not found: $CONFIG_FILE" >&2
@@ -50,7 +50,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Pick an editor: $VISUAL → $EDITOR → nano → vim → vi
+# Pick an editor: $VISUAL -> $EDITOR -> nano -> vim -> vi
 # ---------------------------------------------------------------------------
 EDITOR_CMD="${VISUAL:-${EDITOR:-}}"
 if [[ -z "$EDITOR_CMD" ]]; then

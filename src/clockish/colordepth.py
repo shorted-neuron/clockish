@@ -175,7 +175,7 @@ def run_test(label, base_rgb, channel):
             break
         elif key.lower() == 'y':
             threshold_delta = delta
-            print(f"  ✓ Difference visible at delta={delta}")
+            print(f"  [ok] Difference visible at delta={delta}")
             break
         else:
             print(f"  No difference seen at delta={delta}")

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 fontdemo.py - Display all named fonts from clockish on the ILI9486.
 

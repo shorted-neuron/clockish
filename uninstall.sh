@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# uninstall.sh — remove the clockish systemd service and optionally user config.
+# uninstall.sh  --  remove the clockish systemd service and optionally user config.
 #
 # Usage:
 #   ./uninstall.sh
@@ -15,7 +15,7 @@ USER_CFG_DIR="$HOME/.config/clockish"
 # Service removal
 # ---------------------------------------------------------------------------
 if [[ ! -f "$SERVICE_FILE" ]]; then
-    echo "No service file found at $SERVICE_FILE — skipping service removal."
+    echo "No service file found at $SERVICE_FILE  --  skipping service removal."
 else
     echo "Found service: $SERVICE_FILE"
     echo ""

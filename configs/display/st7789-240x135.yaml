@@ -1,9 +1,9 @@
-# ST7789 — Adafruit 1.14" 240 × 135 TFT (product #4383)
+# ST7789  --  Adafruit 1.14" 240 x 135 TFT (product #4383)
 # ---------------------------------------------------------------------------
-# The ST7789 controller has a 320×240 internal framebuffer.
-# This panel is a 240×135 window within it, addressed via offset_left/top.
+# The ST7789 controller has a 320x240 internal framebuffer.
+# This panel is a 240x135 window within it, addressed via offset_left/top.
 #
-# Use this profile with: small.yaml and any other 240×135 row config.
+# Use this profile with: small.yaml and any other 240x135 row config.
 # ---------------------------------------------------------------------------
 
 display:
@@ -20,7 +20,7 @@ display:
   spi_speed_hz: 64000000
   invert:       true        # required by most ST7789 panels
 
-  # Panel sits at offset (40, 53) inside the 320×240 ST7789 framebuffer.
+  # Panel sits at offset (40, 53) inside the 320x240 ST7789 framebuffer.
   # Adjust these if your image appears shifted on screen.
   offset_left:  40
   offset_top:   53

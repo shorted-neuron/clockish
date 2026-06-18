@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# download-nixie-font.sh — download the Nixie One font into third_party/nixie/
+# download-nixie-font.sh  --  download the Nixie One font into third_party/nixie/
 # ---------------------------------------------------------------------------
 # Nixie One is an open-source Google Font by Jovanny Lemonad that recreates
 # the warm glowing cathode style of vintage Nixie tube displays.
@@ -26,7 +26,7 @@ DEST_DIR="${PROJECT_ROOT}/third_party/nixie"
 
 mkdir -p "${DEST_DIR}"
 
-echo "==> Downloading Nixie One from Google Fonts GitHub…"
+echo "==> Downloading Nixie One from Google Fonts GitHub..."
 curl -fsSL -o "${DEST_DIR}/${TTF_FILE}" "${GOOGLE_FONTS_BASE}/${TTF_FILE}"
 curl -fsSL -o "${DEST_DIR}/LICENSE-OFL.txt" "${GOOGLE_FONTS_BASE}/${OFL_FILE}"
 

@@ -7,9 +7,9 @@ users of the library pay zero import cost.  Use it explicitly when you want it:
     from pyili9486.colors import PALETTE, C, RED, GREEN, best_label_color
 
 The ILI9486 display supports 65,536 colors in RGB565 format:
-  - Red:   5 bits  -> 32 steps, multiples of 8  (0, 8, 16 … 248)
-  - Green: 6 bits  -> 64 steps, multiples of 4  (0, 4, 8  … 252)
-  - Blue:  5 bits  -> 32 steps, multiples of 8  (0, 8, 16 … 248)
+  - Red:   5 bits  -> 32 steps, multiples of 8  (0, 8, 16 ... 248)
+  - Green: 6 bits  -> 64 steps, multiples of 4  (0, 4, 8  ... 252)
+  - Blue:  5 bits  -> 32 steps, multiples of 8  (0, 8, 16 ... 248)
 
 All RGB values in this palette are snapped to the RGB565 grid so every
 color renders exactly as intended with no rounding artefacts.
@@ -17,8 +17,8 @@ The palette contains exactly 64 named colors.
 
 Quick-reference
 ---------------
-- PALETTE         list of (name: str, rgb: tuple[int,int,int]) — all 64 colors
-- BY_NAME         dict[str, tuple] — look up RGB by name
+- PALETTE         list of (name: str, rgb: tuple[int,int,int])  --  all 64 colors
+- BY_NAME         dict[str, tuple]  --  look up RGB by name
 - C.COLORNAME     attribute-style access returning an RGB tuple
 - Module-level    RED, GREEN, ... as '#RRGGBB' hex strings for PIL fill= args
 - rgb_to_hex(rgb) -> '#RRGGBB'
@@ -29,7 +29,7 @@ Quick-reference
 """
 
 # ---------------------------------------------------------------------------
-# Palette — (name, RGB tuple), ordered by hue family
+# Palette  --  (name, RGB tuple), ordered by hue family
 # All values snapped to RGB565 grid: R & B multiples of 8, G multiples of 4.
 # Max values: R=248, G=252, B=248  (5-bit and 6-bit maximums)
 # ---------------------------------------------------------------------------
@@ -186,7 +186,7 @@ def hex_to_rgb(hex_str: str) -> tuple[int, int, int]:
 
 
 def luminance(rgb: tuple[int, int, int]) -> float:
-    """Return the perceived luminance of an RGB tuple on a 0–255 scale."""
+    """Return the perceived luminance of an RGB tuple on a 0 - 255 scale."""
     r, g, b = rgb
     return 0.299 * r + 0.587 * g + 0.114 * b
 
@@ -197,7 +197,7 @@ def best_label_color(bg_rgb: tuple[int, int, int]) -> tuple[int, int, int]:
 
     - Dark background         -> WHITE  (255, 255, 255)
     - Light background        -> BLACK  (0, 0, 0)
-    - Mid-grey background     -> ORANGE (255, 164, 0)  — cuts through grey
+    - Mid-grey background     -> ORANGE (255, 164, 0)   --  cuts through grey
     """
     r, g, b = bg_rgb
     lum = luminance(bg_rgb)

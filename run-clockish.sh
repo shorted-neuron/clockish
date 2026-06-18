@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-clockish.sh — activate the venv and run clockish.
+# run-clockish.sh  --  activate the venv and run clockish.
 # With --install-service, write (or update) the systemd unit so clockish
 # starts automatically every time the Raspberry Pi boots.
 #
@@ -14,11 +14,11 @@ SERVICE_NAME="clockish"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 # ---------------------------------------------------------------------------
-# -h / --help  — show wrapper usage then pass through to clockish -h
+# -h / --help   --  show wrapper usage then pass through to clockish -h
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'USAGE'
-run-clockish.sh — wrapper around the clockish display engine
+run-clockish.sh  --  wrapper around the clockish display engine
 
 Wrapper-specific options (handled here, not passed to clockish):
   --install-service [config.yaml]
@@ -37,11 +37,11 @@ USAGE
 fi
 
 # ---------------------------------------------------------------------------
-# --remove-service  — stop, disable, and delete the unit file
+# --remove-service   --  stop, disable, and delete the unit file
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "--remove-service" ]]; then
     if [[ ! -f "$SERVICE_FILE" ]]; then
-        echo "No service file found at $SERVICE_FILE — nothing to remove."
+        echo "No service file found at $SERVICE_FILE  --  nothing to remove."
         exit 0
     fi
     echo "Stopping and disabling $SERVICE_NAME ..."
@@ -54,7 +54,7 @@ if [[ "${1:-}" == "--remove-service" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# --install-service  — write the unit file and (re)start the service
+# --install-service   --  write the unit file and (re)start the service
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "--install-service" ]]; then
     shift
@@ -102,7 +102,7 @@ UNIT
     sudo systemctl daemon-reload
     sudo systemctl enable "$SERVICE_NAME"
     if sudo systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        echo "Service is already running — restarting..."
+        echo "Service is already running  --  restarting..."
         sudo systemctl restart "$SERVICE_NAME"
     else
         echo "Starting service..."
@@ -119,7 +119,7 @@ UNIT
 fi
 
 # ---------------------------------------------------------------------------
-# Normal run — activate venv and exec clockish
+# Normal run  --  activate venv and exec clockish
 # ---------------------------------------------------------------------------
 CLOCKISH_BIN="$VENV_BIN/clockish"
 if [[ ! -x "$CLOCKISH_BIN" ]]; then
