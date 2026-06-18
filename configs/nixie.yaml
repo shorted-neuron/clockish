@@ -66,23 +66,12 @@ rows:
     height: "69%"           # 221px @ 320  331px @ 480  745px @ 1080
     panels:
       - type: clock
-        # width: 85%        # uncomment if using the am/pm indicator below
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         colors:
-          # time: darkorange      # classic warm nixie yellow-orange
-          time: burntsienna       # deeper amber
-          # time: orange          # bright amber
-        time_font: giant          # ≈ 68% of display height — fills the row
-      # - type: clock
-      #   width: 15%
-      #   justify: center
-      #   timezone: US/Mountain
-      #   time_format: "%p"
-      #   colors:
-      #     time: burntsienna
-      #   time_font: med
+          time: darkorange      # classic warm nixie yellow-orange
+        time_font: giant        # ≈ 68% of display height — fills the row
 
   - name: divider-1
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
@@ -101,13 +90,6 @@ rows:
         colors:
           date: darkorange
         date_font: normal         # ≈ 12% of display height — fits the date row
-      # - type: date
-      #   justify: center
-      #   timezone: US/Mountain
-      #   date_format: ":%S"
-      #   colors:
-      #     time: burntsienna
-      #   date_font: normal
 
   - name: divider-2
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
@@ -121,35 +103,27 @@ rows:
     panels:
       - type: wifi_graphic
         width: 44
-        color: burntsienna
+        color: orange
       - type: fact
         width: 15%
         source: wifi_status
-        color: rust
-        font: tiny                # ≈ 5% of display height
+        color: darkorange
+        font: auto
       - type: fact
-      #  width: 15%
         source: hostname
-        color: rust
+        color: orange
         font: tiny
       - type: fact
-      #  width: 20%
         source: ip
-        color: rust
+        color: darkorange
         font: tiny
       - type: fact
         width: 10%
         justify: center
         source: cpu
         color: rust
-        font: tiny
+        font: auto
       - type: fact
-      #  width: 15%
         source: ntp_all
         color: rust
-        font: tiny
-      # - type: debug
-      #   width: 30%
-      #   color: rust
-      #   font: micro
-
+        font: auto

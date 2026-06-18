@@ -296,6 +296,9 @@ if DEBUG:
     print("Font metrics:")
     dump_font_metrics()
 
+# Pre-compute layout and resolve 'auto' font references once at startup.
+_init_layout()
+
 
 # ---------------------------------------------------------------------------
 # Color helper — looks up any palette name from pyili9486.colors
@@ -706,6 +709,54 @@ def _measure_rows(rows: list) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Layout pre-computation — runs once at startup; cached in _LAYOUT.
+# ---------------------------------------------------------------------------
+_LAYOUT: list = []   # list of (row_dict, y, row_height_px)
+
+# Font keys that support the special value 'auto'.
+_AUTO_FONT_KEYS = ('font', 'time_font', 'date_font', 'label_font')
+
+# Fraction of row height used when a font key is set to 'auto'.
+_AUTO_FONT_FRACTION = 0.75
+
+
+def _init_layout() -> None:
+    """Pre-compute row layout and resolve 'auto' font references in panel dicts.
+
+    Called once during module init, after fonts and config are fully loaded.
+    Results are stored in _LAYOUT so that show_rows() never re-computes row
+    heights or re-emits the height-overflow warning.
+
+    font: auto  (also time_font, date_font, label_font) means "size this font
+    to ~75% of the parent row height, using the config's default_font".  The
+    resolved font is registered in _FONTS under a synthetic name (e.g.
+    '_auto_32') and the panel dict is updated in-place so the renderer just
+    calls _get_font() normally.
+    """
+    global _LAYOUT
+    rows = _config.get('rows', [])
+    layout = _measure_rows(rows)   # height-overflow warning printed here, once
+
+    _default_font_file = _config.get('default_font')
+    _auto_path = _find_font(_default_font_file) if _default_font_file else _FONT_PATH
+
+    for r, ry, rh in layout:
+        for p in r.get('panels', []):
+            for key in _AUTO_FONT_KEYS:
+                if p.get(key) == 'auto':
+                    auto_name = f'_auto_{rh}'
+                    if auto_name not in _FONTS:
+                        px = max(1, round(rh * _AUTO_FONT_FRACTION))
+                        _FONTS[auto_name] = ImageFont.truetype(_auto_path, px)
+                        if DEBUG:
+                            print(f"auto font '{auto_name}': {px}px "
+                                  f"({_AUTO_FONT_FRACTION*100:.0f}% of {rh}px row)")
+                    p[key] = auto_name
+
+    _LAYOUT = layout
+
+
+# ---------------------------------------------------------------------------
 # Panel renderers — uniform signature: (p, px, py, pw, ph, ...)
 #   px, py  = top-left origin of the panel's allocated rectangle
 #   pw, ph  = width and height of that rectangle
@@ -1063,14 +1114,14 @@ def show_rows():
     # Snapshot all timezones referenced by all panels in all rows.
     with timed_section("tz", timings):
         tz_cache: dict[str, datetime.datetime] = {}
-        for r in _config.get('rows', []):
+        for r, _ry, _rh in _LAYOUT:
             for p in r.get('panels', []):
                 if p.get('type') in ('clock', 'date'):
                     tz = p.get('timezone', 'local')
                     if tz not in tz_cache:
                         tz_cache[tz] = _now_in_tz(tz)
 
-    layout = _measure_rows(_config.get('rows', []))
+    layout = _LAYOUT
 
     with timed_section("draw", timings):
         draw.rectangle((0, 0, width - 1, height - 1), fill=0)  # fill gaps between rows
