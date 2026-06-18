@@ -1148,6 +1148,7 @@ def show_rows():
 # ---------------------------------------------------------------------------
 def main():
     """Run the display loop.  All module-level init has already happened."""
+    global DEBUG_LAYOUT
     try:
         lcd.idle()
         lcd.idle(False)   # idle(True) can cause fonts/colors to render weirdly
@@ -1156,6 +1157,13 @@ def main():
             # Single render then exit so debug output is easy to capture.
             show_rows()
             sys.exit(0)
+
+        if DEBUG:
+            # Print the full layout once at startup using the same DEBUG_LAYOUT
+            # code path, then continue with the normal timed loop.
+            DEBUG_LAYOUT = True
+            show_rows()
+            DEBUG_LAYOUT = False
 
         while True:
             show_rows()
