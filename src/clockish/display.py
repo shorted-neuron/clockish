@@ -765,8 +765,12 @@ def _init_layout() -> None:
             font_size = p.get('font_size') # size spec
 
             if font_ref is not None:
-                # font: attribute specified — resolve (file, size) → synthetic key
+                # font: attribute specified — resolve (file, size) → synthetic key.
+                # 'debug' defaults to 'micro' when no font_size is given;
+                # all other font references default to 'auto' (75% of row height).
                 file_path = _font_files.get(font_ref, _auto_path)
+                if font_size is None and font_ref == 'debug':
+                    font_size = 'micro'
                 size_px   = _resolve_size(font_size, rh)
                 file_stem = os.path.splitext(os.path.basename(file_path))[0]
                 syn_name  = f'_res_{file_stem}_{size_px}'
