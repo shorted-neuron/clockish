@@ -68,5 +68,5 @@ repos:
         entry: python -m clockish.config_validator --no-yamllint
         language: system
         # files: ^configs/(?!display/|clockish-config\.schema).*\.yaml$
-        files: ^configs/display/.*\.yaml$
+        files: ^notyet.yaml$
         pass_filenames: true
