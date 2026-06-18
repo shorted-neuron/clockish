@@ -25,7 +25,7 @@ Severity levels
 ERROR
     Structural problems that will prevent correct rendering or crash clockish
     at runtime.  In strict CI mode these produce a non-zero exit code.
-    At startup they are printed prominently but do **not** abort startup  -- 
+    At startup they are printed prominently but do **not** abort startup  --
     clockish will attempt to continue in a degraded state.
 
 WARNING
@@ -765,16 +765,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == '__main__':
     sys.exit(main())
-
-
-
-
-
-
-
-
-
-
-
-
-

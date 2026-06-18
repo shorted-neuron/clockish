@@ -77,6 +77,7 @@ dev = [
     "ruff",          # linter + formatter
     "mypy",          # type checker
     "yamllint>=1.35",  # YAML style linting (used by clockish-validate --yamllint)
+    "pre-commit>=3.5", # git hook framework (run: pre-commit install)
 ]
 
 # -- CLI entry points ----------------------------------------------------------
@@ -115,4 +116,3 @@ select = ["E", "F", "W", "I"]   # pycodestyle, pyflakes, isort
 [tool.mypy]
 python_version = "3.9"
 warn_unused_configs = true
-

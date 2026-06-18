@@ -35,4 +35,3 @@ echo "Font installed to ${DEST_DIR}/${TTF_FILE}"
 echo "License:          ${DEST_DIR}/LICENSE-OFL.txt"
 echo ""
 echo "Done.  You can now use nixie.yaml."
-

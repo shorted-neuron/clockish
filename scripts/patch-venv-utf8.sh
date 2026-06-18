@@ -90,4 +90,3 @@ if [ "$patched" -gt 0 ]; then
 else
     echo "All activation scripts in $VENV_DIR already patched (nothing to do)."
 fi
-

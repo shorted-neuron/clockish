@@ -82,4 +82,3 @@ def load_driver(display_cfg: dict) -> DisplayDriver:
 
 
 __all__ = ["DisplayDriver", "load_driver"]
-

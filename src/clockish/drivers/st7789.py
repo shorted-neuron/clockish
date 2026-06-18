@@ -182,6 +182,3 @@ class ST7789Driver(DisplayDriver):
     def is_landscape(self) -> bool:
         w, h = self.dimensions
         return w > h
-
-
-

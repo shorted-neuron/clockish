@@ -564,5 +564,3 @@ class TestValidationResultAPI:
         assert 'WARNING' in out
         assert '1 error' in out
         assert '1 warning' in out
-
-

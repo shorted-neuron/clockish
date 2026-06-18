@@ -83,4 +83,3 @@ will work automatically.
 | `DSEG7Modern-Regular.ttf` | Clean: no ghost segments |
 | `DSEG7Modern-Bold.ttf` | Bold modern |
 | `DSEG14Classic-Regular.ttf` | 14-segment (alphanumeric) |
-

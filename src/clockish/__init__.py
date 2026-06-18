@@ -11,4 +11,3 @@ __version__ = "26.6.2"
 # Example:
 # from clockish.core import SomeClass
 # __all__ = ["SomeClass"]
-

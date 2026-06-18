@@ -17,4 +17,3 @@ def test_require_pi_raises_on_windows(monkeypatch):
     monkeypatch.setattr(pu, "is_raspberry_pi", lambda: False)
     with pytest.raises(RuntimeError, match="Raspberry Pi"):
         pu.require_pi("test feature")
-

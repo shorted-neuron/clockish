@@ -60,4 +60,3 @@ secrets.json
 # Compiled device-tree overlays, kernel objects — never commit these
 *.dtbo
 *.ko
-

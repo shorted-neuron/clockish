@@ -76,4 +76,3 @@ if ($patched -gt 0) {
 } else {
     Write-Host "All activation scripts in '$VenvDir' already patched (nothing to do)."
 }
-

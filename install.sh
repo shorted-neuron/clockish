@@ -632,4 +632,3 @@ echo "  - numpy/Pillow slow?    sudo apt install python3-numpy  (then re-run ins
 echo "  - numpy missing?        source .venv/bin/activate && pip install 'numpy>=2.4'"
 echo "  - Service not starting? sudo journalctl -u clockish -n 50"
 echo ""
-

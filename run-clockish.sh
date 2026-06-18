@@ -130,4 +130,3 @@ if [[ ! -x "$CLOCKISH_BIN" ]]; then
 fi
 source "$VENV_BIN/activate"
 exec "$CLOCKISH_BIN" "$@"
-

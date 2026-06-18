@@ -121,21 +121,21 @@ class FramebufferDriver(DisplayDriver):
         self._blue_off  = 0
         self._line_bytes = self._width * 4
         self._rotation = int(cfg.get('rotation', 0))
-        
+
         # Pre-flight check: verify framebuffer device is accessible
         self._preflight_check()
 
     # ------------------------------------------------------------------
     def _preflight_check(self) -> None:
         """Verify framebuffer device is accessible before begin() is called.
-        
+
         This fail-fast check ensures users get immediate, clear feedback
         if the device is missing or inaccessible (e.g., due to missing group
         membership or unplugged display), rather than discovering the problem
         later during initialization.
         """
         device = self._cfg.get('device', '/dev/fb0')
-        
+
         try:
             # Try to open the device read-write to verify access
             with open(device, 'rb+'):
