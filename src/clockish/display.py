@@ -143,6 +143,12 @@ x       = 0
 lcd = load_driver(_display_cfg).begin()
 print(f'Initialized display: {width}x{height} rotation={rotation}, landscape={lcd.is_landscape}, dimensions={lcd.dimensions}')
 
+# Log the orientation hint from the config (landscape | portrait | square).
+# This is informational — the physical orientation is set in the display profile.
+_orientation = _config.get('orientation')
+if _orientation:
+    print(f"Layout orientation hint: {_orientation}")
+
 # ---------------------------------------------------------------------------
 # Fonts — loaded once on first use, keyed by config name
 # ---------------------------------------------------------------------------
@@ -193,26 +199,74 @@ def _find_font(name: str) -> str:
 _FONT_PATH = _find_font('DejaVuSans.ttf')
 _FONTS: dict = {}
 
+# ---------------------------------------------------------------------------
+# Standard font scale — each name maps to a fraction of the display height.
+# These built-in names are loaded on first use, using the font file set by
+# 'default_font' in the config (falls back to DejaVu Sans).
+#
+# Scale (8 steps, largest → smallest):
+#   giant  ≈ 68%  — fills a tall clock row
+#   huge   ≈ 45%
+#   big    ≈ 30%
+#   med    ≈ 20%
+#   normal ≈ 12%  — date / subtitle rows
+#   small  ≈  8%
+#   tiny   ≈  5%  — info / status rows
+#   micro  ≈  3%
+#
+# Custom fonts defined in the 'fonts:' config section may override these names
+# or introduce new ones.  Sizes in 'fonts:' may be integers (pixels) or
+# percentage strings like "68%" (resolved against the display height).
+# ---------------------------------------------------------------------------
+BUILTIN_FONT_SCALE: dict[str, float] = {
+    'giant':  0.68,
+    'huge':   0.45,
+    'big':    0.30,
+    'med':    0.20,
+    'normal': 0.12,
+    'small':  0.08,
+    'tiny':   0.05,
+    'micro':  0.03,
+}
+
+
+def _resolve_dimension(raw, base: int) -> int:
+    """Resolve a config dimension value to an integer number of pixels.
+
+    Accepts:
+      str ending in '%'  — percentage of *base*, e.g. "68%"
+      float in 0.0–1.0   — fraction of *base*, e.g. 0.68
+      int / float > 1.0  — direct pixel value (rounded to int)
+    """
+    if isinstance(raw, str) and raw.endswith('%'):
+        return max(1, round(base * float(raw[:-1]) / 100))
+    f = float(raw)
+    if 0.0 <= f <= 1.0:
+        return max(1, round(base * f))
+    return max(1, round(f))
+
+
 def _get_font(name: str) -> ImageFont.FreeTypeFont:
     if not _FONTS:
-        _FONTS['giant']  = ImageFont.truetype(_FONT_PATH, 160)
-        _FONTS['huge']   = ImageFont.truetype(_FONT_PATH, 72)
-        _FONTS['big']    = ImageFont.truetype(_FONT_PATH, 48)
-        _FONTS['med']    = ImageFont.truetype(_FONT_PATH, 36)
-        _FONTS['normal'] = ImageFont.truetype(_FONT_PATH, 28)
-        _FONTS['small']  = ImageFont.truetype(_FONT_PATH, 20)
-        _FONTS['tiny']   = ImageFont.truetype(_FONT_PATH, 14)
+        # Use 'default_font' from config as the typeface for all built-in
+        # scale names; fall back to DejaVu Sans if not set.
+        _default_font_file = _config.get('default_font')
+        _scale_font_path = _find_font(_default_font_file) if _default_font_file else _FONT_PATH
+        for _scale_name, _fraction in BUILTIN_FONT_SCALE.items():
+            _px = max(1, round(height * _fraction))
+            _FONTS[_scale_name] = ImageFont.truetype(_scale_font_path, _px)
     if name not in _FONTS:
         # Try to load a custom font defined in the config's 'fonts:' section.
         # Each entry looks like:
         #   fonts:
         #     myfont:
         #       file: SomeName-Regular.ttf
-        #       size: 120
+        #       size: 120        # or "12%" (% of display height)
         custom = _config.get('fonts', {}).get(name)
         if custom:
             font_path = _find_font(custom.get('file', 'DejaVuSans.ttf'))
-            _FONTS[name] = ImageFont.truetype(font_path, int(custom.get('size', 28)))
+            size_px = _resolve_dimension(custom.get('size', '12%'), height)
+            _FONTS[name] = ImageFont.truetype(font_path, size_px)
         else:
             return _FONTS.get('normal', ImageFont.load_default())
     return _FONTS[name]
@@ -628,13 +682,15 @@ def _font_ink_top(f: ImageFont.FreeTypeFont) -> int:
 def _measure_rows(rows: list) -> list:
     """Return a list of (row_dict, y, height) tuples.
 
-    Every row MUST have a 'height' key.  Warns on stderr if the total
-    height exceeds the display height; content that overflows is clipped.
+    Every row MUST have a 'height' key.  The value may be an integer (pixels),
+    a float 0.0–1.0 (fraction of display height), or a percentage string such
+    as "15%" (resolved against the display height).  Warns on stderr if the
+    total height exceeds the display height; content that overflows is clipped.
     """
     result = []
     y = top
     for r in rows:
-        h = int(r.get('height', 30))
+        h = _resolve_dimension(r.get('height', 30), height)
         result.append((r, y, h))
         y += h
 

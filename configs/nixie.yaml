@@ -19,33 +19,54 @@
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Custom fonts — maps a config name to a TTF file + size.
-# The 'file' is searched in all subdirectories of third_party/ automatically,
-# so third_party/nixie/NixieOne-Regular.ttf will be found after running the
-# download script.
+# Orientation hint — landscape | portrait | square
+#   landscape: aspect ratio ≥ ~1.5  (e.g. 480x320, 800x480, 1920x1080)
+#   portrait:  aspect ratio ≤ ~0.7  (e.g. 320x480)
+#   square:    aspect ratio ≈ 1.0
+#
+# This hint is informational; it helps users pick the right config for their
+# display.  All row heights and font sizes below are percentages of the
+# display HEIGHT so this layout scales automatically to any landscape display.
 # ---------------------------------------------------------------------------
-fonts:
-  nixiegiant:
-    file: NixieOne-Regular.ttf
-    size: 220
-  nixiehuge:
-    file: NixieOne-Regular.ttf
-    size: 64
-  nixiemed:
-    file: NixieOne-Regular.ttf
-    size: 32
-  nixiesmall:
-    file: NixieOne-Regular.ttf
-    size: 18
+orientation: landscape
 
-# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
+# ---------------------------------------------------------------------------
+# default_font — TTF file used for all built-in scale font names.
+#
+# When set, every standard font name (giant, huge, big, med, normal, small,
+# tiny, micro) is loaded from this file at the appropriate percentage of the
+# display height — no explicit 'fonts:' section is needed for a single
+# typeface.  The file is searched in all subdirectories of third_party/.
+# ---------------------------------------------------------------------------
+default_font: NixieOne-Regular.ttf
+
+# ---------------------------------------------------------------------------
+# Built-in font scale (% of display height) — for reference:
+#
+#   giant  ≈ 68%   big    ≈ 30%   small  ≈  8%
+#   huge   ≈ 45%   med    ≈ 20%   tiny   ≈  5%
+#                  normal ≈ 12%   micro  ≈  3%
+#
+# Example pixel sizes at common display heights:
+#   height 320px (480×320):    giant≈218  normal≈38  tiny≈16
+#   height 480px (800×480):    giant≈326  normal≈58  tiny≈24
+#   height 1080px (1920×1080): giant≈734  normal≈130 tiny≈54
+#
+# You can still define a 'fonts:' section for custom overrides or additional
+# named fonts.  Sizes may be integer pixels or percentage strings like "10%".
+# ---------------------------------------------------------------------------
+
+# Display settings are in a display profile — pair with one of:
+#   configs/display/ili9486-landscape.yaml     (480×320 SPI display)
+#   configs/display/framebuffer-800x480.yaml   (800×480 framebuffer)
+#   configs/display/framebuffer-1920x1080.yaml (1920×1080 framebuffer)
 
 rows:
   - name: clock
-    height: 220
+    height: "69%"           # 221px @ 320  331px @ 480  745px @ 1080
     panels:
       - type: clock
-        # width: 85% # uncomment if using the am/pm indicator below
+        # width: 85%        # uncomment if using the am/pm indicator below
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
@@ -53,7 +74,7 @@ rows:
           # time: darkorange      # classic warm nixie yellow-orange
           time: burntsienna       # deeper amber
           # time: orange          # bright amber
-        time_font: nixiegiant
+        time_font: giant          # ≈ 68% of display height — fills the row
       # - type: clock
       #   width: 15%
       #   justify: center
@@ -61,17 +82,17 @@ rows:
       #   time_format: "%p"
       #   colors:
       #     time: burntsienna
-      #   time_font: nixiehuge
+      #   time_font: med
 
   - name: divider-1
-    height: 9
+    height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
     panels:
       - type: divider
         height: 1
         color: rust
 
   - name: date
-    height: 48
+    height: "15%"           #  48px @ 320   72px @ 480  162px @ 1080
     panels:
       - type: date
         justify: center
@@ -79,24 +100,24 @@ rows:
         date_format: "%A, %B %-d"
         colors:
           date: darkorange
-        date_font: nixiemed
-#      - type: date
-#        justify: center
-#        timezone: US/Mountain
-#        date_format: ":%S"
-#        colors:
-#          time: burntsienna
-#        date_font: nixiemed
+        date_font: normal         # ≈ 12% of display height — fits the date row
+      # - type: date
+      #   justify: center
+      #   timezone: US/Mountain
+      #   date_format: ":%S"
+      #   colors:
+      #     time: burntsienna
+      #   date_font: normal
 
   - name: divider-2
-    height: 9
+    height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
     panels:
       - type: divider
         height: 1
         color: rust
 
   - name: info
-    height: 34
+    height: "10%"           #  32px @ 320   48px @ 480  108px @ 1080
     panels:
       - type: wifi_graphic
         width: 44
@@ -105,30 +126,30 @@ rows:
         width: 15%
         source: wifi_status
         color: rust
-        font: nixiesmall
+        font: tiny                # ≈ 5% of display height
       - type: fact
       #  width: 15%
         source: hostname
         color: rust
-        font: nixiesmall
+        font: tiny
       - type: fact
       #  width: 20%
         source: ip
         color: rust
-        font: nixiesmall
+        font: tiny
       - type: fact
         width: 10%
         justify: center
         source: cpu
         color: rust
-        font: nixiesmall
+        font: tiny
       - type: fact
       #  width: 15%
         source: ntp_all
         color: rust
-        font: nixiesmall
+        font: tiny
       # - type: debug
       #   width: 30%
       #   color: rust
-      #   font: small
+      #   font: micro
 
