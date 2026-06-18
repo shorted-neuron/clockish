@@ -21,15 +21,15 @@ from clockish import __version__
 
 
 # ---------------------------------------------------------------------------
-# Debug flag — set by -d / --debug command-line argument
+# Debug flag  --  set by -d / --debug command-line argument
 # ---------------------------------------------------------------------------
 def _find_default_config() -> str:
     """Search for clockish.yaml in order of preference."""
     candidates = [
-        # 1. Next to this file (old fork layout — kept for dev convenience)
+        # 1. Next to this file (old fork layout  --  kept for dev convenience)
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'clockish.yaml'),
         # 2. configs/ directory relative to project root (clockish src-layout)
-        # __file__ is src/clockish/display.py → go up 2 levels to reach the project root.
+        # __file__ is src/clockish/display.py -> go up 2 levels to reach the project root.
         os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'configs', 'clockish.yaml'),
         # 3. User config directory
         os.path.expanduser('~/.config/clockish/clockish.yaml'),
@@ -46,7 +46,7 @@ def _find_default_config() -> str:
 _DEFAULT_CONFIG = _find_default_config()
 
 _parser = argparse.ArgumentParser(
-    description='Pi Panel Display — config-driven LCD dashboard',
+    description='Pi Panel Display  --  config-driven LCD dashboard',
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog='Example: clockish.py --debug my-config.yaml'
 )
@@ -58,9 +58,37 @@ _parser.add_argument('config', nargs='?', default=None,
                      metavar='CONFIG',
                      help='Path to YAML config file (default: %(const)s)',
                      const=_DEFAULT_CONFIG)
-_args = _parser.parse_args()
-DEBUG = _args.debug
-DEBUG_LAYOUT = _args.debug_layout
+
+# ---------------------------------------------------------------------------
+# Module-level globals  --  populated by _init(), called from main().
+# Functions may read these globals; nothing should depend on them being set
+# before main() calls _init().
+# ---------------------------------------------------------------------------
+_args          = None
+DEBUG: bool    = False
+DEBUG_LAYOUT: bool = False
+_config: dict  = {}
+_display_cfg: dict = {}
+width: int     = 320
+height: int    = 480
+rotation: int  = 0
+image: Image.Image           = Image.new("RGB", (320, 480))
+draw:  ImageDraw.ImageDraw   = ImageDraw.Draw(image)
+padding: int   = 0
+top: int       = 0
+bottom: int    = 480
+x: int         = 0
+lcd            = None
+_orientation   = None
+_FONT_PATH: str = ''
+_C_WHITE:    str = '#ffffff'
+_C_DARKGREY: str = '#404040'
+_C_GREY:     str = '#808080'
+_C_GREEN:    str = '#00ff00'
+_C_BROWN:    str = '#964b00'
+_C_BLACK:    str = '#000000'
+bigfont = medfont = font = smallfont = tiny = None
+_cpu_stat_prev: tuple[int, int] = (0, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -95,65 +123,10 @@ def _find_display_profile(config_path: str | None) -> str | None:
     return None
 
 
-_config: dict = _load_config(_args.config)
-
-# If the row config has no inline 'display:' section, load it from a
-# display profile file.  This lets users switch row configs freely while
-# keeping all hardware settings in one place.
-if 'display' not in _config:
-    _profile_path = _find_display_profile(_args.config)
-    if _profile_path:
-        print(f"Loading display profile: {_profile_path}")
-        with open(_profile_path) as _pf:
-            _profile = yaml.safe_load(_pf) or {}
-        if 'display' not in _profile:
-            sys.exit(f"ERROR: display profile '{_profile_path}' has no 'display:' section")
-        _config['display'] = _profile['display']
-    else:
-        sys.exit(
-            "ERROR: no 'display:' section in config and no display profile found.\n"
-            "  Tried: display.yaml alongside config, ~/.config/clockish/display.yaml\n"
-            "  Fix:   run install.sh to set up a display profile, or copy one from\n"
-            "         configs/display/ to ~/.config/clockish/display.yaml"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Display dimensions, rotation, and PIL canvas — read from config
-# ---------------------------------------------------------------------------
-_display_cfg = _config.get('display', {})
-width    = _display_cfg.get('width',    320)
-height   = _display_cfg.get('height',   480)
-rotation = _display_cfg.get('rotation', 0)
-
-
-image = Image.new("RGB", (width, height))
-draw  = ImageDraw.Draw(image)
-draw.rectangle((0, 0, width, height), outline=0, fill=0)
-
-padding = 0
-top     = padding
-bottom  = height - padding
-x       = 0
-
-# ---------------------------------------------------------------------------
-# Hardware init — driver is selected by display.driver in the config
-# (default: ili9486).  All display-section keys are forwarded to the driver.
-# ---------------------------------------------------------------------------
-lcd = load_driver(_display_cfg).begin()
-print(f'Initialized display: {width}x{height} rotation={rotation}, landscape={lcd.is_landscape}, dimensions={lcd.dimensions}')
-
-# Log the orientation hint from the config (landscape | portrait | square).
-# This is informational — the physical orientation is set in the display profile.
-_orientation = _config.get('orientation')
-if _orientation:
-    print(f"Layout orientation hint: {_orientation}")
-
-# ---------------------------------------------------------------------------
-# Fonts — loaded once on first use, keyed by config name
+# Fonts  --  loaded once on first use, keyed by config name
 # ---------------------------------------------------------------------------
 
-# Project root: src/clockish/display.py → up two levels
+# Project root: src/clockish/display.py -> up two levels
 _PROJECT_ROOT = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 )
@@ -163,13 +136,13 @@ def _find_font(name: str) -> str:
 
     Search order:
       1. Standard DejaVu location
-      2. /usr/share/fonts/truetype/dseg  — installed by: sudo apt install fonts-dseg
+      2. /usr/share/fonts/truetype/dseg   --  installed by: sudo apt install fonts-dseg
       3. Other system font directories
       4. Alongside this script
-      5. Every direct subdirectory of third_party/ — covers vendored fonts such as
+      5. Every direct subdirectory of third_party/  --  covers vendored fonts such as
          third_party/dseg/   (scripts/download-dseg-font.sh)
          third_party/nixie/  (scripts/download-nixie-font.sh)
-         … and any future additions automatically.
+         ... and any future additions automatically.
 
     Falls back to the bare filename (Pillow will raise a clear error if not found).
     """
@@ -196,23 +169,22 @@ def _find_font(name: str) -> str:
             return candidate
     return name   # fall back; Pillow will raise a clear error if not found
 
-_FONT_PATH = _find_font('DejaVuSans.ttf')
 _FONTS: dict = {}
 
 # ---------------------------------------------------------------------------
-# Standard font scale — each name maps to a fraction of the display height.
+# Standard font scale  --  each name maps to a fraction of the display height.
 # These built-in names are loaded on first use, using the font file set by
 # 'default_font' in the config (falls back to DejaVu Sans).
 #
-# Scale (8 steps, largest → smallest):
-#   giant  ≈ 68%  — fills a tall clock row
-#   huge   ≈ 45%
-#   big    ≈ 30%
-#   med    ≈ 20%
-#   normal ≈ 12%  — date / subtitle rows
-#   small  ≈  8%
-#   tiny   ≈  5%  — info / status rows
-#   micro  ≈  3%
+# Scale (8 steps, largest -> smallest):
+#   giant  ~ 68%   --  fills a tall clock row
+#   huge   ~ 45%
+#   big    ~ 30%
+#   med    ~ 20%
+#   normal ~ 12%   --  date / subtitle rows
+#   small  ~  8%
+#   tiny   ~  5%   --  info / status rows
+#   micro  ~  3%
 #
 # Custom fonts defined in the 'fonts:' config section may override these names
 # or introduce new ones.  Sizes in 'fonts:' may be integers (pixels) or
@@ -234,9 +206,9 @@ def _resolve_dimension(raw, base: int) -> int:
     """Resolve a config dimension value to an integer number of pixels.
 
     Accepts:
-      str ending in '%'  — percentage of *base*, e.g. "68%"
-      float in 0.0–1.0   — fraction of *base*, e.g. 0.68
-      int / float > 1.0  — direct pixel value (rounded to int)
+      str ending in '%'   --  percentage of *base*, e.g. "68%"
+      float in 0.0 - 1.0    --  fraction of *base*, e.g. 0.68
+      int / float > 1.0   --  direct pixel value (rounded to int)
     """
     if isinstance(raw, str) and raw.endswith('%'):
         return max(1, int(base * float(raw[:-1]) / 100))
@@ -282,21 +254,9 @@ def dump_font_metrics():
               f"  cell={asc+desc:3d}  bbox(Ag|)={bbox_ag}  bbox(0)={bbox_0}")
 
 
-# Convenience aliases used by legacy display functions
-bigfont   = _get_font('big')
-medfont   = _get_font('med')
-font      = _get_font('normal')
-smallfont = _get_font('small')
-tiny      = _get_font('tiny')
-
-if DEBUG:
-    print("Font metrics:")
-    dump_font_metrics()
-
-
 
 # ---------------------------------------------------------------------------
-# Color helper — looks up any palette name from pyili9486.colors
+# Color helper  --  looks up any palette name from pyili9486.colors
 # ---------------------------------------------------------------------------
 def _color(name: str) -> str:
     """Return a hex color string for a palette name or hex value (case-insensitive).
@@ -311,21 +271,12 @@ def _color(name: str) -> str:
     stripped = name.lstrip('#')
     if len(stripped) in (3, 6) and all(c in '0123456789abcdefABCDEF' for c in stripped):
         return name if name.startswith('#') else f'#{name}'
-    print(f"WARNING: unknown color '{name}' — defaulting to grey", file=sys.stderr)
+    print(f"WARNING: unknown color '{name}'  --  defaulting to grey", file=sys.stderr)
     return '#888888'
 
 
-# Pre-resolved constants for colors used by hardcoded UI elements (after _color is defined)
-_C_WHITE    = _color('WHITE')
-_C_DARKGREY = _color('DARKGREY')
-_C_GREY     = _color('GREY')
-_C_GREEN    = _color('GREEN')
-_C_BROWN    = _color('BROWN')
-_C_BLACK    = _color('BLACK')
-
-
 # ---------------------------------------------------------------------------
-# Color resolution — walk the config once at startup, replacing every color
+# Color resolution  --  walk the config once at startup, replacing every color
 # string with its resolved hex value so renderers never do lookups per frame.
 # ---------------------------------------------------------------------------
 def _resolve_colors(cfg: dict) -> None:
@@ -349,7 +300,6 @@ def _resolve_colors(cfg: dict) -> None:
 
     _walk(cfg)
 
-_resolve_colors(_config)
 
 
 # ---------------------------------------------------------------------------
@@ -412,9 +362,6 @@ def _read_cpu_stat() -> tuple[int, int]:
     total = sum(fields)
     return idle, total
 
-# Prime the first sample at import time so the first call to get_cpu_percent()
-# returns a meaningful value rather than 0%.
-_cpu_stat_prev: tuple[int, int] = _read_cpu_stat()
 _cpu_percent_cached: float = 0.0
 _cpu_percent_cache_time: float = -999.0
 
@@ -588,7 +535,7 @@ def _get_fact(source: str) -> str:
         'ntp_upstream': get_ntp_upstream_count,
         'ntp_all':      lambda: get_ntp_status() + " " + get_ntp_upstream_count(),
         'wireguard':    get_wireguard_status,
-        # wifi facts — raw values from the cached get_wifi_info() tuple
+        # wifi facts  --  raw values from the cached get_wifi_info() tuple
         #   (status, ssid, signal_dbm, quality)
         'wifi_status':  lambda: get_wifi_info()[0],
         'wifi_ssid':    lambda: get_wifi_info()[1],
@@ -675,13 +622,13 @@ def _font_ink_top(f: ImageFont.FreeTypeFont) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Row layout — uses fixed heights from config (required on every row)
+# Row layout  --  uses fixed heights from config (required on every row)
 # ---------------------------------------------------------------------------
 def _measure_rows(rows: list) -> list:
     """Return a list of (row_dict, y, height) tuples.
 
     Every row MUST have a 'height' key.  The value may be an integer (pixels),
-    a float 0.0–1.0 (fraction of display height), or a percentage string such
+    a float 0.0 - 1.0 (fraction of display height), or a percentage string such
     as "15%" (resolved against the display height).  Warns on stderr if the
     total height exceeds the display height; content that overflows is clipped.
     """
@@ -696,7 +643,7 @@ def _measure_rows(rows: list) -> list:
     if total > height:
         print(
             f"WARNING: row total height {total}px exceeds display height {height}px "
-            f"by {total - height}px — bottom rows will be clipped.",
+            f"by {total - height}px  --  bottom rows will be clipped.",
             file=sys.stderr,
         )
 
@@ -704,7 +651,7 @@ def _measure_rows(rows: list) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Layout pre-computation — runs once at startup; cached in _LAYOUT.
+# Layout pre-computation  --  runs once at startup; cached in _LAYOUT.
 # ---------------------------------------------------------------------------
 _LAYOUT: list = []   # list of (row_dict, y, row_height_px)
 
@@ -719,7 +666,7 @@ def _init_layout() -> None:
 
       font_size: <name|%|px|auto>
         Uses default_font (or DejaVu) as the typeface.  Named scale names
-        (giant, huge, …) are pre-loaded at startup.  'auto' sizes to 75% of
+        (giant, huge, ...) are pre-loaded at startup.  'auto' sizes to 75% of
         the row height.  '%' and integer values resolve against display height.
 
       font: <name>   [+ font_size: <name|%|px|auto>]
@@ -739,7 +686,7 @@ def _init_layout() -> None:
     _default_font_file = _config.get('default_font')
     _auto_path = _find_font(_default_font_file) if _default_font_file else _FONT_PATH
 
-    # Map font reference names → resolved TTF paths.
+    # Map font reference names -> resolved TTF paths.
     # 'debug' is always DejaVuSans regardless of default_font.
     _font_files: dict = {'debug': _FONT_PATH}
     for fname, fentry in _config.get('fonts', {}).items():
@@ -765,7 +712,7 @@ def _init_layout() -> None:
             font_size = p.get('font_size') # size spec
 
             if font_ref is not None:
-                # font: attribute specified — resolve (file, size) → synthetic key.
+                # font: attribute specified  --  resolve (file, size) -> synthetic key.
                 # 'debug' defaults to 'micro' when no font_size is given;
                 # all other font references default to 'auto' (75% of row height).
                 file_path = _font_files.get(font_ref, _auto_path)
@@ -783,7 +730,7 @@ def _init_layout() -> None:
                 del p['font']   # consumed; renderers only use font_size
 
             elif font_size == 'auto':
-                # No font: but font_size: auto — default_font at row-relative size
+                # No font: but font_size: auto  --  default_font at row-relative size
                 auto_name = f'_auto_{rh}'
                 if auto_name not in _FONTS:
                     px = max(1, int(rh * _AUTO_FONT_FRACTION))
@@ -793,20 +740,22 @@ def _init_layout() -> None:
                               f"({_AUTO_FONT_FRACTION*100:.0f}% of {rh}px row)")
                 p['font_size'] = auto_name
 
-            # Named scale, explicit %, or integer with no font: →
+            # Named scale, explicit %, or integer with no font: ->
             # handled by _get_font() at render time using default_font.
 
     _LAYOUT = layout
 
+    # Pre-compute panel widths once; warning fires only once here.
+    for _wi, (_wr, _wy, _wh) in enumerate(_LAYOUT):
+        _wp = _wr.get('panels', [])
+        if _wp:
+            _wr['_widths'] = _resolve_panel_widths(_wp, width, _wi)
 
-# Pre-compute layout and resolve 'auto' font references once at startup.
-# Must be called after: font aliases (populates _FONTS), _resolve_colors (resolves
-# color fields), and all helper functions used by _measure_rows/_init_layout.
-_init_layout()
+
 
 
 # ---------------------------------------------------------------------------
-# Panel renderers — uniform signature: (p, px, py, pw, ph, ...)
+# Panel renderers  --  uniform signature: (p, px, py, pw, ph, ...)
 #   px, py  = top-left origin of the panel's allocated rectangle
 #   pw, ph  = width and height of that rectangle
 # ---------------------------------------------------------------------------
@@ -818,9 +767,9 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
 
     Vertical placement: always centred within [py, py+ph).
     Horizontal placement controlled by `justify`:
-      'center' — ink centred within [px+x_offset, px+pw)
-      'left'   — ink starts at px+x_offset
-      'right'  — ink ends at px+pw
+      'center'  --  ink centred within [px+x_offset, px+pw)
+      'left'    --  ink starts at px+x_offset
+      'right'   --  ink ends at px+pw
     """
     ink_top = _font_ink_top(f)
     ink_h   = _font_height(f) - ink_top
@@ -902,7 +851,7 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
 def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
                         d: ImageDraw.ImageDraw) -> None:
-    """Static text panel — renders p['label'] as-is, no data lookup."""
+    """Static text panel  --  renders p['label'] as-is, no data lookup."""
     _draw_text_line(d, px, py, pw, ph,
                     p.get('label', ''),
                     _get_font(p.get('font_size', 'normal')),
@@ -931,7 +880,7 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
     if connected:
         try:
             dbm = float(signal_str.replace('dBm', '').strip())
-            # -50 or better → 4, -60 → 3, -70 → 2, weaker → 1
+            # -50 or better -> 4, -60 -> 3, -70 -> 2, weaker -> 1
             if   dbm >= -50: level = 4
             elif dbm >= -60: level = 3
             elif dbm >= -70: level = 2
@@ -952,7 +901,7 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
     # The wifi fan is a quarter-circle arc set, so it is half as tall as wide.
     # We want it to fill the cell tightly.
     #
-    # No padding — the arc geometry already leaves enough visual margin.
+    # No padding  --  the arc geometry already leaves enough visual margin.
     draw_w    = pw
     draw_h    = ph
 
@@ -963,14 +912,14 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
     # Stroke width: proportional to R_max, at least 1
     stroke    = max(1, R_max // 8)
 
-    num_arcs  = 3   # 3 arcs → 4 levels (0 + one per arc)
+    num_arcs  = 3   # 3 arcs -> 4 levels (0 + one per arc)
     dot_r     = max(2, R_max // 7)
     gap       = max(1, R_max // 12)   # gap between dot edge and first arc
     # Distribute arcs evenly in (dot_r + gap .. R_max)
     arc_band  = R_max - dot_r - gap
     r_step    = arc_band // num_arcs if num_arcs else arc_band
 
-    # Centre the graphic: fan occupies R_max wide (×2) and R_max tall
+    # Centre the graphic: fan occupies R_max wide (x2) and R_max tall
     fan_w = R_max * 2
     fan_h = R_max   # top of outermost arc to dot centre
 
@@ -985,7 +934,7 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
               fill=arc_color)
 
     # --- Draw arcs ---
-    # arc i (0-based) lights when level > i  (arc0 → level≥1, arc1 → level≥2, …)
+    # arc i (0-based) lights when level > i  (arc0 -> level>=1, arc1 -> level>=2, ...)
     for i in range(num_arcs):
         r  = dot_r + gap + r_step * (i + 1)
         bx = cx - r
@@ -1058,7 +1007,7 @@ def _dispatch_panel(p: dict, px: int, py: int, pw: int, ph: int,
         _render_wifi_graphic_panel(p, px, py, pw, ph, target_draw)
     elif pt == 'debug':
         _render_debug_panel(p, px, py, pw, ph, timings, t0, target_draw)
-    # 'blank' — space reserved, nothing to draw
+    # 'blank'  --  space reserved, nothing to draw
 
 
 def _resolve_panel_widths(panels: list, row_w: int, row_idx: int) -> list[int]:
@@ -1101,25 +1050,19 @@ def _resolve_panel_widths(panels: list, row_w: int, row_idx: int) -> list[int]:
     if total > row_w:
         print(
             f"WARNING: row {row_idx} panel widths total {total}px "
-            f"exceeds row width {row_w}px by {total - row_w}px — rightmost panels clipped.",
+            f"exceeds row width {row_w}px by {total - row_w}px  --  rightmost panels clipped.",
             file=sys.stderr,
         )
     return widths
 
 
-# Pre-compute panel widths once so the warning fires only once at startup.
-# Must run after _resolve_panel_widths is defined (hence not inside _init_layout).
-for _row_idx, (_r, _ry, _rh) in enumerate(_LAYOUT):
-    _panels = _r.get('panels', [])
-    if _panels:
-        _r['_widths'] = _resolve_panel_widths(_panels, width, _row_idx)
 
 
 def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
                 tz_cache: dict, timings: dict, t0: float) -> None:
     """Render a row: panels are laid out left-to-right with computed widths.
 
-    Every row is treated the same regardless of panel count — a single-panel
+    Every row is treated the same regardless of panel count  --  a single-panel
     row is just a multi-panel row with one panel.
     """
     panels = r.get('panels', [])
@@ -1150,7 +1093,7 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
 
 
 # ---------------------------------------------------------------------------
-# Main display function — called once per second
+# Main display function  --  called once per second
 # ---------------------------------------------------------------------------
 _last_display_ms: float = 0.0
 
@@ -1191,11 +1134,108 @@ def show_rows():
 
 
 # ---------------------------------------------------------------------------
-# Entry point — called by the `clockish` console script and by __main__.py
+# One-time initialization  --  called by main() before the display loop.
+# ---------------------------------------------------------------------------
+def _init() -> None:
+    """Parse args, load config, init hardware, fonts, colors, and layout.
+
+    All module-level globals used by renderers are set here.  Nothing outside
+    _init() / main() should depend on them being available at import time.
+    """
+    global _args, DEBUG, DEBUG_LAYOUT
+    global _config, _display_cfg, width, height, rotation
+    global image, draw, padding, top, bottom, x
+    global lcd, _orientation
+    global _FONT_PATH
+    global _C_WHITE, _C_DARKGREY, _C_GREY, _C_GREEN, _C_BROWN, _C_BLACK
+    global bigfont, medfont, font, smallfont, tiny
+    global _cpu_stat_prev
+
+    # --- Arguments ---------------------------------------------------------
+    _args = _parser.parse_args()
+    DEBUG = _args.debug
+    DEBUG_LAYOUT = _args.debug_layout
+
+    # --- Config ------------------------------------------------------------
+    _config = _load_config(_args.config)
+
+    if 'display' not in _config:
+        _profile_path = _find_display_profile(_args.config)
+        if _profile_path:
+            print(f"Loading display profile: {_profile_path}")
+            with open(_profile_path) as _pf:
+                _profile = yaml.safe_load(_pf) or {}
+            if 'display' not in _profile:
+                sys.exit(f"ERROR: display profile '{_profile_path}' has no 'display:' section")
+            _config['display'] = _profile['display']
+        else:
+            sys.exit(
+                "ERROR: no 'display:' section in config and no display profile found.\n"
+                "  Tried: display.yaml alongside config, ~/.config/clockish/display.yaml\n"
+                "  Fix:   run install.sh to set up a display profile, or copy one from\n"
+                "         configs/display/ to ~/.config/clockish/display.yaml"
+            )
+
+    # --- Display dimensions and PIL canvas ---------------------------------
+    _display_cfg = _config.get('display', {})
+    width    = _display_cfg.get('width',    320)
+    height   = _display_cfg.get('height',   480)
+    rotation = _display_cfg.get('rotation', 0)
+
+    image = Image.new("RGB", (width, height))
+    draw  = ImageDraw.Draw(image)
+    draw.rectangle((0, 0, width, height), outline=0, fill=0)
+
+    padding = 0
+    top     = padding
+    bottom  = height - padding
+    x       = 0
+
+    # --- Hardware ----------------------------------------------------------
+    lcd = load_driver(_display_cfg).begin()
+    print(f'Initialized display: {width}x{height} rotation={rotation}, '
+          f'landscape={lcd.is_landscape}, dimensions={lcd.dimensions}')
+
+    _orientation = _config.get('orientation')
+    if _orientation:
+        print(f"Layout orientation hint: {_orientation}")
+
+    # --- Fonts -------------------------------------------------------------
+    _FONT_PATH = _find_font('DejaVuSans.ttf')
+
+    bigfont   = _get_font('big')
+    medfont   = _get_font('med')
+    font      = _get_font('normal')
+    smallfont = _get_font('small')
+    tiny      = _get_font('tiny')
+
+    if DEBUG:
+        print("Font metrics:")
+        dump_font_metrics()
+
+    # --- Colors ------------------------------------------------------------
+    _C_WHITE    = _color('WHITE')
+    _C_DARKGREY = _color('DARKGREY')
+    _C_GREY     = _color('GREY')
+    _C_GREEN    = _color('GREEN')
+    _C_BROWN    = _color('BROWN')
+    _C_BLACK    = _color('BLACK')
+    _resolve_colors(_config)
+
+    # --- CPU stats (prime for first get_cpu_percent() call) ----------------
+    _cpu_stat_prev = _read_cpu_stat()
+
+    # --- Layout (calls _resolve_panel_widths; safe here since all fns defined) --
+    _init_layout()
+
+
+# ---------------------------------------------------------------------------
+# Entry point  --  called by the `clockish` console script and by __main__.py
 # ---------------------------------------------------------------------------
 def main():
-    """Run the display loop.  All module-level init has already happened."""
+    """Parse args, initialize hardware, then run the display loop."""
     global DEBUG_LAYOUT
+    _init()
     try:
         lcd.idle()
         lcd.idle(False)   # idle(True) can cause fonts/colors to render weirdly
@@ -1223,8 +1263,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        # Do not blank the display on exit — lets you see where it stopped.
-        # GPIO.cleanup() is not needed — rpi-lgpio facade handles it.
+        # Do not blank the display on exit  --  lets you see where it stopped.
+        # GPIO.cleanup() is not needed  --  rpi-lgpio facade handles it.
         lcd.close()
 
 
@@ -1243,7 +1283,7 @@ def show_invert():
 
 
 # ---------------------------------------------------------------------------
-# Main loop — call show_rows() once per second
+# Main loop  --  call show_rows() once per second
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
     main()
