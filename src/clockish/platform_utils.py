@@ -55,4 +55,3 @@ def _check_cpuinfo() -> bool:
             return "raspberry pi" in f.read().lower()
     except OSError:
         return False
-

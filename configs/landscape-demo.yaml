@@ -1,9 +1,11 @@
+---
 # landscape-demo.yaml  --  clockish config
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish
 # Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml.
 # ---------------------------------------------------------------------------
 
+orientation: landscape
 
 rows:
   - name: utc-clock
@@ -14,11 +16,8 @@ rows:
         timezone: UTC
         label: " UTC"
         time_format: 24hs
-        colors:
-          time:   lime
-          label:  lime
-        time_font: huge
-        label_font: big
+        color: lime
+        font_size: huge
 
   - name: divider-1
     height: 5
@@ -34,9 +33,8 @@ rows:
         justify: center
         timezone: UTC
         date_format: "%A, %B %-d  UTC"
-        colors:
-          date: darklime
-        date_font: med
+        color: darklime
+        font_size: med
 
   - name: divider-2
     height: 5
@@ -53,10 +51,8 @@ rows:
         # justify: center
         timezone: America/Denver
         time_format: 24h
-        colors:
-          time:   cornflower
-          label:  darkorange
-        time_font: big
+        color: cornflower
+        font_size: big
       - type: divider
         width: 2%
         color: black
@@ -66,10 +62,8 @@ rows:
         background: darkred
         timezone: US/Eastern
         time_format: 24h
-        colors:
-          time:   orange
-          label:  red
-        time_font: big
+        color: orange
+        font_size: big
       - type: divider
         width: 2%
         color: black
@@ -78,11 +72,8 @@ rows:
         timezone: Asia/Kolkata
         time_format: 24h
         background: black
-        colors:
-          time:   brown
-          label:  yellow
-        time_font: big
-        label_font: med
+        color: brown
+        font_size: big
 
   - name: world-labels
     height: 42
@@ -91,7 +82,7 @@ rows:
         # justify: center
         label: " Denver"
         color: cornflower
-        font: normal
+        font_size: normal
         background: black
       - type: divider
         width: 2%
@@ -102,14 +93,14 @@ rows:
         label: "US/Eastern"
         background: darkred
         color: orange
-        font: normal
+        font_size: normal
       - type: divider
         width: 2%
         color: black
       - type: text
         # justify: center
         label: "  India"
-        font: normal
+        font_size: normal
         color: brown
 
   - name: divider-3
@@ -130,28 +121,28 @@ rows:
         width: 18%
         source: wifi_status
         color: ff8888
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         width: 20%
         source: wifi_ssid
         label: "SSID "
         color: brightblue
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         width: 35%
         source: wifi_signal
         label: " signal: "
         color: pink
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         width: 18%
         source: wifi_quality
         label: "qual:"
         color: purple
-        font: small
+        font_size: small
 
   - name: host-ip
     height: 46
@@ -160,11 +151,11 @@ rows:
         justify: left
         source: hostname
         color: green
-        font: small
+        font_size: small
       - type: fact
         justify: center
         source: ip
         color: green
-        font: small
+        font_size: small
       - type: debug
         color: silver

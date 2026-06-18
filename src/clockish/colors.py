@@ -225,4 +225,3 @@ if __name__ == "__main__":
     for name, rgb in PALETTE:
         label = rgb_to_hex(best_label_color(rgb))
         print(f"{name:<18} {rgb_to_hex(rgb):<10} {str(rgb):<20} {label}")
-

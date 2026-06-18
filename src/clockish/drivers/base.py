@@ -80,4 +80,3 @@ class DisplayDriver(ABC):
         """``True`` when the display width exceeds its height."""
         w, h = self.dimensions
         return w > h
-

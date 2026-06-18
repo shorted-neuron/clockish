@@ -145,4 +145,3 @@ class ILI9486Driver(DisplayDriver):
     def is_landscape(self) -> bool:
         """Delegate to the underlying ILI9486 object."""
         return self._lcd.is_landscape
-

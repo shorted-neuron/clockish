@@ -1,59 +1,57 @@
+---
 # big-red.yaml  --  clockish config for a big red clock perhaps for your bedroom
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish
 # Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml.
 # ---------------------------------------------------------------------------
 
+orientation: landscape
 
 rows:
   - name: clock
-    height: 170
+    height: 45%
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
-        colors:
-          time: red
-        time_font: giant
-        label_font: huge
+        color: red
+        font_size: huge
 
       - type: clock
         justify: center
         width: 10%
         timezone: US/Mountain
         time_format: "%p"
-        colors:
-          time:   darkred
-        time_font: normal
+        color: darkred
+        font_size: med
 
   - name: divider-1
-    height: 5
+    height: 2%
     panels:
       - type: divider
         height: 1
         color: dimred
 
   - name: date
-    height: 42
+    height: 15%
     panels:
       - type: date
         justify: center
         timezone: US/Mountain
         date_format: "%A, %B %-d"
-        colors:
-          date: darkred
-        date_font: med
+        color: darkred
+        font_size: normal
 
   - name: divider-1
-    height: 5
+    height: 2%
     panels:
       - type: divider
         height: 1
         color: dimred
 
   - name: wifi-info
-    height: 34
+    height: 15%
     panels:
       - type: wifi_graphic
         width: 44
@@ -64,44 +62,42 @@ rows:
         width: 18%
         source: wifi_status
         color: darkred
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         width: 30%
         source: wifi_ssid
         label: "SSID "
         color: darkred
-        font: small
+        font_size: tiny
       - type: fact
         # justify: center
         width: 20%
         source: wifi_signal
-        label: "sig: "
         color: dimred
-        font: small
+        font_size: small
       - type: fact
-        # justify: center
+        justify: right
         width: 18%
         source: wifi_quality
         label: "q:"
         color: dimred
-        font: small
+        font_size: small
 
   - name: host-ip
-    height: 46
+    height: 20%
     panels:
       - type: fact
         width: 24%
         justify: left
         source: hostname
         color: brown
-        font: small
+        font_size: tiny
       - type: fact
         width: 33%
         justify: center
         source: ip
         color: brown
-        font: small
+        font_size: tiny
       - type: debug
         color: chocolate
-

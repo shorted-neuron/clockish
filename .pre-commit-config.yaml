@@ -1,0 +1,69 @@
+# .pre-commit-config.yaml  --  pre-commit hook configuration for clockish
+# ---------------------------------------------------------------------------
+# Setup (one-time, after cloning):
+#   pip install pre-commit          # or: pip install -e ".[dev]"
+#   pre-commit install              # installs the git hook into .git/hooks/pre-commit
+#
+# After that, the hooks run automatically on every `git commit`.
+#
+# Other useful commands:
+#   pre-commit run --all-files      # run all hooks on every file (not just staged)
+#   pre-commit run clockish-validate --all-files   # run one specific hook
+#   pre-commit run --files configs/nixie.yaml      # run on a specific file
+#   pre-commit autoupdate           # bump hook repo revisions to latest tags
+#
+# CI (GitHub Actions):
+#   - uses: actions/checkout@v4
+#   - uses: actions/setup-python@v5
+#   - run: pip install pre-commit && pre-commit run --all-files
+#
+# Reference: https://pre-commit.com
+# ---------------------------------------------------------------------------
+
+repos:
+
+  # ---------------------------------------------------------------------------
+  # General file hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.md$'         # markdown: trailing spaces mean <br>, leave them alone
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]         # enforce LF everywhere (matches .editorconfig)
+      - id: check-merge-conflict
+
+  # ---------------------------------------------------------------------------
+  # YAML style linting  --  uses the project's .yamllint.yaml ruleset
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: yamllint-clockish-configs
+        name: yamllint (clockish configs)
+        entry: yamllint
+        args: [-c, .yamllint.yaml]
+        language: python
+        additional_dependencies: ["yamllint>=1.35"]
+        types: [yaml]
+        files: ^configs/
+
+  # ---------------------------------------------------------------------------
+  # clockish schema + deprecation validation
+  #
+  # Runs config_validator.py directly as a script -- no clockish package install
+  # needed. The module only imports stdlib + yaml + jsonschema, all provided by
+  # additional_dependencies below. (additional_dependencies: ["."] does NOT work
+  # because pre-commit's pip runs from its cache dir, not the repo root.)
+  # --no-yamllint: yamllint already ran in the hook above.
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: clockish-validate
+        name: clockish-validate (schema + deprecations)
+        entry: python src/clockish/config_validator.py --no-yamllint
+        language: python
+        additional_dependencies: ["jsonschema>=4.17", "PyYAML>=6.0"]
+        files: ^configs/(?!display/|clockish-config\.schema).*\.yaml$
+        pass_filenames: true

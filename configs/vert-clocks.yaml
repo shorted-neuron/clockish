@@ -1,4 +1,5 @@
-# clockish.yaml
+---
+# vert-clocks.yaml
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish
 #
@@ -58,6 +59,8 @@
 
 # Display settings are in display.yaml  --  use configs/display/ili9486-portrait.yaml.
 
+orientation: portrait
+
 rows:
   - name: utc-clock
     height: 72
@@ -68,11 +71,8 @@ rows:
         timezone: UTC
         # label: "UTC"
         time_format: 24hs       # HH:MM:SS
-        colors:
-          time:   lime
-          label:  lime
-        time_font: huge          # 72pt ~80px
-        label_font: small        # 20pt ~22px
+        color: lime
+        font_size: huge          # 72pt ~80px
 
   - name: utc-date
     height: 30        # normal font ink_h=28; 36 gives 4px padding top+bottom
@@ -81,9 +81,8 @@ rows:
         # justify: center
         timezone: UTC
         date_format: "%a %b %-d, %Y UTC"
-        colors:
-          date: darklime
-        date_font: normal
+        color: darklime
+        font_size: normal
 
   - name: divider-1
     height: 5
@@ -101,15 +100,12 @@ rows:
         timezone: America/Denver
         #label: "DEN"
         time_format: 12h         # h:MM AM/PM
-        colors:
-          time:   cornflower
-          label:  steelblue
-        time_font: big
+        color: cornflower
+        font_size: big
       - type: text
         # justify: center
         label: "DEN"
         color: steelblue
-        label_font: normal
 
   - name: den-date
     height: 30        # normal font ink_h=28; 36px gives 4px padding top+bottom
@@ -118,9 +114,8 @@ rows:
         # justify: center
         timezone: America/Denver
         date_format: "%A, %B %-d"
-        colors:
-          date: steelblue
-        date_font: normal
+        color: steelblue
+        font_size: normal
 
   - name: et-clock
     height: 68
@@ -131,16 +126,14 @@ rows:
         timezone: US/Eastern
         # label: "ET" # when label is different size than time, layout gets weird
         time_format: 12h
-        colors:
-          time:   orange
+        color: orange
           # label:  darkorange
-        time_font: big
-        label_font: normal
+        font_size: big
       - type: text
         # justify: center
         label: "ATL"
         color: darkorange
-        font: normal
+        font_size: normal
         background: black
         width: 30%
 
@@ -152,16 +145,13 @@ rows:
         timezone: Asia/Kolkata
         # label: "IST"
         time_format: 12h
-        colors:
-          time:   brown
-          label:  brown
-        time_font: big
-        label_font: normal
+        color: brown
+        font_size: big
       - type: text
         # justify: center
         label: "IST"
         color: brown
-        font: normal
+        font_size: normal
         background: black
         width: 30%
 
@@ -180,14 +170,14 @@ rows:
         # justify: center
         label: "Time sync status:"
         color: periwinkle
-        font: small
+        font_size: small
         background: black
         width: 60%
       - type: fact
         # justify: center
         source: ntp_all
         color: white
-        font: small
+        font_size: small
         background: black
 
   - name: ip-wifi
@@ -199,7 +189,7 @@ rows:
         source: ip
         label: ""
         color: grey
-        font: small
+        font_size: small
       - type: wifi_graphic
         width: 32
         # justify: center
@@ -209,7 +199,7 @@ rows:
         source: wifi_signal
         # label: "default"
         color: lime
-        font: small
+        font_size: small
 
   - name: cpu-mem
     height: 26        # small font ink_h=20; 26px gives 3px padding top+bottom
@@ -219,12 +209,12 @@ rows:
         source: cpu
         label: "cpu: "
         color: yellow
-        font: small
+        font_size: small
       - type: fact
         # justify: center
         source: mem
         color: purple
-        font: small
+        font_size: small
 
   - name: disk
     height: 26        # small font ink_h=20; 26px gives 3px padding top+bottom
@@ -233,11 +223,10 @@ rows:
         # justify: center
         source: disk
         color: green
-        font: small
+        font_size: small
 
   - name: debug
     height: 46
     panels:
       - type: debug
         color: tan
-

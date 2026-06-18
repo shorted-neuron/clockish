@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 # =============================================================================
 [project]
 name = "clockish"
-version = "26.6.2"
+version = "26.6.3"
 description = "Clockish is a customizable _whatever_ display for Raspberry Pi with a PIL compatible display driver."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -51,6 +51,10 @@ dependencies = [
     "numpy>=1.21.0",
     # Config files
     "PyYAML>=6.0",
+    # Config schema validation (used at startup + ad-hoc via clockish-validate)
+    "jsonschema>=4.17",
+    # YAML style linting (used by clockish-validate; also installable via apt: yamllint)
+    "yamllint>=1.35",
     # Timezone data (needed on systems without tzdata OS package, e.g. minimal Pi OS)
     "tzdata>=2024.1",
     # pyili9486  --  ILI9486 SPI display driver (Pi only; pulls in spidev which is Linux-only)
@@ -74,6 +78,7 @@ dev = [
     "pytest-cov",
     "ruff",          # linter + formatter
     "mypy",          # type checker
+    "pre-commit>=3.5", # git hook framework (run: pre-commit install)
 ]
 
 # -- CLI entry points ----------------------------------------------------------
@@ -85,6 +90,7 @@ clockish-depth   = "clockish.colordepth:main"
 clockish-test    = "clockish.colortest:main"
 clockish-fonts   = "clockish.fontdemo:main"
 clockish-corners = "clockish.cornertest:main"
+clockish-validate = "clockish.config_validator:main"
 
 # -- Where to find packages ----------------------------------------------------
 [tool.hatch.build.targets.wheel]
@@ -111,4 +117,3 @@ select = ["E", "F", "W", "I"]   # pycodestyle, pyflakes, isort
 [tool.mypy]
 python_version = "3.9"
 warn_unused_configs = true
-

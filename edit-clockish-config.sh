@@ -82,4 +82,3 @@ if [[ "${REPLY,,}" != "y" ]]; then
 fi
 
 exec "$EDITOR_CMD" "$CONFIG_FILE"
-

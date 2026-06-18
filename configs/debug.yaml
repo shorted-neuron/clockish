@@ -1,9 +1,11 @@
+---
 # debug.yaml  --  clockish config
 # ---------------------------------------------------------------------------
 # Display layout configuration for clockish
 # Display settings are in display.yaml  --  use configs/display/ili9486-portrait.yaml.
 # ---------------------------------------------------------------------------
 
+orientation: portrait
 
 rows:
   - name: utc-clock
@@ -13,11 +15,8 @@ rows:
       - type: clock
         timezone: UTC
         time_format: 24hs
-        colors:
-          time:   lime
-          label:  lime
-        time_font: huge
-        label_font: small
+        color: lime
+        font_size: huge
 
   - name: utc-date
     height: 36
@@ -26,9 +25,8 @@ rows:
       - type: date
         timezone: UTC
         date_format: "%a %b %-d, %Y UTC"
-        colors:
-          date: darklime
-        date_font: normal
+        color: darklime
+        font_size: normal
 
   - name: divider-1
     height: 3
@@ -46,11 +44,8 @@ rows:
         timezone: America/Denver
         label: "DEN"
         time_format: 12h
-        colors:
-          time:   ff0000
-          label:  darkred
-        time_font: big
-        label_font: normal
+        color: darkred
+        font_size: big
 
   - name: den-date
     height: 36
@@ -59,9 +54,8 @@ rows:
         justify: right
         timezone: America/Denver
         date_format: "%A, %B %-d"
-        colors:
-          date: slate
-        date_font: normal
+        color: slate
+        font_size: normal
 
   - name: ist-clock
     height: 68
@@ -70,13 +64,12 @@ rows:
         width: 70%
         timezone: Asia/Kolkata
         time_format: 12h
-        colors:
-          time:   brown
-        time_font: big
+        color: brown
+        font_size: big
       - type: text
         label: "IST"
         color: brown
-        font: med
+        font_size: med
         background: black
 
   - name: divider-2
@@ -92,14 +85,14 @@ rows:
       - type: text
         label: "Time sync status:"
         color: white
-        font: small
+        font_size: small
         background: black
         width: 60%
       - type: fact
         source: ntp_all
         label: " is "
         color: black
-        font: small
+        font_size: small
         background: cyan
 
   - name: ip-disk
@@ -108,12 +101,12 @@ rows:
       - type: fact
         source: hostname
         color: lime
-        font: small
+        font_size: small
       - type: fact
         source: ip
         label: "ip "
         color: grey
-        font: small
+        font_size: small
 
   - name: cpu-mem
     height: 26
@@ -123,11 +116,11 @@ rows:
         source: cpu
         label: "cpu: "
         color: yellow
-        font: small
+        font_size: small
       - type: fact
         source: mem
         color: purple
-        font: small
+        font_size: small
 
   - name: load-disk
     height: 26
@@ -137,12 +130,12 @@ rows:
         source: cpu_load
         label: "load: "
         color: green
-        font: small
+        font_size: small
       - type: fact
         width: 60%
         source: disk
         color: green
-        font: small
+        font_size: small
 
   - name: debug
     height: 80
@@ -153,4 +146,3 @@ rows:
       - type: fact
         label: v
         source: version
-

@@ -54,4 +54,3 @@ echo "Font variants now available (set these as 'file:' in your config):"
 ls "${DEST_DIR}"/*.ttf 2>/dev/null | xargs -I{} basename {} | sort
 echo ""
 echo "Done.  You can now use seven-segment.yaml (or any config with DSEG7 fonts)."
-

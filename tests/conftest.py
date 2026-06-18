@@ -18,4 +18,3 @@ def mock_raspberry_pi(monkeypatch):
     """
     import clockish.platform_utils as pu
     monkeypatch.setattr(pu, "is_raspberry_pi", lambda: True)
-
