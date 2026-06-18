@@ -149,45 +149,89 @@ def scan_and_fix(dry_run=False):
     return issues
 
 
-print("Scanning project for non-ASCII / mojibake / BOM issues...")
-print("=" * 60)
-issues = scan_and_fix(dry_run=False)
-print("=" * 60)
-if not issues:
-    print("No issues found. Project is clean.")
-else:
-    print(f"Processed {len(issues)} file(s) with issues.")
+def verify_clean():
+    """Return a list of (relpath, label, matches) for files that still have issues."""
+    dirty = []
+    for dirpath, dirnames, filenames in os.walk(PROJECT_ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for fname in filenames:
+            ext = os.path.splitext(fname)[1].lower()
+            if ext not in TEXT_EXTS:
+                continue
+            is_markdown = ext in MD_EXTS
+            fpath = os.path.join(dirpath, fname)
+            relpath = os.path.relpath(fpath, PROJECT_ROOT)
+            try:
+                with open(fpath, encoding='utf-8') as f:
+                    src = f.read()
+            except UnicodeDecodeError:
+                continue
+            if is_markdown:
+                remaining = list(re.finditer(r'\ufeff', src))
+                label = "BOM"
+            else:
+                remaining = list(re.finditer(r'[^\x00-\x7F]', src))
+                label = "non-ASCII"
+            if remaining:
+                dirty.append((relpath, label, remaining, src))
+    return dirty
 
-# Final verification pass
-print("\nVerification pass...")
-clean = True
-for dirpath, dirnames, filenames in os.walk(PROJECT_ROOT):
-    dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-    for fname in filenames:
-        ext = os.path.splitext(fname)[1].lower()
-        if ext not in TEXT_EXTS:
-            continue
-        is_markdown = ext in MD_EXTS
-        fpath = os.path.join(dirpath, fname)
-        relpath = os.path.relpath(fpath, PROJECT_ROOT)
-        try:
-            with open(fpath, encoding='utf-8') as f:
-                src = f.read()
-        except UnicodeDecodeError:
-            continue
-        # Markdown: only fail on BOM; other non-ASCII is intentional UTF-8
-        if is_markdown:
-            remaining = list(re.finditer(r'\ufeff', src))
-            label = "BOM"
-        else:
-            remaining = list(re.finditer(r'[^\x00-\x7F]', src))
-            label = "non-ASCII"
-        if remaining:
-            clean = False
+
+# ---------------------------------------------------------------------------
+# pytest entry point  --  run automatically with the rest of the test suite
+# ---------------------------------------------------------------------------
+
+def test_all_files_ascii_or_utf8_markdown():
+    """All non-Markdown text files must be pure ASCII.
+    Markdown files must be BOM-free (intentional Unicode is allowed).
+
+    If this test fails, run:  python tests/test_all_encoding.py
+    That script will auto-fix what it can (mojibake, known Unicode -> ASCII
+    replacements) and report anything that needs manual attention.
+    """
+    # Auto-fix pass first (idempotent -- safe to run in CI too)
+    scan_and_fix(dry_run=False)
+    # Then verify
+    dirty = verify_clean()
+    if not dirty:
+        return
+    lines = []
+    for relpath, label, matches, src in dirty:
+        lines.append(f"\n  {relpath}  ({len(matches)} {label} char(s)):")
+        for m in matches[:5]:
+            line_no = src[:m.start()].count('\n') + 1
+            lines.append(f"    line {line_no}: {repr(m.group())}  U+{ord(m.group()):04X}")
+        if len(matches) > 5:
+            lines.append(f"    ... and {len(matches) - 5} more")
+    raise AssertionError(
+        "Non-ASCII / BOM characters found in project files "
+        "(auto-fix could not resolve all of them):\n" + "\n".join(lines)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Standalone script entry point  --  python tests/test_all_encoding.py
+# ---------------------------------------------------------------------------
+
+if __name__ == '__main__':
+    print("Scanning project for non-ASCII / mojibake / BOM issues...")
+    print("=" * 60)
+    issues = scan_and_fix(dry_run=False)
+    print("=" * 60)
+    if not issues:
+        print("No issues found. Project is clean.")
+    else:
+        print(f"Processed {len(issues)} file(s) with issues.")
+
+    print("\nVerification pass...")
+    dirty = verify_clean()
+    if dirty:
+        for relpath, label, remaining, src in dirty:
             print(f"  STILL HAS {label}: {relpath} ({len(remaining)} chars)")
             for m in remaining[:3]:
                 line = src[:m.start()].count('\n') + 1
                 print(f"    line {line}: {repr(m.group())} U+{ord(m.group()):04X}")
-
-if clean:
-    print("All scanned files are clean.")
+        import sys
+        sys.exit(1)
+    else:
+        print("All scanned files are clean.")

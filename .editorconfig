@@ -1,0 +1,39 @@
+# .editorconfig  --  consistent file encoding / whitespace across all editors
+# https://editorconfig.org
+#
+# Supported by: VS Code (built-in), JetBrains IDEs (built-in), Vim (plugin),
+# Emacs (plugin), Sublime Text (plugin), Notepad++ (plugin), and many others.
+#
+# This is the single most effective way to prevent cp1252 files from being
+# created on Windows.  Every editor that respects .editorconfig will save
+# files as UTF-8 with LF line endings automatically.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.yaml]
+indent_size = 2
+
+[*.yml]
+indent_size = 2
+
+[*.sh]
+indent_size = 2
+
+[*.toml]
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+[*.md]
+# Markdown: allow trailing spaces (two spaces = <br>); still enforce UTF-8
+trim_trailing_whitespace = false
+

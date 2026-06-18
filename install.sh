@@ -329,6 +329,14 @@ fi
 VENV_PY="$VENV_DIR/bin/python"
 VENV_PIP="$VENV_DIR/bin/pip"
 
+# Patch all activation scripts to export PYTHONUTF8=1.
+# This ensures Python uses UTF-8 for open() and stdio on every platform
+# (critical on Windows/WSL where the default locale is cp1252).
+info "Patching .venv activation scripts with PYTHONUTF8=1 ..."
+bash "$SCRIPT_DIR/scripts/patch-venv-utf8.sh" "$VENV_DIR" \
+    && ok "PYTHONUTF8=1 injected into .venv activation scripts." \
+    || warn "UTF-8 patch failed (non-fatal -- set PYTHONUTF8=1 in your shell manually)."
+
 # ---------------------------------------------------------------------------
 # 5. Pip packages
 # ---------------------------------------------------------------------------
@@ -455,7 +463,7 @@ else
         # Profile paths follow the pattern: configs/display/{driver}-{resolution}.yaml
         _PROFILE_FILENAME=$(basename "$SELECTED_PROFILE_SRC")
         _DRIVER_NAME="${_PROFILE_FILENAME%%-*}"  # strip everything after the first dash
-        
+
         _BACKUP="$USER_DISPLAY_CFG.$_DRIVER_NAME.$(date '+%Y%m%d-%H%M%S').bak"
         cp "$USER_DISPLAY_CFG" "$_BACKUP"
 
