@@ -69,9 +69,8 @@ rows:
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
-        colors:
-          time: darkorange      # classic warm nixie yellow-orange
-        time_font: giant        # ≈ 68% of display height — fills the row
+        color: darkorange   # classic warm nixie yellow-orange
+        font_size: giant    # ~68% of display height - fills the row
 
   - name: divider-1
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
@@ -87,9 +86,8 @@ rows:
         justify: center
         timezone: US/Mountain
         date_format: "%A, %B %-d"
-        colors:
-          date: darkorange
-        date_font: normal         # ≈ 12% of display height — fits the date row
+        color: darkorange
+        font_size: normal       # ~12% of display height - fits the date row
 
   - name: divider-2
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
@@ -108,22 +106,22 @@ rows:
         width: 15%
         source: wifi_status
         color: darkorange
-        font: auto
+        font_size: auto
       - type: fact
         source: hostname
         color: orange
-        font: tiny
+        font_size: tiny
       - type: fact
         source: ip
         color: darkorange
-        font: tiny
+        font_size: tiny
       - type: fact
         width: 10%
         justify: center
         source: cpu
         color: rust
-        font: auto
+        font_size: auto
       - type: fact
         source: ntp_all
         color: rust
-        font: auto
+        font_size: auto

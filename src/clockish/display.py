@@ -712,7 +712,7 @@ def _measure_rows(rows: list) -> list:
 _LAYOUT: list = []   # list of (row_dict, y, row_height_px)
 
 # Font keys that support the special value 'auto'.
-_AUTO_FONT_KEYS = ('font', 'time_font', 'date_font', 'label_font')
+_AUTO_FONT_KEYS = ('font_size',)
 
 # Fraction of row height used when a font key is set to 'auto'.
 _AUTO_FONT_FRACTION = 0.75
@@ -725,7 +725,7 @@ def _init_layout() -> None:
     Results are stored in _LAYOUT so that show_rows() never re-computes row
     heights or re-emits the height-overflow warning.
 
-    font: auto  (also time_font, date_font, label_font) means "size this font
+    font: auto  (also accepted on any font_size key) means "size this font
     to ~75% of the parent row height, using the config's default_font".  The
     resolved font is registered in _FONTS under a synthetic name (e.g.
     '_auto_32') and the panel dict is updated in-place so the renderer just
@@ -796,11 +796,8 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
 
 def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
                          now: datetime.datetime, d: ImageDraw.ImageDraw) -> None:
-    colors_cfg  = p.get('colors', {})
-    time_color  = colors_cfg.get('time',  _C_WHITE)
-    label_color = colors_cfg.get('label', _C_WHITE)
-    time_f      = _get_font(p.get('time_font',  'normal'))
-    label_f     = _get_font(p.get('label_font', 'normal'))
+    color       = p.get('color', _C_WHITE)
+    time_f      = _get_font(p.get('font_size', 'normal'))
     _time_format = p.get('time_format')
     if _time_format is None:
         fmt = '%H:%M'
@@ -813,38 +810,37 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
         cell_h = _font_height(time_f)
         ink_top = _font_ink_top(time_f)
         ink_h   = cell_h - ink_top
-        print(f"      [clock] font={p.get('time_font','normal')} cell_h={cell_h} "
+        print(f"      [clock] font_size={p.get('font_size','normal')} cell_h={cell_h} "
               f"ink_top={ink_top} ink_h={ink_h}  str='{time_str}'")
 
     justify = p.get('justify', 'center')
-    _draw_text_line(d, px, py, pw, ph, time_str, time_f, time_color, justify=justify)
+    _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify)
 
     if label_str:
         time_w = time_f.getbbox(time_str)[2]
-        _draw_text_line(d, px + time_w + 6, py, pw, ph, label_str, label_f, label_color, justify='left')
+        _draw_text_line(d, px + time_w + 6, py, pw, ph, label_str, time_f, color, justify='left')
 
 
 def _render_date_panel(p: dict, px: int, py: int, pw: int, ph: int,
                         now: datetime.datetime, d: ImageDraw.ImageDraw) -> None:
-    colors_cfg = p.get('colors', {})
-    date_color = colors_cfg.get('date', _C_WHITE)
-    date_f     = _get_font(p.get('date_font', 'normal'))
-    date_str   = now.strftime(p.get('date_format', '%a %b %-d, %Y'))
+    color    = p.get('color', _C_WHITE)
+    date_f   = _get_font(p.get('font_size', 'normal'))
+    date_str = now.strftime(p.get('date_format', '%a %b %-d, %Y'))
 
     if DEBUG_LAYOUT:
         cell_h  = _font_height(date_f)
         ink_top = _font_ink_top(date_f)
         ink_h   = cell_h - ink_top
-        print(f"      [date]  font={p.get('date_font','normal')} cell_h={cell_h} "
+        print(f"      [date]  font_size={p.get('font_size','normal')} cell_h={cell_h} "
               f"ink_top={ink_top} ink_h={ink_h}  str='{date_str}'")
 
-    _draw_text_line(d, px, py, pw, ph, date_str, date_f, date_color,
+    _draw_text_line(d, px, py, pw, ph, date_str, date_f, color,
                     x_offset=4, justify=p.get('justify', 'center'))
 
 
 def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
                         d: ImageDraw.ImageDraw) -> None:
-    f      = _get_font(p.get('font', 'normal'))
+    f      = _get_font(p.get('font_size', 'normal'))
     color  = p.get('color', _C_WHITE)
     source = p['source']
     value  = _get_fact(source)
@@ -864,7 +860,7 @@ def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
     """Static text panel — renders p['label'] as-is, no data lookup."""
     _draw_text_line(d, px, py, pw, ph,
                     p.get('label', ''),
-                    _get_font(p.get('font', 'normal')),
+                    _get_font(p.get('font_size', 'normal')),
                     p.get('color', _C_WHITE),
                     justify=p.get('justify', 'center'))
 
