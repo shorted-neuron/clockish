@@ -64,7 +64,7 @@ rows:
       - type: date
         justify: left
         timezone: US/Mountain
-        date_format: "%A, %B %-d"
+        date_format: "%a, %B %-d"
         color: darkorange
         font_size: normal
       - type: clock
@@ -101,10 +101,11 @@ rows:
       - type: fact
         width: 25%
         source: wifi_signal
-        label: " sig: "
+        label: "sig "
         color: rust
         font_size: small
       - type: fact
+        justify: right
         width: 18%
         source: wifi_quality
         label: "q:"
@@ -125,6 +126,6 @@ rows:
         justify: center
         source: ip
         color: burntsienna
-        font_size: small
+        font_size: tiny
       - type: debug
         color: rust
