@@ -1,4 +1,4 @@
-# seven-segment.yaml — clockish config for an amber 7-segment-style clock
+# seven-segment.yaml — clockish config for red 7-segment-style clock
 # ---------------------------------------------------------------------------
 # Requires the DSEG7Classic font (SIL OFL 1.1 license).
 # Install one of these ways:
@@ -9,89 +9,80 @@
 #   Option B — vendor the font into third_party/dseg/:
 #     bash scripts/download-dseg-font.sh
 #
-# Font variants available once installed (set the 'file:' key below):
-#   DSEG7Classic-Regular.ttf   ← authentic look: ghost/"off" segments visible
+# DSEG7 is digits/symbols only — date text and info rows use DejaVu Sans.
+#
+# Font variants available once installed (change file: in fonts: below):
+#   DSEG7Classic-Regular.ttf   <- authentic look: ghost/"off" segments visible
 #   DSEG7Classic-Bold.ttf
 #   DSEG7Classic-Italic.ttf
 #   DSEG7Classic-BoldItalic.ttf
-#   DSEG7Modern-Regular.ttf    ← cleaner look: no ghost segments
+#   DSEG7Modern-Regular.ttf    <- cleaner look: no ghost segments
 #   DSEG7Modern-Bold.ttf
+#
+# The 'file' is searched in:
+#   /usr/share/fonts/truetype/dseg/  (apt install fonts-dseg)
+#   third_party/dseg/                (scripts/download-dseg-font.sh)
 #
 # See also: https://github.com/keshikan/DSEG
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Custom fonts — maps a config name to a TTF file + size.
-# The 'file' is searched in:
-#   /usr/share/fonts/truetype/dseg/  (apt install fonts-dseg)
-#   third_party/dseg/                (scripts/download-dseg-font.sh)
-# ---------------------------------------------------------------------------
-fonts:
-  seg7giant:
-    file: DSEG7Classic-Italic.ttf
-    size: 135
-  seg7huge:
-    file: DSEG7Classic-Italic.ttf
-    size: 64
-  seg7med:
-    file: DSEG7Classic-Italic.ttf
-    size: 32
-  seg7small:
-    file: DSEG7Classic-Italic.ttf
-    size: 18
+orientation: landscape
 
-# Display settings are in display.yaml — use configs/display/ili9486-landscape.yaml.
+# DSEG7 is used only for clock panels; no default_font is set so that all
+# other panels (date text, info rows) fall back to DejaVu Sans via the
+# built-in named scale sizes.
+fonts:
+  seg7-clock:
+    file: DSEG7Classic-Italic.ttf
+    size: "42%"
+  seg7-secs:
+    file: DSEG7Classic-Italic.ttf
+    size: "10%"
 
 rows:
   - name: clock
-    height: 150
+    height: "47%"
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         # time_format: 24h        # 24h looks most authentic on a 7-seg display
-        colors:
-          # time: orange
-          # time: darkorange        # classic amber LED colour
-          # time: burntsienna       # pretty cool too
-          time: ff0000  # aka RED
-        time_font: seg7giant
+        color: ff0000
+        font_size: seg7-clock
 
   - name: divider-1
-    height: 4
+    height: "1%"
     panels:
       - type: divider
         height: 1
         color: burntsienna
 
   - name: date
-    height: 52
+    height: "16%"
     panels:
       - type: date
         justify: left
         timezone: US/Mountain
         date_format: "%A, %B %-d"
-        colors:
-          date: darkorange
-        # date_font: seg7med
+        color: darkorange
+        font_size: normal
       - type: clock
         justify: right
         timezone: US/Mountain
         time_format: 24hs
-        colors:
-          time: burntsienna
-        time_font: seg7med
+        color: burntsienna
+        font_size: seg7-secs
 
   - name: divider-2
-    height: 4
+    height: "1%"
     panels:
       - type: divider
         height: 1
         color: burntsienna
 
   - name: wifi-info
-    height: 34
+    height: "11%"
     panels:
       - type: wifi_graphic
         width: 44
@@ -100,41 +91,40 @@ rows:
         width: 20%
         source: wifi_status
         color: burntsienna
-        font: small
+        font_size: small
       - type: fact
         width: 20%
         source: wifi_ssid
         # label: "SSID "
         color: rust
-        font: small
+        font_size: small
       - type: fact
         width: 25%
         source: wifi_signal
         label: " sig: "
         color: rust
-        font: small
+        font_size: small
       - type: fact
         width: 18%
         source: wifi_quality
         label: "q:"
         color: rust
-        font: small
+        font_size: small
 
   - name: host-ip
-    height: 45
+    height: "14%"
     panels:
       - type: fact
         width: 24%
         justify: left
         source: hostname
         color: burntsienna
-        font: small
+        font_size: small
       - type: fact
         width: 38%
         justify: center
         source: ip
         color: burntsienna
-        font: small
+        font_size: small
       - type: debug
         color: rust
-
