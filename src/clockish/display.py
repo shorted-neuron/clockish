@@ -20,6 +20,13 @@ import yaml
 import zoneinfo
 from contextlib import contextmanager
 
+# syslog: Unix/Linux only
+try:
+    import syslog
+    _SYSLOG_AVAILABLE = True
+except ImportError:
+    _SYSLOG_AVAILABLE = False
+
 from PIL import Image, ImageDraw, ImageFont
 import PIL.ImageOps
 
@@ -624,29 +631,69 @@ def _extract_value_by_regex(response_text: str, pattern: str) -> str | None:
         pass
     return None
 
-def _extract_value_by_json_path(response_text: str, json_path: str) -> str | None:
+def _extract_value_by_json_path(response_text: str, json_path: str) -> tuple[str | None, bool]:
     """Extract value from JSON response using dot notation path.
 
-    Example: json_path='data.temp' navigates response['data']['temp']
+    Supports two modes:
+    1. Simple key (no dots): extract from first object in JSON
+       Example: json_path='tempF' on {"286114a10300004b": {...}} → first object's tempF
+    2. Dot notation: navigate nested dicts
+       Example: json_path='data.temp' → response['data']['temp']
+
+    Returns:
+        (value_str, is_missing_key) tuple
+        - value_str: extracted value as string, or None if error
+        - is_missing_key: True if JSON key doesn't exist, False if other error
     """
     try:
         data = json.loads(response_text)
-        keys = json_path.strip().split('.')
+        if not isinstance(data, dict):
+            return (None, False)
+
+        json_path = json_path.strip()
+
+        # Simple key (no dots): extract from first object
+        if '.' not in json_path:
+            # Get first object (dict keys are ordered in Python 3.7+)
+            for obj in data.values():
+                if isinstance(obj, dict):
+                    value = obj.get(json_path)
+                    if value is None:
+                        return (None, True)  # Key missing
+                    return (str(value), False)
+            # No dict objects found
+            return (None, True)
+
+        # Dot notation: traverse nested keys
+        keys = json_path.split('.')
         for key in keys:
             if isinstance(data, dict):
                 data = data.get(key)
+                if data is None:
+                    return (None, True)  # Key missing
             else:
-                return None
-        return str(data) if data is not None else None
+                return (None, True)  # Can't traverse non-dict
+        return (str(data), False) if data is not None else (None, True)
     except Exception:
-        pass
-    return None
+        return (None, False)  # Parse error, not missing key
+
+def _log_warning(msg: str) -> None:
+    """Log warning to both stderr and syslog (if available)."""
+    print(f"WARNING: {msg}", file=sys.stderr)
+    if _SYSLOG_AVAILABLE:
+        try:
+            syslog.syslog(syslog.LOG_WARNING, f"clockish: {msg}")
+        except Exception:
+            pass
 
 def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
                        timeout: int, verify_ssl: bool, fallback: str) -> str:
     """Fetch URL and extract value using pattern or json_path.
 
-    Returns extracted value or fallback on error.
+    Returns:
+    - Extracted value (on success)
+    - "?" (if JSON key missing; logs warning)
+    - fallback (on network/fetch error)
     """
     try:
         # Create SSL context (ignore certificate for https by default)
@@ -671,10 +718,13 @@ def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
         # Extract value
         if pattern:
             value = _extract_value_by_regex(response_text, pattern)
+            return value if value is not None else fallback
         else:  # json_path
-            value = _extract_value_by_json_path(response_text, json_path)
-
-        return value if value is not None else fallback
+            value, is_missing_key = _extract_value_by_json_path(response_text, json_path)
+            if is_missing_key:
+                _log_warning(f"url-fact: JSON key '{json_path}' not found in {url}")
+                return "?"
+            return value if value is not None else fallback
     except Exception as e:
         if DEBUG:
             print(f"DEBUG: url-fact fetch failed: {url} -> {e}")
