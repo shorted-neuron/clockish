@@ -1,0 +1,15 @@
+---
+orientation: portrait
+
+rows:
+  - name: sensor-temp
+    height: 100%
+    panels:
+      - type: url-fact
+        url: http://sensor-master.lan/last-json
+        json_path: tempF
+        interval: 1m
+        timeout: 5
+        label: "TempF: "
+        color: orange
+        font_size: huge
