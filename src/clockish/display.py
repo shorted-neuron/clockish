@@ -1038,6 +1038,8 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'))
 
 
+def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
+                        d: ImageDraw.ImageDraw) -> None:
     """Static text panel  --  renders p['label'] as-is, no data lookup."""
     _draw_text_line(d, px, py, pw, ph,
                     p.get('label', ''),
