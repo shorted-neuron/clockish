@@ -15,6 +15,37 @@ Git: commit/PR messages normal. Otherwise check before `git add` / `git commit`.
 
 Remember: major pattern change require update AGENTS.md also
 
+### File Modification Tracking (for AI agents & handoff)
+
+**Always explicitly report which files you touched.** Silent modifications cause surprises at commit time.
+
+**Pattern:**
+1. **Per-edit**: After `replace_string_in_file`, `insert_edit_into_file`, or `create_file`, state:
+   ```
+   ✏️  Modified: src/clockish/display.py (line 600: added _render_url_fact_panel)
+   ```
+   or
+   ```
+   📄 Created: configs/url-fact-sample.yaml
+   ```
+
+2. **On tool failure** (partial state left): Flag it:
+   ```
+   ⚠️  Partial state: configs/url-fact-sample.yaml may have trailing blanks (fix attempt failed; user must clean)
+   ```
+
+3. **Session summary** (end of major feature): Print full list:
+   ```
+   ## FILES MODIFIED THIS SESSION
+   - src/clockish/config_validator.py (added url-fact validation)
+   - src/clockish/display.py (added url-fact renderer + cache)
+   - tests/test_config_validator.py (added TestUrlFactPanel)
+   - configs/url-fact-sample.yaml (created)
+   - URL_FACT_GUIDE.md (created)
+   ```
+
+**Why**: Developers need to `git diff` / `git status` and catch changes before commit. Don't hide file touches.
+
 ---
 
 ## Codebase Overview
@@ -217,6 +248,32 @@ bash install.sh  # venv, system deps, run-clockish.sh, edit-clockish-config.sh
 2. Add lambda to `_get_fact()` dict in `display.py`
 3. Optional: add default label to `_FACT_DEFAULT_LABELS`
 4. Test in validator tests
+
+---
+
+## Code Conventions & Linter Notes
+
+### Import ordering (Ruff)
+Ruff enforces PEP 8 import grouping:
+1. Standard library (alphabetical)
+2. Blank line
+3. Third-party (alphabetical)
+4. Blank line
+5. Local application (alphabetical)
+
+Example:
+```python
+import argparse
+import datetime
+import os
+
+from PIL import Image
+import yaml
+
+from clockish.colors import BY_NAME
+```
+
+Ruff auto-flags unsorted imports. Reorganize them to fix `unsorted-imports` warnings.
 
 ---
 
