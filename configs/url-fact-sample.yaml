@@ -1,16 +1,16 @@
 ---
-orientation: portrait
+orientation: square
 
 rows:
   - name: time
-    height: 60
+    height: 33%
     panels:
       - type: clock
         font_size: huge
         color: '#00ff00'
 
   - name: external-ip
-    height: 40
+    height: 22%
     panels:
       - type: url-fact
         url: https://api.ipify.org?format=json
@@ -22,7 +22,7 @@ rows:
         font_size: normal
 
   - name: random-quote
-    height: 40
+    height: 22%
     background: '#1a1a1a'
     panels:
       - type: url-fact
@@ -35,7 +35,7 @@ rows:
         font_size: small
 
   - name: http-example
-    height: 40
+    height: 11%
     panels:
       - type: url-fact
         url: http://example.com/
@@ -48,15 +48,15 @@ rows:
         font_size: normal
 
   - name: status-fact
-    height: 40
+    height: 12%
     panels:
       - type: text
         label: "url-fact sample config"
         font_size: small
-        color: '#808080'
-
-display:
-  driver: framebuffer
-  width: 320
-  height: 480
-  rotation: 0
+        color: white
+        background: navy
+      - type: text
+        label: "url-fact sample two!"
+        font_size: small
+        color: yellow
+        background: darkgrey
