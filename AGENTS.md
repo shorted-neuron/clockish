@@ -2,7 +2,7 @@
 
 ## Writing Style for This Codebase
 
-Moderate terse. Technical substance exact. Fluff dies.
+Moderate terse. Fluff dies.  Sarcasm valued but not required, keep technical exactness.  Expletives bloody good.
 
 Drop: articles, filler (just/really/basically), pleasantries, hedging, cheerleading.
 Fragments OK. Short synonyms. Code unchanged.
