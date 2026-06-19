@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from typing import Any
@@ -68,12 +69,26 @@ except ImportError:  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
+# Helpers for url-fact validation
+# ---------------------------------------------------------------------------
+
+def _is_valid_interval(interval_str: str) -> bool:
+    """Check if interval_str is in valid format: <number>[s|m|h].
+
+    Examples: '30s', '5m', '1h', '2.5m'
+    """
+    # TODO: clarify and comment the following return statement, perhaps split it
+    #       into something less efficient but more readable to humans
+    return bool(re.match(r'^\d+(?:\.\d+)?[smh]$', interval_str.strip()))
+
+
+# ---------------------------------------------------------------------------
 # Schema constants
 # ---------------------------------------------------------------------------
 
 #: Panel types recognised by the display engine.
 KNOWN_PANEL_TYPES: frozenset[str] = frozenset({
-    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'debug', 'blank',
+    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'debug', 'blank', 'url-fact',
 })
 
 #: Valid ``source:`` values for ``type: fact`` panels.
@@ -127,6 +142,10 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     }),
     'blank': frozenset({
         'type', 'width', 'background',
+    }),
+    'url-fact': frozenset({
+        'type', 'url', 'pattern', 'json_path', 'interval', 'timeout', 'verify_ssl',
+        'fallback', 'label', 'color', 'font', 'font_size', 'width', 'background', 'justify',
     }),
 }
 
@@ -476,6 +495,49 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                         f"unrecognised fact source '{source}' "
                         f"(known sources: {', '.join(sorted(KNOWN_FACT_SOURCES))})",
                     )
+
+            # 7. url-fact panel: url required, exactly one of pattern/json_path required
+            if ptype == 'url-fact':
+                url = panel.get('url')
+                pattern = panel.get('pattern')
+                json_path = panel.get('json_path')
+                interval = panel.get('interval')
+                verify_ssl = panel.get('verify_ssl')
+
+                if not url:
+                    msg = "url-fact panel missing 'url' key (will crash at runtime)"
+                    err(ploc, msg)
+
+                # Exactly one of pattern or json_path
+                has_pattern = pattern is not None
+                has_json_path = json_path is not None
+                if has_pattern and has_json_path:
+                    msg = "url-fact panel has both 'pattern' and 'json_path' (use one)"
+                    err(ploc, msg)
+                elif not has_pattern and not has_json_path:
+                    msg = (
+                        "url-fact panel must have 'pattern' or 'json_path' "
+                        "(use exactly one)"
+                    )
+                    err(ploc, msg)
+
+                # Validate interval format if present
+                if interval is not None:
+                    if not isinstance(interval, str) or not _is_valid_interval(interval):
+                        msg = (
+                            f"url-fact panel invalid 'interval: {interval}' "
+                            "(use format: 30s, 5m, 1h, etc.)"
+                        )
+                        warn(ploc, msg)
+
+                # warn if verify_ssl used with http URL
+                if verify_ssl is not None:
+                    if isinstance(url, str) and url.lower().startswith('http://'):
+                        msg = (
+                            "url-fact panel has 'verify_ssl' but URL is http:// "
+                            "(verify_ssl ignored for http)"
+                        )
+                        warn(ploc, msg)
 
     return issues
 

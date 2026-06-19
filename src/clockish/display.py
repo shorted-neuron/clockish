@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys
-import os
 import argparse
-import time
-import subprocess
-import socket
-import shutil
 import datetime
 import functools
-import zoneinfo
+import json
+import os
+import re
+import shutil
+import signal
+import socket
+import ssl
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
 import yaml
+import zoneinfo
 from contextlib import contextmanager
+
 from PIL import Image, ImageDraw, ImageFont
 import PIL.ImageOps
+
+from clockish import __version__
 from clockish.colors import rgb_to_hex, BY_NAME
 from clockish.drivers import load_driver
-from clockish import __version__
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +97,10 @@ _C_BROWN:    str = '#964b00'
 _C_BLACK:    str = '#000000'
 bigfont = medfont = font = smallfont = tiny = None
 _cpu_stat_prev: tuple[int, int] = (0, 0)
+
+# url-fact panel caching
+_remote_fact_cache: dict = {}  # {panel_id: {value, last_fetch_time, interval_secs}}
+_refresh_remote_cache_flag: bool = False  # Set by SIGUSR1 handler to invalidate cache
 
 
 # ---------------------------------------------------------------------------
@@ -487,7 +499,7 @@ def get_wifi_info():
             and now - get_wifi_info._cache_time < 10):
         return get_wifi_info._cache_value
 
-    ssid = signal = quality = "N/A"
+    ssid = signal_dbm = quality = "n/a"
     connected = False
     try:
         with open("/proc/net/wireless") as f:
@@ -496,7 +508,7 @@ def get_wifi_info():
             parts = line.split()
             if parts:
                 quality   = parts[2].rstrip('.')
-                signal    = parts[3].rstrip('.')
+                signal_dbm    = parts[3].rstrip('.')
                 connected = True
                 break
     except Exception:
@@ -507,11 +519,13 @@ def get_wifi_info():
     except Exception:
         pass
     try:
-        ssid = subprocess.check_output(["iwgetid", "-r"], stderr=subprocess.DEVNULL).decode().strip()
+        ssid = subprocess.check_output(
+            ["iwgetid", "-r"], stderr=subprocess.DEVNULL
+        ).decode().strip()
     except Exception:
         ssid = "N/A"
     status      = "WiFi OK" if connected else "No Wifi"
-    signal_str  = f"{signal}dBm" if signal != "N/A" else "N/A"
+    signal_str  = f"{signal_dbm}dBm" if signal_dbm != "n/a" else "n/a"
     ssid_str    = ssid if ssid else "N/A"
     quality_str = quality if quality != "N/A" else "N/A"
     get_wifi_info._cache_value = (status, ssid_str, signal_str, quality_str)
@@ -582,6 +596,96 @@ def _now_in_tz(tz_name: str) -> datetime.datetime:
     if tz_name.lower() == 'local':
         return datetime.datetime.now()
     return datetime.datetime.now(zoneinfo.ZoneInfo(tz_name))
+
+
+# ---------------------------------------------------------------------------
+# url-fact panel helpers
+# ---------------------------------------------------------------------------
+
+def _parse_interval(interval_str: str) -> int:
+    """Convert interval string (e.g., '5m', '30s', '1h') to seconds."""
+    interval_str = interval_str.strip()
+    if interval_str.endswith('s'):
+        return int(float(interval_str[:-1]))
+    elif interval_str.endswith('m'):
+        return int(float(interval_str[:-1]) * 60)
+    elif interval_str.endswith('h'):
+        return int(float(interval_str[:-1]) * 3600)
+    # Fallback to seconds if no unit (shouldn't happen if validator works)
+    return int(float(interval_str))
+
+def _extract_value_by_regex(response_text: str, pattern: str) -> str | None:
+    """Extract first capture group from regex match, or None if no match."""
+    try:
+        match = re.search(pattern, response_text)
+        if match:
+            return match.group(1)
+    except Exception:
+        pass
+    return None
+
+def _extract_value_by_json_path(response_text: str, json_path: str) -> str | None:
+    """Extract value from JSON response using dot notation path.
+
+    Example: json_path='data.temp' navigates response['data']['temp']
+    """
+    try:
+        data = json.loads(response_text)
+        keys = json_path.strip().split('.')
+        for key in keys:
+            if isinstance(data, dict):
+                data = data.get(key)
+            else:
+                return None
+        return str(data) if data is not None else None
+    except Exception:
+        pass
+    return None
+
+def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
+                       timeout: int, verify_ssl: bool, fallback: str) -> str:
+    """Fetch URL and extract value using pattern or json_path.
+
+    Returns extracted value or fallback on error.
+    """
+    try:
+        # Create SSL context (ignore certificate for https by default)
+        if url.lower().startswith('https://'):
+            ctx = ssl.create_default_context()
+            if not verify_ssl:
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+        else:
+            ctx = None
+
+        # Fetch with timeout
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', f'clockish/{__version__}')
+        if ctx:
+            response = urllib.request.urlopen(req, timeout=timeout, context=ctx)
+        else:
+            response = urllib.request.urlopen(req, timeout=timeout)
+
+        response_text = response.read().decode('utf-8')
+
+        # Extract value
+        if pattern:
+            value = _extract_value_by_regex(response_text, pattern)
+        else:  # json_path
+            value = _extract_value_by_json_path(response_text, json_path)
+
+        return value if value is not None else fallback
+    except Exception as e:
+        if DEBUG:
+            print(f"DEBUG: url-fact fetch failed: {url} -> {e}")
+        return fallback
+
+def _handle_sigusr1(signum, frame):
+    """SIGUSR1 handler: invalidate all remote fact cache entries."""
+    global _refresh_remote_cache_flag
+    _refresh_remote_cache_flag = True
+    if DEBUG:
+        print("DEBUG: SIGUSR1 received; invalidating remote fact cache")
 
 
 # ---------------------------------------------------------------------------
@@ -751,6 +855,37 @@ def _init_layout() -> None:
         if _wp:
             _wr['_widths'] = _resolve_panel_widths(_wp, width, _wi)
 
+    # Stagger url-fact panel cache initialization to spread fetches over time.
+    # Collect all url-fact panels with their intervals.
+    url_fact_panels = []
+    for _r, _, _ in _LAYOUT:
+        for _p in _r.get('panels', []):
+            if _p.get('type') == 'url-fact':
+                _interval_str = _p.get('interval', '5m')
+                _interval_secs = _parse_interval(_interval_str)
+                url_fact_panels.append((_p, _interval_secs))
+
+    # Stagger the fetch times so they don't all happen at once.
+    # If there are N panels with interval I, space them out over the interval.
+    if url_fact_panels:
+        now = time.monotonic()
+        for _idx, (_p, _interval_secs) in enumerate(url_fact_panels):
+            # Offset into the interval window so that panel 0 fetches now,
+            # panel 1 fetches after interval/N, etc.
+            if len(url_fact_panels) > 1:
+                _stagger_offset = (_interval_secs * _idx) / len(url_fact_panels)
+            else:
+                _stagger_offset = 0
+            # Set last_fetch_time in the past so first fetch happens after stagger delay
+            _cache_key = id(_p)
+            _remote_fact_cache[_cache_key] = {
+                'value': _p.get('fallback', 'n/a'),
+                'last_fetch_time': now - _interval_secs + _stagger_offset,
+                'interval_secs': _interval_secs,
+            }
+            if DEBUG:
+                print(f"  url-fact panel {_idx}: interval={_interval_secs}s, stagger_offset={_stagger_offset:.1f}s")
+
 
 
 
@@ -849,8 +984,60 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'))
 
 
-def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
-                        d: ImageDraw.ImageDraw) -> None:
+def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
+                            d: ImageDraw.ImageDraw) -> None:
+    """Render a url-fact panel: fetch from URL, extract, cache, display."""
+    global _refresh_remote_cache_flag, _remote_fact_cache
+
+    f      = _get_font(p.get('font_size', 'normal'))
+    color  = p.get('color', _C_WHITE)
+    url    = p.get('url', '')
+    pattern = p.get('pattern')
+    json_path = p.get('json_path')
+    interval_str = p.get('interval', '5m')
+    timeout = p.get('timeout', 5)
+    verify_ssl = p.get('verify_ssl', False)
+    fallback = p.get('fallback', 'n/a')
+    label = p.get('label', '')
+
+    # Parse interval to seconds
+    interval_secs = _parse_interval(interval_str)
+
+    # Generate cache key (use id() of the panel dict as unique ID)
+    cache_key = id(p)
+
+    # Check if cache needs refresh (SIGUSR1 was received)
+    if _refresh_remote_cache_flag:
+        _remote_fact_cache.clear()
+        _refresh_remote_cache_flag = False
+
+    # Check cache; fetch if expired
+    now = time.monotonic()
+    if cache_key not in _remote_fact_cache:
+        # First fetch: happens immediately
+        value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+        _remote_fact_cache[cache_key] = {'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs}
+    else:
+        cache_entry = _remote_fact_cache[cache_key]
+        last_fetch = cache_entry['last_fetch_time']
+        if now - last_fetch >= interval_secs:
+            # Interval expired: fetch fresh value
+            value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+            cache_entry['value'] = value
+            cache_entry['last_fetch_time'] = now
+        else:
+            # Use cached value
+            value = cache_entry['value']
+
+    # Render like fact panel
+    if label:
+        text = label + value
+    else:
+        text = value
+
+    _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'))
+
+
     """Static text panel  --  renders p['label'] as-is, no data lookup."""
     _draw_text_line(d, px, py, pw, ph,
                     p.get('label', ''),
@@ -999,6 +1186,8 @@ def _dispatch_panel(p: dict, px: int, py: int, pw: int, ph: int,
         _render_date_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')], target_draw)
     elif pt == 'fact':
         _render_fact_panel(p, px, py, pw, ph, target_draw)
+    elif pt == 'url-fact':
+        _render_url_fact_panel(p, px, py, pw, ph, target_draw)
     elif pt == 'text':
         _render_text_panel(p, px, py, pw, ph, target_draw)
     elif pt == 'divider':
@@ -1244,6 +1433,16 @@ def _init() -> None:
 
     # --- Layout (calls _resolve_panel_widths; safe here since all fns defined) --
     _init_layout()
+
+    # --- Register signal handlers -------------------------------------------
+    # SIGUSR1: invalidate url-fact cache (gracefully ignored on Windows)
+    try:
+        signal.signal(signal.SIGUSR1, _handle_sigusr1)
+        if DEBUG:
+            print("SIGUSR1 signal handler registered for url-fact cache invalidation")
+    except (AttributeError, ValueError):
+        # Windows doesn't have SIGUSR1; silently continue
+        pass
 
 
 # ---------------------------------------------------------------------------

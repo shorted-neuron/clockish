@@ -1,0 +1,62 @@
+---
+orientation: portrait
+
+rows:
+  - name: time
+    height: 60
+    panels:
+      - type: clock
+        font_size: huge
+        color: '#00ff00'
+
+  - name: external-ip
+    height: 40
+    panels:
+      - type: url-fact
+        url: https://api.ipify.org?format=json
+        json_path: ip
+        interval: 5m
+        timeout: 5
+        label: "IP "
+        color: '#ffffff'
+        font_size: normal
+
+  - name: random-quote
+    height: 40
+    background: '#1a1a1a'
+    panels:
+      - type: url-fact
+        url: https://api.quotable.io/random
+        json_path: content
+        interval: 10m
+        timeout: 5
+        fallback: "No quote"
+        color: '#ffff00'
+        font_size: small
+
+  - name: http-example
+    height: 40
+    panels:
+      - type: url-fact
+        url: http://example.com/
+        pattern: '<title>([^<]+)</title>'
+        interval: 1h
+        timeout: 5
+        fallback: "example"
+        label: "title "
+        color: '#aaaaaa'
+        font_size: normal
+
+  - name: status-fact
+    height: 40
+    panels:
+      - type: text
+        label: "url-fact sample config"
+        font_size: small
+        color: '#808080'
+
+display:
+  driver: framebuffer
+  width: 320
+  height: 480
+  rotation: 0
