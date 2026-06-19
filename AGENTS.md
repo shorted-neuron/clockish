@@ -13,6 +13,8 @@ Pattern: `[thing] [action] [reason]. [next step].`
 
 Git: commit/PR messages normal. Otherwise check before `git add` / `git commit`.
 
+Remember: major pattern change require update AGENTS.md also
+
 ---
 
 ## Codebase Overview
