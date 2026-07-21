@@ -71,14 +71,14 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 
 ### Key modules
 
-| File | Role |
-|------|------|
-| `display.py` | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, divider, debug. |
-| `render_preview.py` | PNG export (any platform). Stubs hardware; runs render pipeline offline. |
-| `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based. |
-| `drivers/` | Abstract `DisplayDriver` + three concrete implementations (ili9486, st7789, framebuffer). |
-| `colors.py` | Named color palette lookup. |
-| `platform_utils.py` | `is_raspberry_pi()`, `is_linux()`, `require_pi()` guards. |
+| File                  | Role                                                                                                                            |
+|-----------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| `display.py`          | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, divider, debug. |
+| `render_preview.py`   | PNG export (any platform). Stubs hardware; runs render pipeline offline.                                                        |
+| `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based.                                                |
+| `drivers/`            | Abstract `DisplayDriver` + three concrete implementations (ili9486, st7789, framebuffer).                                       |
+| `colors.py`           | Named color palette lookup.                                                                                                     |
+| `platform_utils.py`   | `is_raspberry_pi()`, `is_linux()`, `require_pi()` guards.                                                                       |
 
 ### Config structure
 
@@ -139,20 +139,20 @@ Text vertical-centering: `_center_y()` aligns ink baseline within row height.
 
 `_get_fact(source)` maps strings to lambdas:
 
-| source | value |
-|--------|-------|
-| `ip` | first non-loopback IPv4 |
-| `hostname` | system hostname |
-| `uptime` | human-readable uptime |
-| `cpu` | CPU usage % (delta /proc/stat) |
-| `cpu_load` | 1-min load average |
-| `mem` | memory % used |
-| `disk` | disk % used (root fs) |
-| `temp` | CPU temperature (zone0) |
-| `ntp_status` | synchronized/unsync (chronyc/timedatectl) |
-| `ntp_upstream` | number of upstream sources |
-| `wireguard` | wg status (stubbed if no wg) |
-| `wifi_*` | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
+| source         | value                                                            |
+|----------------|------------------------------------------------------------------|
+| `ip`           | first non-loopback IPv4                                          |
+| `hostname`     | system hostname                                                  |
+| `uptime`       | human-readable uptime                                            |
+| `cpu`          | CPU usage % (delta /proc/stat)                                   |
+| `cpu_load`     | 1-min load average                                               |
+| `mem`          | memory % used                                                    |
+| `disk`         | disk % used (root fs)                                            |
+| `temp`         | CPU temperature (zone0)                                          |
+| `ntp_status`   | synchronized/unsync (chronyc/timedatectl)                        |
+| `ntp_upstream` | number of upstream sources                                       |
+| `wireguard`    | wg status (stubbed if no wg)                                     |
+| `wifi_*`       | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
 
 ### Display drivers
 
@@ -279,10 +279,10 @@ Ruff auto-flags unsorted imports. Reorganize them to fix `unsorted-imports` warn
 
 ## Common edits
 
-| Goal | File | Pattern |
-|------|------|---------|
-| Add color | `colors.py` | `BY_NAME['mycolor'] = '#rrggbb'` |
-| Tweak layout | `configs/*.yaml` | height/width, row bg, panel fonts |
-| Debug render | `--debug` flag | prints per-frame ms; `--debug-layout` one-frame exit |
-| Fix config | `clockish-validate` | run before deploy; start supports non-fatal errors |
-| Test preview | `clockish-preview` | outputs PNG offline; cross-platform |
+| Goal         | File                | Pattern                                              |
+|--------------|---------------------|------------------------------------------------------|
+| Add color    | `colors.py`         | `BY_NAME['mycolor'] = '#rrggbb'`                     |
+| Tweak layout | `configs/*.yaml`    | height/width, row bg, panel fonts                    |
+| Debug render | `--debug` flag      | prints per-frame ms; `--debug-layout` one-frame exit |
+| Fix config   | `clockish-validate` | run before deploy; start supports non-fatal errors   |
+| Test preview | `clockish-preview`  | outputs PNG offline; cross-platform                  |
