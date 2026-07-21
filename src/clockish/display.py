@@ -16,9 +16,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import zoneinfo # before yaml
+from contextlib import contextmanager # before yaml
 import yaml
-import zoneinfo
-from contextlib import contextmanager
 
 # syslog: Unix/Linux only
 try:
