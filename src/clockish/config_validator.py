@@ -50,6 +50,13 @@ from typing import Any
 
 import yaml
 
+from clockish.transforms import (
+    KNOWN_TRANSFORM_NAMES,
+    NO_ARG_TRANSFORMS,
+    OPTIONAL_NUMERIC_ARG_TRANSFORMS,
+    REQUIRED_ARG_TRANSFORMS,
+)
+
 # ---------------------------------------------------------------------------
 # Optional dependencies  --  handled gracefully if not installed
 # ---------------------------------------------------------------------------
@@ -118,18 +125,19 @@ _DEPRECATED_PANEL_KEYS: dict[str, str] = {
 _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'clock': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'width', 'background', 'label',
-        'timezone', 'time_format',
+        'timezone', 'time_format', 'transform',
     }),
     'date': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'width', 'background',
-        'timezone', 'date_format',
+        'timezone', 'date_format', 'transform',
     }),
     'fact': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'width', 'background', 'label',
-        'source',
+        'source', 'transform',
     }),
     'text': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'width', 'background', 'label',
+        'transform',
     }),
     'divider': frozenset({
         'type', 'color', 'height', 'width', 'background',
@@ -146,6 +154,7 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'url-fact': frozenset({
         'type', 'url', 'pattern', 'json_path', 'interval', 'timeout', 'verify_ssl',
         'fallback', 'label', 'color', 'font', 'font_size', 'width', 'background', 'justify',
+        'transform',
     }),
 }
 
@@ -538,6 +547,74 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                             "(verify_ssl ignored for http)"
                         )
                         warn(ploc, msg)
+
+            # 8. transform: list validation (any panel type that supports it)
+            if 'transform' in panel:
+                transform_list = panel['transform']
+                if not isinstance(transform_list, list):
+                    err(ploc, "'transform' must be a list, e.g. transform: [upper]")
+                else:
+                    for ti, entry in enumerate(transform_list):
+                        tloc = f'{ploc}.transform[{ti}]'
+                        if isinstance(entry, str):
+                            name, arg, has_arg = entry, None, False
+                        elif isinstance(entry, dict) and len(entry) == 1:
+                            name, arg = next(iter(entry.items()))
+                            has_arg = True
+                        else:
+                            warn(
+                                tloc,
+                                f"transform entry {entry!r} must be a string (e.g. 'upper') "
+                                "or a single-key mapping (e.g. {round: 1})",
+                            )
+                            continue
+
+                        if name not in KNOWN_TRANSFORM_NAMES:
+                            warn(
+                                tloc,
+                                f"unrecognised transform '{name}' "
+                                f"(known: {', '.join(sorted(KNOWN_TRANSFORM_NAMES))})",
+                            )
+                            continue
+
+                        if name in REQUIRED_ARG_TRANSFORMS and not has_arg:
+                            warn(
+                                tloc,
+                                f"transform '{name}' requires an argument, "
+                                f"e.g. {{{name}: ...}}",
+                            )
+                        elif name in NO_ARG_TRANSFORMS and has_arg:
+                            warn(
+                                tloc,
+                                f"transform '{name}' takes no argument -- use plain '{name}' "
+                                "instead of a mapping",
+                            )
+                        elif name in OPTIONAL_NUMERIC_ARG_TRANSFORMS and has_arg:
+                            if not isinstance(arg, (int, float)):
+                                warn(
+                                    tloc,
+                                    f"transform '{name}' argument must be a number "
+                                    f"(decimal places), got {arg!r}",
+                                )
+                        elif name in ('multiply', 'add') and has_arg:
+                            if not isinstance(arg, (int, float)):
+                                warn(
+                                    tloc,
+                                    f"transform '{name}' argument must be a number, got {arg!r}",
+                                )
+                        elif name == 'replace' and has_arg:
+                            if not isinstance(arg, dict) or 'from' not in arg:
+                                warn(
+                                    tloc,
+                                    "transform 'replace' requires "
+                                    "{replace: {from: ..., to: ...}}",
+                                )
+                        elif name in ('prefix', 'suffix', 'format') and has_arg:
+                            if not isinstance(arg, str):
+                                warn(
+                                    tloc,
+                                    f"transform '{name}' argument must be a string, got {arg!r}",
+                                )
 
     return issues
 

@@ -757,3 +757,134 @@ class TestUrlFactPanel:
         }])
         result = validate_config_dict(cfg)
         assert result.ok
+
+
+# ---------------------------------------------------------------------------
+# transform: value-transform pipeline validation
+# ---------------------------------------------------------------------------
+
+class TestTransform:
+    """Tests for the generic 'transform:' key (fact/url-fact/clock/date/text)."""
+
+    def test_transform_valid_simple_list_on_text_panel(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{
+                'type': 'text', 'label': 'HELLO', 'transform': ['lower'],
+            }],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok, f"expected no issues, got: {result.issues}"
+
+    def test_transform_valid_camelcase_and_titlecase(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [
+                {'type': 'text', 'label': 'hello world', 'transform': ['camelcase']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['titlecase']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['pascalcase']},
+            ],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok
+
+    def test_transform_valid_on_fact_panel(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{
+                'type': 'fact', 'source': 'temp', 'transform': ['round'],
+            }],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok
+
+    def test_transform_valid_on_url_fact_with_params(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{
+                'type': 'url-fact',
+                'url': 'https://example.com',
+                'json_path': 'tempF',
+                'transform': [{'round': 0}, {'suffix': 'F'}],
+            }],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok
+
+    def test_transform_valid_on_clock_and_date(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [
+                {'type': 'clock', 'transform': ['lower']},
+                {'type': 'date', 'transform': ['upper']},
+            ],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok
+
+    def test_transform_not_a_list_errors(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'transform': 'upper'}],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('list' in m.message.lower() for m in result.errors)
+
+    def test_transform_unknown_name_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'transform': ['not_a_real_transform']}],
+        }])
+        result = validate_config_dict(cfg)
+        assert not result.has_errors
+        msgs = [i.message for i in result.warnings]
+        assert any('unrecognised transform' in m.lower() for m in msgs)
+
+    def test_transform_missing_required_arg_warns(self) -> None:
+        """'suffix' requires an argument -- bare string form should warn."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'transform': ['suffix']}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('requires an argument' in m.lower() for m in msgs)
+
+    def test_transform_no_arg_transform_given_mapping_warns(self) -> None:
+        """'upper' takes no argument -- mapping form should warn."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'transform': [{'upper': 1}]}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('takes no argument' in m.lower() for m in msgs)
+
+    def test_transform_round_bad_arg_type_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'transform': [{'round': 'nope'}]}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('must be a number' in m.lower() for m in msgs)
+
+    def test_transform_replace_missing_from_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'transform': [{'replace': {'to': 'y'}}]}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('replace' in m.lower() for m in msgs)
+
+    def test_transform_malformed_entry_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'transform': [123]}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('transform entry' in m.lower() for m in msgs)
+

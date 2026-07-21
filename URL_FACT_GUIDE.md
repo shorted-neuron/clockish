@@ -38,7 +38,98 @@ panels:
   - HTTP URLs ignore this setting
 - `fallback`: Value shown if fetch/parse fails (default: `n/a`)
 - `label`: Text prepended to the extracted value
+- `transform`: Ordered list of value transforms applied before `label` -- see [Transforms](#transforms) below
 - Standard styling: `color`, `font_size`, `justify`, `width`, `background`
+
+## Transforms
+
+Any text-producing panel type (`clock`, `date`, `fact`, `text`, `url-fact`) supports a `transform:`
+key -- an ordered list of operations applied to the panel's core value *before* any label is added.
+Great for cleaning up messy remote data (e.g., `"71.8"` -> `"72"`), or just for fun on static text.
+
+```yaml
+transform: [upper]                       # simple, no-argument form
+transform: [{round: 1}]                  # parameterised, single-key mapping form
+transform: [lower, {suffix: "!"}]        # chained -- applied left to right
+```
+
+### Available transforms
+
+| Name                    | Argument            | Example (input -> output)              |
+|-------------------------|----------------------|-----------------------------------------|
+| `upper`                 | none                 | `hello` -> `HELLO`                      |
+| `lower`                 | none                 | `HELLO` -> `hello`                      |
+| `title`                 | none                 | `hello world` -> `Hello World`          |
+| `capitalize`            | none                 | `hello world` -> `Hello world`          |
+| `titlecase` / `pascalcase` | none              | `hello world` -> `HelloWorld`           |
+| `camelcase`             | none                 | `hello world` -> `helloWorld`           |
+| `strip`                 | none                 | `"  hi  "` -> `hi`                      |
+| `round`                 | decimal places (default 0) | `71.8` -> `72`  (banker's rounding) |
+| `ceil`                  | decimal places (default 0) | `71.1` -> `72`  (always rounds up)  |
+| `floor`                 | decimal places (default 0) | `71.9` -> `71`  (always rounds down)|
+| `int`                   | none                 | `71.8` -> `71`  (truncate, no rounding) |
+| `abs`                   | none                 | `-5` -> `5`                             |
+| `multiply`              | number (required)   | `10` + `{multiply: 1.8}` -> `18`        |
+| `add`                   | number (required)   | `32` + `{add: 10}` -> `42`              |
+| `replace`               | `{from, to}` (required) | `hello world` + `{replace: {from: world, to: there}}` -> `hello there` |
+| `prefix`                | string (required)   | `72` + `{prefix: "IP: "}` -> `IP: 72`   |
+| `suffix`                | string (required)   | `72` + `{suffix: "F"}` -> `72F`         |
+| `format`                | Python format-spec (required) | `71.8` + `{format: "{:.1f}F"}` -> `71.8F` |
+
+### `titlecase`/`pascalcase` vs `camelcase`
+
+Both split on whitespace/`_`/`-` and capitalize each word, but `titlecase` (alias `pascalcase`)
+capitalizes the **first** word too, while `camelcase` leaves the first word lowercase:
+
+```yaml
+# input: "hello world"
+transform: [titlecase]   # -> "HelloWorld"
+transform: [pascalcase]  # -> "HelloWorld"  (same as titlecase)
+transform: [camelcase]   # -> "helloWorld"  (first word lowercase)
+```
+
+### Three rounding modes -- string -> float -> int
+
+`round`, `ceil`, and `floor` all convert the value to a float first, then apply a distinct
+rounding rule (contrast with `int`, which truncates with no rounding at all):
+
+```yaml
+# input: "71.8"  (a string, as returned by json_path/pattern)
+transform: [round]   # -> "72"  (round-half-even: nearest int)
+transform: [ceil]    # -> "72"  (always rounds up)
+transform: [floor]   # -> "71"  (always rounds down)
+transform: [int]     # -> "71"  (truncate toward zero -- no rounding)
+```
+
+### The `format` escape hatch
+
+For anything the named transforms don't cover, `format` applies a raw Python format-spec
+to the (numeric, when possible) value:
+
+```yaml
+- type: url-fact
+  url: http://sensor-master.lan/last-json
+  json_path: tempF
+  transform: [{format: "{:.1f}°F"}]   # "71.8" -> "71.8°F"
+```
+
+Numeric conversion is attempted first; if the value isn't numeric, the format-spec is applied
+to the raw string instead (e.g. `{format: "[{}]"}` on `"hello"` -> `"[hello]"`).
+
+### Chaining example (silly but valid)
+
+```yaml
+- type: text
+  label: "HELLO"
+  transform: [lower]          # "HELLO" -> "hello"
+- type: text
+  label: "hello world"
+  transform: [camelcase]      # "hello world" -> "helloWorld"
+```
+
+Failed/unsupported conversions (e.g. rounding a non-numeric fallback like `"n/a"`) leave the
+value unchanged rather than crashing the render loop.
+
 
 ## Sample URLs to Test
 
