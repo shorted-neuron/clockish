@@ -33,6 +33,7 @@ import PIL.ImageOps
 from clockish import __version__
 from clockish.colors import rgb_to_hex, BY_NAME
 from clockish.drivers import load_driver
+from clockish.transforms import apply_transforms
 
 
 # ---------------------------------------------------------------------------
@@ -1090,9 +1091,10 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
 def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
                         d: ImageDraw.ImageDraw) -> None:
-    """Static text panel  --  renders p['label'] as-is, no data lookup."""
+    """Static text panel  --  renders p['label'], optionally transformed."""
+    label = apply_transforms(p.get('label', ''), p.get('transform'), debug=DEBUG)
     _draw_text_line(d, px, py, pw, ph,
-                    p.get('label', ''),
+                    label,
                     _get_font(p.get('font_size', 'normal')),
                     p.get('color', _C_WHITE),
                     justify=p.get('justify', 'center'))

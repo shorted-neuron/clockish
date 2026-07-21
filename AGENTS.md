@@ -78,6 +78,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 | `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based.                                                |
 | `drivers/`            | Abstract `DisplayDriver` + three concrete implementations (ili9486, st7789, framebuffer).                                       |
 | `colors.py`           | Named color palette lookup.                                                                                                     |
+| `transforms.py`       | Value-transform registry (`upper`/`round`/`camelcase`/etc.) applied to panel text.                                              |
 | `platform_utils.py`   | `is_raspberry_pi()`, `is_linux()`, `require_pi()` guards.                                                                       |
 
 ### Config structure
@@ -97,11 +98,12 @@ rows:
     height: 40  # pixels | float 0-1 | "15%"
     background: navy  # optional; default black
     panels:
-      - type: clock | date | fact | text | divider | wifi_graphic | debug | blank
+      - type: clock | date | fact | text | divider | wifi_graphic | debug | blank | url-fact
         # common: color, font_size, font, width, background, justify
         # clock/date: timezone, time_format / date_format
         # fact: source (required), label
         # text: label
+        # clock/date/fact/text/url-fact: transform (see below)
 
 display:  # optional here; search display.yaml alongside config or ~/.config/clockish/
   driver: ili9486 | st7789 | framebuffer  # default ili9486
@@ -134,6 +136,17 @@ All renderers: `(panel_dict, px, py, pw, ph, ...)` → draw on `ImageDraw`.
 - **blank**: reserved space, no draw
 
 Text vertical-centering: `_center_y()` aligns ink baseline within row height.
+
+### Value transforms
+
+`clock`, `date`, `fact`, `text`, `url-fact` panels support `transform:` -- an ordered list of
+named operations applied to the panel's core string before any `label` prefix. Registry lives
+in `transforms.py` (`TRANSFORM_REGISTRY`), shared by `display.py` (application) and
+`config_validator.py` (name/arg validation). Built-ins: case (`upper`/`lower`/`title`/
+`capitalize`/`titlecase`/`pascalcase`/`camelcase`/`strip`), rounding (`round`/`ceil`/`floor`/
+`int`, string→float→int), arithmetic (`multiply`/`add`/`abs`), string ops (`replace`/`prefix`/
+`suffix`), and a `format` escape hatch (raw Python format-spec). See `URL_FACT_GUIDE.md` for
+full examples.
 
 ### System info sources
 
@@ -249,6 +262,14 @@ bash install.sh  # venv, system deps, run-clockish.sh, edit-clockish-config.sh
 3. Optional: add default label to `_FACT_DEFAULT_LABELS`
 4. Test in validator tests
 
+**Add a value transform**:
+1. Write `_t_<name>(value: str, arg) -> str` in `transforms.py`, add to `TRANSFORM_REGISTRY`
+2. Classify it in `NO_ARG_TRANSFORMS` / `REQUIRED_ARG_TRANSFORMS` /
+   `OPTIONAL_NUMERIC_ARG_TRANSFORMS` (used by validator's arg-shape checks)
+3. Add arg-shape validation case in `config_validator.py` if it needs custom checks (e.g. `replace`)
+4. Document in `URL_FACT_GUIDE.md` transforms table
+5. Test in `test_transforms.py` + `test_config_validator.py::TestTransform`
+
 ---
 
 ## Code Conventions & Linter Notes
@@ -286,3 +307,4 @@ Ruff auto-flags unsorted imports. Reorganize them to fix `unsorted-imports` warn
 | Debug render | `--debug` flag      | prints per-frame ms; `--debug-layout` one-frame exit |
 | Fix config   | `clockish-validate` | run before deploy; start supports non-fatal errors   |
 | Test preview | `clockish-preview`  | outputs PNG offline; cross-platform                  |
+| Add transform| `transforms.py`     | `TRANSFORM_REGISTRY['myop'] = _t_myop`               |
