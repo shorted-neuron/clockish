@@ -15,6 +15,37 @@ Git: commit/PR messages normal. Otherwise check before `git add` / `git commit`.
 
 Remember: major pattern change require update AGENTS.md also
 
+### File Modification Tracking (for AI agents & handoff)
+
+**Always explicitly report which files you touched.** Silent modifications cause surprises at commit time.
+
+**Pattern:**
+1. **Per-edit**: After `replace_string_in_file`, `insert_edit_into_file`, or `create_file`, state:
+   ```
+   ✏️  Modified: src/clockish/display.py (line 600: added _render_url_fact_panel)
+   ```
+   or
+   ```
+   📄 Created: configs/url-fact-sample.yaml
+   ```
+
+2. **On tool failure** (partial state left): Flag it:
+   ```
+   ⚠️  Partial state: configs/url-fact-sample.yaml may have trailing blanks (fix attempt failed; user must clean)
+   ```
+
+3. **Session summary** (end of major feature): Print full list:
+   ```
+   ## FILES MODIFIED THIS SESSION
+   - src/clockish/config_validator.py (added url-fact validation)
+   - src/clockish/display.py (added url-fact renderer + cache)
+   - tests/test_config_validator.py (added TestUrlFactPanel)
+   - configs/url-fact-sample.yaml (created)
+   - URL_FACT_GUIDE.md (created)
+   ```
+
+**Why**: Developers need to `git diff` / `git status` and catch changes before commit. Don't hide file touches.
+
 ---
 
 ## Codebase Overview
@@ -40,14 +71,14 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 
 ### Key modules
 
-| File | Role |
-|------|------|
-| `display.py` | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, divider, debug. |
-| `render_preview.py` | PNG export (any platform). Stubs hardware; runs render pipeline offline. |
-| `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based. |
-| `drivers/` | Abstract `DisplayDriver` + three concrete implementations (ili9486, st7789, framebuffer). |
-| `colors.py` | Named color palette lookup. |
-| `platform_utils.py` | `is_raspberry_pi()`, `is_linux()`, `require_pi()` guards. |
+| File                  | Role                                                                                                                            |
+|-----------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| `display.py`          | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, divider, debug. |
+| `render_preview.py`   | PNG export (any platform). Stubs hardware; runs render pipeline offline.                                                        |
+| `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based.                                                |
+| `drivers/`            | Abstract `DisplayDriver` + three concrete implementations (ili9486, st7789, framebuffer).                                       |
+| `colors.py`           | Named color palette lookup.                                                                                                     |
+| `platform_utils.py`   | `is_raspberry_pi()`, `is_linux()`, `require_pi()` guards.                                                                       |
 
 ### Config structure
 
@@ -108,20 +139,20 @@ Text vertical-centering: `_center_y()` aligns ink baseline within row height.
 
 `_get_fact(source)` maps strings to lambdas:
 
-| source | value |
-|--------|-------|
-| `ip` | first non-loopback IPv4 |
-| `hostname` | system hostname |
-| `uptime` | human-readable uptime |
-| `cpu` | CPU usage % (delta /proc/stat) |
-| `cpu_load` | 1-min load average |
-| `mem` | memory % used |
-| `disk` | disk % used (root fs) |
-| `temp` | CPU temperature (zone0) |
-| `ntp_status` | synchronized/unsync (chronyc/timedatectl) |
-| `ntp_upstream` | number of upstream sources |
-| `wireguard` | wg status (stubbed if no wg) |
-| `wifi_*` | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
+| source         | value                                                            |
+|----------------|------------------------------------------------------------------|
+| `ip`           | first non-loopback IPv4                                          |
+| `hostname`     | system hostname                                                  |
+| `uptime`       | human-readable uptime                                            |
+| `cpu`          | CPU usage % (delta /proc/stat)                                   |
+| `cpu_load`     | 1-min load average                                               |
+| `mem`          | memory % used                                                    |
+| `disk`         | disk % used (root fs)                                            |
+| `temp`         | CPU temperature (zone0)                                          |
+| `ntp_status`   | synchronized/unsync (chronyc/timedatectl)                        |
+| `ntp_upstream` | number of upstream sources                                       |
+| `wireguard`    | wg status (stubbed if no wg)                                     |
+| `wifi_*`       | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
 
 ### Display drivers
 
@@ -220,12 +251,38 @@ bash install.sh  # venv, system deps, run-clockish.sh, edit-clockish-config.sh
 
 ---
 
+## Code Conventions & Linter Notes
+
+### Import ordering (Ruff)
+Ruff enforces PEP 8 import grouping:
+1. Standard library (alphabetical)
+2. Blank line
+3. Third-party (alphabetical)
+4. Blank line
+5. Local application (alphabetical)
+
+Example:
+```python
+import argparse
+import datetime
+import os
+
+from PIL import Image
+import yaml
+
+from clockish.colors import BY_NAME
+```
+
+Ruff auto-flags unsorted imports. Reorganize them to fix `unsorted-imports` warnings.
+
+---
+
 ## Common edits
 
-| Goal | File | Pattern |
-|------|------|---------|
-| Add color | `colors.py` | `BY_NAME['mycolor'] = '#rrggbb'` |
-| Tweak layout | `configs/*.yaml` | height/width, row bg, panel fonts |
-| Debug render | `--debug` flag | prints per-frame ms; `--debug-layout` one-frame exit |
-| Fix config | `clockish-validate` | run before deploy; start supports non-fatal errors |
-| Test preview | `clockish-preview` | outputs PNG offline; cross-platform |
+| Goal         | File                | Pattern                                              |
+|--------------|---------------------|------------------------------------------------------|
+| Add color    | `colors.py`         | `BY_NAME['mycolor'] = '#rrggbb'`                     |
+| Tweak layout | `configs/*.yaml`    | height/width, row bg, panel fonts                    |
+| Debug render | `--debug` flag      | prints per-frame ms; `--debug-layout` one-frame exit |
+| Fix config   | `clockish-validate` | run before deploy; start supports non-fatal errors   |
+| Test preview | `clockish-preview`  | outputs PNG offline; cross-platform                  |
