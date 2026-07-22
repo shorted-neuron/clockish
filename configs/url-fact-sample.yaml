@@ -17,7 +17,7 @@ rows:
         json_path: ip
         interval: 5m
         timeout: 5
-        label: "IP "
+        label: "Public IP "
         color: '#ffffff'
         font_size: normal
 

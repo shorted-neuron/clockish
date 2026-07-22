@@ -30,6 +30,15 @@ panels:
   - `pattern`: Python regex with capture group(s); first group extracted
   - `json_path`: Dot-notation path into JSON response (e.g., `data.temp`)
 
+  For a dot-less `json_path` (e.g. `ip`, `tempF`), lookup is tried in this order:
+  1. **Root-level key** -- `{"ip": "203.0.113.42"}` + `json_path: ip` -> `203.0.113.42`
+  2. **Nested-wrapper key** (only if the root key is absent) -- for APIs that wrap
+     their payload under an opaque/variable top-level key, e.g.
+     `{"286114a10300004b": {"tempF": 71.8}}` + `json_path: tempF` -> `71.8`
+
+  Use dot notation (`data.temp`) when you need to navigate an explicitly-named
+  nested structure.
+
 ### Optional Keys
 - `interval`: Frequency to fetch (default: `5m`)
   - Formats: `30s`, `5m`, `1h`, `2.5m`, etc.
