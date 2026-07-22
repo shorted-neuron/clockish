@@ -178,16 +178,23 @@ _PREVIEW_SIZE_RE = re.compile(r'^\d+x\d+$')
 # ---------------------------------------------------------------------------
 
 _HEIGHT_SCHEMA: dict = {
-    "description": "Row height: integer pixels >= 1, float fraction 0 < x < 1, or percentage string like '15%'.",
+    "description": (
+        "Row height: integer pixels >= 1, 'Npx' string, float fraction 0 < x < 1, "
+        "or percentage string like '15%'."
+    ),
     "anyOf": [
         {"type": "integer", "minimum": 1},
         {"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 1.0},
         {"type": "string", "pattern": r"^\d+(\.\d+)?%$"},
+        {"type": "string", "pattern": r"^\d+(\.\d+)?px$"},
     ],
 }
 
 _WIDTH_SCHEMA: dict = {
-    "description": "Panel width: integer pixels >= 1, float fraction 0 < x < 1, percentage string, 'auto', or 'default'.",
+    "description": (
+        "Panel width: integer pixels >= 1, 'Npx' string, float fraction 0 < x < 1, "
+        "percentage string, 'auto', or 'default'."
+    ),
     "anyOf": [
         {"type": "integer", "minimum": 1},
         {"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 1.0},

@@ -75,7 +75,9 @@ properties:
           type: string
           description: Unique label for this row (used in debug output).
         height:
-          description: 'Row height: integer pixels >= 1, float fraction 0 < x < 1, or percentage string like ''15%''.'
+          description: >-
+            Row height: integer pixels >= 1, "Npx" string, float fraction 0 < x < 1,
+            or percentage string like '15%'.
           anyOf:
             - type: integer
               minimum: 1
@@ -84,6 +86,8 @@ properties:
               exclusiveMaximum: 1.0
             - type: string
               pattern: ^\d+(\.\d+)?%$
+            - type: string
+              pattern: ^\d+(\.\d+)?px$
         background:
           type: string
           description: 'Row background color (name or hex). Default: black.'
@@ -120,9 +124,9 @@ properties:
                   Do NOT use built-in scale names here  --  use 'font_size:' instead.
               font_size:
                 description: 'Font size: built-in scale name (giant/huge/big/med/normal/small/tiny/micro),
-                  percentage string like ''10%'', integer pixels, or ''auto'' (75% of row height).'
+                  percentage string like ''10%'', "Npx" string, integer pixels, or ''auto'' (75% of row height).'
               width:
-                description: 'Panel width: integer pixels >= 1, float fraction 0 < x < 1,
+                description: 'Panel width: integer pixels >= 1, "Npx" string, float fraction 0 < x < 1,
                   percentage string, ''auto'', or ''default''.'
                 anyOf:
                   - type: integer

@@ -37,11 +37,11 @@ rows:
         font_size: auto
 
   - name: divider-1
-    height: 5
+    height: "5px"
     background: black
     panels:
       - type: divider
-        height: 1
+        height: "1px"
         color: darkgrey
 
   - name: local-clock
@@ -118,10 +118,10 @@ rows:
         font_size: auto
 
   - name: divider-2
-    height: 3
+    height: "3px"
     panels:
       - type: divider
-        height: 1
+        height: "1px"
         color: darkgrey
 
   - name: ntp
@@ -141,10 +141,10 @@ rows:
         font_size: auto
 
   - name: divider-3
-    height: 3
+    height: "3px"
     panels:
       - type: divider
-        height: 1
+        height: "1px"
         color: darkgrey
 
   - name: cpu

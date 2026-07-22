@@ -37,11 +37,11 @@ rows:
         font_size: auto
 
   - name: divider-1
-    height: 5
+    height: "5px"
     background: black
     panels:
       - type: divider
-        height: 1
+        height: "1px"
         color: darkgrey
 
   - name: local-clock
@@ -65,7 +65,7 @@ rows:
         font_size: auto
 
   - name: blank-1
-    height: 6
+    height: "6px"
     background: black
     panels:
       - type: blank
@@ -91,7 +91,7 @@ rows:
         font_size: auto
 
   - name: blank-2
-    height: 6
+    height: "6px"
     background: black
     panels:
       - type: blank
@@ -114,7 +114,7 @@ rows:
         font_size: auto
 
   - name: blank-3
-    height: 6
+    height: "6px"
     background: black
     panels:
       - type: blank
@@ -141,7 +141,7 @@ rows:
         font_size: auto
 
 # - name: wifi-signal
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -157,13 +157,13 @@ rows:
 #       font_size: small
 
   - name: blank-4
-    height: 6
+    height: "6px"
     background: black
     panels:
       - type: blank
 
 # - name: ntp
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -179,10 +179,10 @@ rows:
 #       font_size: small
 
 # - name: divider-3
-#   height: 3
+#   height: 3px
 #   panels:
 #     - type: divider
-#       height: 1
+#       height: 1px
 #       color: darkgrey
 
   - name: cpu
@@ -202,7 +202,7 @@ rows:
         font_size: auto
 
 # - name: memory
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -212,7 +212,7 @@ rows:
 #       font_size: small
 
 # - name: disk
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -222,7 +222,7 @@ rows:
 #       font_size: small
 
 # - name: temp
-#   height: 27
+#   height: 27px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -232,10 +232,10 @@ rows:
 #       font_size: small
 
   - name: divider-2
-    height: 5
+    height: "5px"
     panels:
       - type: divider
-        height: 1
+        height: "1px"
         color: darkgrey
 
   - name: uptime

@@ -53,7 +53,7 @@ rows:
     height: "1%"
     panels:
       - type: divider
-        height: 1
+        height: "1px"
         color: burntsienna
 
   - name: date
@@ -77,7 +77,7 @@ rows:
     height: "1%"
     panels:
       - type: divider
-        height: 1
+        height: "1px"
         color: burntsienna
 
   - name: wifi-info
