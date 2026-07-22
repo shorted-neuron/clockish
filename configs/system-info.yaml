@@ -3,23 +3,30 @@
 # ---------------------------------------------------------------------------
 # System information display: local time + all available fact sources.
 # Display settings are in display.yaml  --  use configs/display/ili9486-portrait.yaml.
+#
+# Row heights are percentages of the target 320x480 portrait canvas; panel
+# widths are percentages of the target 320 width. font_size: auto sizes each
+# panel to 75% of its OWN row height, so named-scale mismatches (a named font
+# is a fixed % of the *display* height, not the row) can't happen here.
+# Dividers keep pixel heights  --  they're spacers, not content, so there's
+# no font to size against.
 # ---------------------------------------------------------------------------
 
 orientation: portrait
 
 rows:
   - name: app-header
-    height: 40
+    height: 8.33%
     background: navy
     panels:
       - type: text
         # justify: center
         label: "clockish"
         color: silver
-        font_size: normal
+        font_size: auto
 
   - name: app-version
-    height: 30
+    height: 6.25%
     background: navy
     panels:
       - type: fact
@@ -27,7 +34,7 @@ rows:
         source: version
         label: "default"
         color: grey
-        font_size: small
+        font_size: auto
 
   - name: divider-1
     height: 5
@@ -38,27 +45,27 @@ rows:
         color: darkgrey
 
   - name: local-clock
-    height: 56
+    height: 11.67%
     panels:
       - type: clock
         # justify: center
         timezone: local
         time_format: 24hs
         color: white
-        font_size: big
+        font_size: auto
 
   - name: local-date
-    height: 36
+    height: 7.50%
     panels:
       - type: date
         # justify: center
         timezone: local
         date_format: "%a, %B %-d %Y"
         color: pink
-        font_size: normal
+        font_size: auto
 
   - name: network
-    height: 28
+    height: 5.83%
     background: darkred
     panels:
       - type: fact
@@ -66,19 +73,19 @@ rows:
         source: hostname
         label: "default"
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         source: ip
         # label: "default"
         color: silver
-        font_size: small
+        font_size: auto
 
   - name: wifi-status
-    height: 44
+    height: 9.17%
     panels:
       - type: wifi_graphic
-        width: 64
+        width: 20.00%
         # justify: center
         color: lime
         background: navy
@@ -86,29 +93,29 @@ rows:
         # justify: center
         source: wifi_status
         color: lime
-        font_size: normal
+        font_size: auto
       - type: fact
         # justify: center
         source: wifi_ssid
         label: "default"
         color: darklime
-        font_size: normal
+        font_size: auto
 
   - name: wifi-signal
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: wifi_signal
         label: "default"
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         source: wifi_quality
         label: "default"
         color: darkyellow
-        font_size: small
+        font_size: auto
 
   - name: divider-2
     height: 3
@@ -118,20 +125,20 @@ rows:
         color: darkgrey
 
   - name: ntp
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: ntp_status
         label: "default"
         color: cyan
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         source: ntp_upstream
         label: "default"
         color: steelblue
-        font_size: small
+        font_size: auto
 
   - name: divider-3
     height: 3
@@ -141,69 +148,69 @@ rows:
         color: darkgrey
 
   - name: cpu
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: cpu
         label: "default"
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         source: cpu_load
         label: "default"
         color: darkyellow
-        font_size: small
+        font_size: auto
 
   - name: memory
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: mem
         label: "default"
         color: purple
-        font_size: small
+        font_size: auto
 
   - name: disk
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: disk
         label: "default"
         color: green
-        font_size: small
+        font_size: auto
 
   - name: temp
-    height: 27
+    height: 5.63%
     panels:
       - type: fact
         # justify: center
         source: temp
         label: "default"
         color: orange
-        font_size: small
+        font_size: auto
 
   - name: uptime-config
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         justify: left
         source: uptime
         label: "default"
         color: grey
-        font_size: small
+        font_size: auto
       - type: fact
         justify: right
         source: config_file
         # label: "default"
         color: brown
-        font_size: small
+        font_size: auto
 
   - name: debug
-    height: 52
+    height: 10.83%
     background: chocolate
     panels:
       - type: debug
