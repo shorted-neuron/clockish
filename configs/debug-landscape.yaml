@@ -32,11 +32,11 @@ rows:
         font_size: auto
 
   - name: divider-1
-    height: "3px"
+    height: 3px
     background: grey
     panels:
       - type: divider
-        height: "1px"
+        height: 1px
         color: red
 
   - name: den-clock
@@ -73,10 +73,10 @@ rows:
         justify: right
 
   - name: divider-2
-    height: "1px"
+    height: 1px
     panels:
       - type: divider
-        height: "1px"
+        height: 1px
 
   - name: ntp-status
     height: 8.13%

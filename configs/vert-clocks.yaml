@@ -85,10 +85,10 @@ rows:
         font_size: auto
 
   - name: divider-1
-    height: "5px"
+    height: 5px
     panels:
       - type: divider
-        height: "2px"
+        height: 2px
         color: grey
 
   - name: den-clock
@@ -156,10 +156,10 @@ rows:
         width: 30%
 
   - name: divider-2
-    height: "1px"
+    height: 1px
     panels:
       - type: divider
-        height: "1px"
+        height: 1px
         # color: darkgrey # darkgrey is default
 
   - name: ntp-status

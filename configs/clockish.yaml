@@ -37,11 +37,11 @@ rows:
         font_size: auto
 
   - name: divider-1
-    height: "5px"
+    height: 5px
     background: black
     panels:
       - type: divider
-        height: "1px"
+        height: 1px
         color: darkgrey
 
   - name: local-clock
@@ -65,7 +65,7 @@ rows:
         font_size: auto
 
   - name: blank-1
-    height: "6px"
+    height: 6px
     background: black
     panels:
       - type: blank
@@ -91,7 +91,7 @@ rows:
         font_size: auto
 
   - name: blank-2
-    height: "6px"
+    height: 6px
     background: black
     panels:
       - type: blank
@@ -114,7 +114,7 @@ rows:
         font_size: auto
 
   - name: blank-3
-    height: "6px"
+    height: 6px
     background: black
     panels:
       - type: blank
@@ -157,7 +157,7 @@ rows:
 #       font_size: small
 
   - name: blank-4
-    height: "6px"
+    height: 6px
     background: black
     panels:
       - type: blank
@@ -232,10 +232,10 @@ rows:
 #       font_size: small
 
   - name: divider-2
-    height: "5px"
+    height: 5px
     panels:
       - type: divider
-        height: "1px"
+        height: 1px
         color: darkgrey
 
   - name: uptime

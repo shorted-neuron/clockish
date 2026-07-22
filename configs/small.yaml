@@ -13,7 +13,7 @@ preview_size: "240x135"
 
 rows:
   - name: app-header
-    height: "30px"
+    height: 30px
     background: navy
     panels:
       - type: text
@@ -29,7 +29,7 @@ rows:
         font_size: small
 
   - name: local-clock
-    height: "30px"
+    height: 30px
     panels:
       - type: clock
         # justify: center
@@ -39,7 +39,7 @@ rows:
         font_size: small
 
   - name: network
-    height: "28px"
+    height: 28px
     background: darkred
     panels:
       - type: fact
@@ -77,7 +77,7 @@ rows:
 #       font_size: tiny
 
   - name: cpu
-    height: "26px"
+    height: 26px
     panels:
       - type: fact
         # justify: center
