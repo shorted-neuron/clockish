@@ -51,6 +51,15 @@ properties:
   display:
     type: object
     description: Display hardware profile. Usually provided by a separate display.yaml file.
+  preview_size:
+    type: string
+    pattern: '^\d+x\d+$'
+    description: |
+      Preview-tool-only override for non-standard target resolutions (e.g. small ST7789
+      panels or oversized framebuffers). Format "WxH" pixels, e.g. "240x135".
+      Ignored by production (which always uses the real display profile / display: section).
+      Only needed when the orientation-based preview default (480x320 landscape /
+      320x480 portrait) doesn't match the config's intended display.
   rows:
     type: array
     minItems: 1

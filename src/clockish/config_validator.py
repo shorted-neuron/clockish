@@ -166,8 +166,11 @@ _KNOWN_ROW_KEYS: frozenset[str] = frozenset({
 
 #: Valid top-level config keys.
 _KNOWN_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
-    'orientation', 'default_font', 'fonts', 'rows', 'display',
+    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size',
 })
+
+#: Format for preview_size: "WxH", e.g. "240x135". Preview-tool only; ignored by production.
+_PREVIEW_SIZE_RE = re.compile(r'^\d+x\d+$')
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +404,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
     for key in config:
         if key not in _KNOWN_TOP_LEVEL_KEYS:
             warn('(root)', f"unknown top-level key '{key}'")
+
+    # -- preview_size ---------------------------------------------------------
+    preview_size = config.get('preview_size')
+    if preview_size is not None:
+        if not isinstance(preview_size, str) or not _PREVIEW_SIZE_RE.match(preview_size):
+            err('(root)', f"preview_size '{preview_size}' must be a string 'WxH' (e.g. '240x135')")
 
     # -- fonts section ------------------------------------------------------
     fonts_cfg = config.get('fonts', {})

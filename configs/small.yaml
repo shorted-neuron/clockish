@@ -7,6 +7,10 @@
 
 orientation: landscape
 
+# clockish-preview has no way to know the real ST7789 dimensions without a
+# display profile on disk; this hint keeps the PNG preview honest.
+preview_size: "240x135"
+
 rows:
   - name: app-header
     height: 30
