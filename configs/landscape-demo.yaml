@@ -9,7 +9,7 @@ orientation: landscape
 
 rows:
   - name: utc-clock
-    height: 72
+    height: 22.50%
     panels:
       - type: clock
         justify: left
@@ -17,7 +17,7 @@ rows:
         label: " UTC"
         time_format: 24hs
         color: lime
-        font_size: huge
+        font_size: auto
 
   - name: divider-1
     height: 5
@@ -27,14 +27,14 @@ rows:
         color: darkgrey
 
   - name: utc-date
-    height: 42
+    height: 13.13%
     panels:
       - type: date
         justify: center
         timezone: UTC
         date_format: "%A, %B %-d  UTC"
         color: darklime
-        font_size: med
+        font_size: auto
 
   - name: divider-2
     height: 5
@@ -45,14 +45,14 @@ rows:
 
 
   - name: world-clocks
-    height: 52
+    height: 16.25%
     panels:
       - type: clock
         # justify: center
         timezone: America/Denver
         time_format: 24h
         color: cornflower
-        font_size: big
+        font_size: auto
       - type: divider
         width: 2%
         color: black
@@ -63,7 +63,7 @@ rows:
         timezone: US/Eastern
         time_format: 24h
         color: orange
-        font_size: big
+        font_size: auto
       - type: divider
         width: 2%
         color: black
@@ -73,16 +73,16 @@ rows:
         time_format: 24h
         background: black
         color: brown
-        font_size: big
+        font_size: auto
 
   - name: world-labels
-    height: 42
+    height: 13.13%
     panels:
       - type: text
         # justify: center
         label: " Denver"
         color: cornflower
-        font_size: normal
+        font_size: auto
         background: black
       - type: divider
         width: 2%
@@ -93,14 +93,14 @@ rows:
         label: "US/Eastern"
         background: darkred
         color: orange
-        font_size: normal
+        font_size: auto
       - type: divider
         width: 2%
         color: black
       - type: text
         # justify: center
         label: "  India"
-        font_size: normal
+        font_size: auto
         color: brown
 
   - name: divider-3
@@ -110,10 +110,10 @@ rows:
         height: 1
 
   - name: wifi-info
-    height: 34
+    height: 10.63%
     panels:
       - type: wifi_graphic
-        width: 44
+        width: 9.17%
         # justify: center
         color: white
       - type: fact
@@ -121,41 +121,41 @@ rows:
         width: 18%
         source: wifi_status
         color: ff8888
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         width: 20%
         source: wifi_ssid
         label: "SSID "
         color: brightblue
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         width: 35%
         source: wifi_signal
         label: " signal: "
         color: pink
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         width: 18%
         source: wifi_quality
         label: "qual:"
         color: purple
-        font_size: small
+        font_size: auto
 
   - name: host-ip
-    height: 46
+    height: 14.38%
     panels:
       - type: fact
         justify: left
         source: hostname
         color: green
-        font_size: small
+        font_size: auto
       - type: fact
         justify: center
         source: ip
         color: green
-        font_size: small
+        font_size: auto
       - type: debug
         color: silver

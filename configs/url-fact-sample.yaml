@@ -76,21 +76,21 @@ rows:
     panels:
       - type: text
         label: "HELLO"
-        font_size: small
+        font_size: auto
         color: white
         background: navy
         # "HELLO" -> "hello"
         transform: [lower]
       - type: text
         label: "hello world"
-        font_size: small
+        font_size: auto
         color: yellow
         background: darkgrey
         # "hello world" -> "HelloWorld" (TitleCase / PascalCase)
         transform: [titlecase]
       - type: text
         label: "hello world"
-        font_size: small
+        font_size: auto
         color: '#00ffff'
         background: darkgrey
         # "hello world" -> "helloWorld" (true camelCase)

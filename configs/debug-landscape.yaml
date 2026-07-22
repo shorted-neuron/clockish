@@ -9,7 +9,7 @@ orientation: landscape
 
 rows:
   - name: utc-clock
-    height: 72
+    height: 22.50%
     background: darkblue
     panels:
       - type: clock
@@ -17,19 +17,19 @@ rows:
         timezone: UTC
         time_format: 24h
         color: lime
-        font_size: huge
+        font_size: auto
       - type: date
         width: 25%
         timezone: UTC
         date_format: ":%S UTC"
         color: lime
-        font_size: huge
+        font_size: auto
       - type: date
         width: 35%
         timezone: UTC
         date_format: "%a %b %-d, %Y"
         color: darklime
-        font_size: small
+        font_size: auto
 
   - name: divider-1
     height: 3
@@ -40,7 +40,7 @@ rows:
         color: red
 
   - name: den-clock
-    height: 64
+    height: 20.00%
     panels:
       - type: clock
         width: 60%
@@ -49,16 +49,16 @@ rows:
         label: "DEN"
         time_format: 12h
         color: ff0000
-        font_size: big
+        font_size: auto
 
       - type: date
         timezone: America/Denver
         date_format: " %a, %B %-d"
         color: slate
-        font_size: normal
+        font_size: auto
 
   - name: ist-clock
-    height: 36
+    height: 11.25%
     panels:
       - type: clock
         width: 70%
@@ -67,7 +67,7 @@ rows:
         label: "IST"
         time_format: 12h
         color: brown
-        font_size: big
+        font_size: auto
       - type: clock
         width: 30%
         justify: right
@@ -79,52 +79,52 @@ rows:
         height: 1
 
   - name: ntp-status
-    height: 26
+    height: 8.13%
     background: darkgrey
     panels:
       - type: text
         label: "Time sync status:"
         color: white
-        font_size: small
+        font_size: auto
         background: black
         width: 60%
       - type: fact
         source: ntp_all
         label: " is "
         color: black
-        font_size: small
+        font_size: auto
         background: darkred
 
   - name: ip-disk
-    height: 32
+    height: 10.00%
     panels:
       - type: fact
         source: hostname
         label: "host: "
         color: lime
-        font_size: small
+        font_size: auto
       - type: fact
         source: ip
         label: "ip "
         color: grey
-        font_size: small
+        font_size: auto
 
   - name: cpu-mem
-    height: 26
+    height: 8.13%
     panels:
       - type: fact
         width: 40%
         source: cpu
         label: "cpu: "
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         source: mem
         color: purple
-        font_size: small
+        font_size: auto
 
   - name: debug
-    height: 60
+    height: 18.75%
     panels:
       - type: debug
         width: 70%
@@ -132,4 +132,4 @@ rows:
       - type: fact
         label: v
         source: version
-        font_size: small
+        font_size: auto

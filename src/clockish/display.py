@@ -229,9 +229,15 @@ def _resolve_dimension(raw, base: int) -> int:
       str ending in '%'   --  percentage of *base*, e.g. "68%"
       float in 0.0 - 1.0    --  fraction of *base*, e.g. 0.68
       int / float > 1.0   --  direct pixel value (rounded to int)
+
+    Plain ints are ALWAYS pixels, even '1'  --  a literal-1-pixel divider row
+    is common; treating int 1 as a 1.0 (=100%) fraction would silently blow
+    it up to the full display height/width.
     """
     if isinstance(raw, str) and raw.endswith('%'):
         return max(1, int(base * float(raw[:-1]) / 100))
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return max(1, raw)
     f = float(raw)
     if 0.0 <= f <= 1.0:
         return max(1, int(base * f))

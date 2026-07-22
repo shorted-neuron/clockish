@@ -84,7 +84,7 @@ rows:
     height: "11%"
     panels:
       - type: wifi_graphic
-        width: 44
+        width: 9.17%
         color: burntsienna
       - type: fact
         width: 20%

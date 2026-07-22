@@ -101,7 +101,7 @@ rows:
     height: "10%"           #  32px @ 320   48px @ 480  108px @ 1080
     panels:
       - type: wifi_graphic
-        width: 44
+        width: 9.17%
         color: orange
       - type: fact
         width: 15%
