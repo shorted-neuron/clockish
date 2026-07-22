@@ -58,32 +58,33 @@ Great for cleaning up messy remote data (e.g., `"71.8"` -> `"72"`), or just for 
 
 ```yaml
 transform: [upper]                       # simple, no-argument form
-transform: [{round: 1}]                  # parameterised, single-key mapping form
+transform: [round]                       # rounding transforms also work bare -- defaults to 0 decimal places
+transform: [{round: 1}]                  # parameterised, single-key mapping form -- only needed for non-zero decimals
 transform: [lower, {suffix: "!"}]        # chained -- applied left to right
 ```
 
 ### Available transforms
 
-| Name                    | Argument            | Example (input -> output)              |
-|-------------------------|----------------------|-----------------------------------------|
-| `upper`                 | none                 | `hello` -> `HELLO`                      |
-| `lower`                 | none                 | `HELLO` -> `hello`                      |
-| `title`                 | none                 | `hello world` -> `Hello World`          |
-| `capitalize`            | none                 | `hello world` -> `Hello world`          |
-| `titlecase` / `pascalcase` | none              | `hello world` -> `HelloWorld`           |
-| `camelcase`             | none                 | `hello world` -> `helloWorld`           |
-| `strip`                 | none                 | `"  hi  "` -> `hi`                      |
-| `round`                 | decimal places (default 0) | `71.8` -> `72`  (banker's rounding) |
-| `ceil`                  | decimal places (default 0) | `71.1` -> `72`  (always rounds up)  |
-| `floor`                 | decimal places (default 0) | `71.9` -> `71`  (always rounds down)|
-| `int`                   | none                 | `71.8` -> `71`  (truncate, no rounding) |
-| `abs`                   | none                 | `-5` -> `5`                             |
-| `multiply`              | number (required)   | `10` + `{multiply: 1.8}` -> `18`        |
-| `add`                   | number (required)   | `32` + `{add: 10}` -> `42`              |
+| Name                    | Argument            | Example (input -> output)                                              |
+|-------------------------|----------------------|------------------------------------------------------------------------|
+| `upper`                 | none                 | `hello` -> `HELLO`                                                     |
+| `lower`                 | none                 | `HELLO` -> `hello`                                                     |
+| `title`                 | none                 | `hello world` -> `Hello World`                                         |
+| `capitalize`            | none                 | `hello world` -> `Hello world`                                         |
+| `titlecase` / `pascalcase` | none              | `hello world` -> `HelloWorld`                                          |
+| `camelcase`             | none                 | `hello world` -> `helloWorld`                                          |
+| `strip`                 | none                 | `"  hi  "` -> `hi`                                                     |
+| `round`                 | decimal places (default 0) | `71.8` -> `72`  (banker's rounding)                                    |
+| `ceil`                  | decimal places (default 0) | `71.1` -> `72`  (always rounds up)                                     |
+| `floor`                 | decimal places (default 0) | `71.9` -> `71`  (always rounds down)                                   |
+| `int`                   | none                 | `71.8` -> `71`  (truncate, no rounding)                                |
+| `abs`                   | none                 | `-5` -> `5`                                                            |
+| `multiply`              | number (required)   | `10` + `{multiply: 1.8}` -> `18`                                       |
+| `add`                   | number (required)   | `32` + `{add: 10}` -> `42`                                             |
 | `replace`               | `{from, to}` (required) | `hello world` + `{replace: {from: world, to: there}}` -> `hello there` |
-| `prefix`                | string (required)   | `72` + `{prefix: "IP: "}` -> `IP: 72`   |
-| `suffix`                | string (required)   | `72` + `{suffix: "F"}` -> `72F`         |
-| `format`                | Python format-spec (required) | `71.8` + `{format: "{:.1f}F"}` -> `71.8F` |
+| `prefix`                | string (required)   | `72` + `{prefix: "IP: "}` -> `IP: 72`                                  |
+| `suffix`                | string (required)   | `72` + `{suffix: "F"}` -> `72F`                                        |
+| `format`                | Python format-spec (required) | `71.8` + `{format: "{:.1f}F"}` -> `71.8F`                              |
 
 ### `titlecase`/`pascalcase` vs `camelcase`
 
@@ -100,14 +101,19 @@ transform: [camelcase]   # -> "helloWorld"  (first word lowercase)
 ### Three rounding modes -- string -> float -> int
 
 `round`, `ceil`, and `floor` all convert the value to a float first, then apply a distinct
-rounding rule (contrast with `int`, which truncates with no rounding at all):
+rounding rule (contrast with `int`, which truncates with no rounding at all). **All three
+work as bare strings with no argument** -- the decimal-places arg defaults to `0`; only add
+`{round: N}` / `{ceil: N}` / `{floor: N}` if you want N > 0 decimal places kept:
 
 ```yaml
 # input: "71.8"  (a string, as returned by json_path/pattern)
-transform: [round]   # -> "72"  (round-half-even: nearest int)
-transform: [ceil]    # -> "72"  (always rounds up)
-transform: [floor]   # -> "71"  (always rounds down)
+transform: [round]   # -> "72"  (round-half-even: nearest int)  -- bare form, no arg needed
+transform: [ceil]    # -> "72"  (always rounds up)               -- bare form, no arg needed
+transform: [floor]   # -> "71"  (always rounds down)             -- bare form, no arg needed
 transform: [int]     # -> "71"  (truncate toward zero -- no rounding)
+
+# non-zero decimal places require the mapping form:
+transform: [{round: 1}]   # "71.849" -> "71.8"
 ```
 
 ### The `format` escape hatch
