@@ -3,7 +3,7 @@
 #
 # Editor integration (VS Code YAML extension / yaml-language-server):
 #   Add to .vscode/settings.json:
-#     yaml.schemas: { ./configs/clockish-config.schema.yaml: [configs/*.yaml] }
+#     yaml.schemas: { ./configs/schema/clockish-config.schema.yaml: [configs/*.yaml] }
 #
 $schema: https://json-schema.org/draft-07/schema#
 title: Clockish Layout Config

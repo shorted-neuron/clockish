@@ -203,10 +203,12 @@ _WIDTH_SCHEMA: dict = {
 }
 
 #: JSON Schema (Draft 7) for a clockish layout config.
-#: Defined in configs/clockish-config.schema.yaml; loaded at module init.
+#: Defined in configs/schema/clockish-config.schema.yaml; loaded at module init.
 def _load_schema() -> dict:
-    """Load JSON Schema from configs/clockish-config.schema.yaml."""
-    schema_path = os.path.join(os.path.dirname(__file__), '..', '..', 'configs', 'clockish-config.schema.yaml')
+    """Load JSON Schema from configs/schema/clockish-config.schema.yaml."""
+    schema_path = os.path.join(
+        os.path.dirname(__file__), '..', '..', 'configs', 'schema', 'clockish-config.schema.yaml'
+    )
     with open(schema_path, encoding='utf-8') as f:
         return yaml.safe_load(f)
 
