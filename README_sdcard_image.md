@@ -30,4 +30,3 @@ After image and initial boot, did these things:
 5. `git clone https://github.com/shorted-neuron/clockish`
 
 6. `cd clockish ; bash install.sh --verbose`
-
