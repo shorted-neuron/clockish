@@ -1,0 +1,11 @@
+[Unit]
+Description=Disable console cursor blinking
+After=basic.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo 0 > /sys/class/graphics/fbcon/cursor_blink'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=basic.target
