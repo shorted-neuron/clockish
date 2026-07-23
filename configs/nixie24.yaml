@@ -1,0 +1,129 @@
+---
+# nixie.yaml  --  clockish config for a nixie-tube-style clock
+# ---------------------------------------------------------------------------
+# Requires the Nixie One font (SIL OFL 1.1 license).
+# Nixie One is a Google Font by Jovanny Lemonad  --  a faithful recreation of
+# the warm, glowing cathode style of vintage Nixie tube displays.
+#
+# Install:
+#   bash scripts/download-nixie-font.sh
+#
+# (No apt package exists for Nixie One; the script downloads it from the
+#  Google Fonts GitHub repository.)
+#
+# Font file installed:
+#   third_party/nixie/NixieOne-Regular.ttf
+#   (only one weight/style is available for this font)
+#
+# See also: https://fonts.google.com/specimen/Nixie+One
+#           https://github.com/google/fonts/tree/main/ofl/nixieone
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Orientation hint  --  landscape | portrait | square
+#   landscape: aspect ratio >= ~1.5  (e.g. 480x320, 800x480, 1920x1080)
+#   portrait:  aspect ratio <= ~0.7  (e.g. 320x480)
+#   square:    aspect ratio ~ 1.0
+#
+# This hint is informational; it helps users pick the right config for their
+# display.  All row heights and font sizes below are percentages of the
+# display HEIGHT so this layout scales automatically to any landscape display.
+# ---------------------------------------------------------------------------
+orientation: landscape
+
+# ---------------------------------------------------------------------------
+# default_font  --  TTF file used for all built-in scale font names.
+#
+# When set, every standard font name (giant, huge, big, med, normal, small,
+# tiny, micro) is loaded from this file at the appropriate percentage of the
+# display height  --  no explicit 'fonts:' section is needed for a single
+# typeface.  The file is searched in all subdirectories of third_party/.
+# ---------------------------------------------------------------------------
+default_font: NixieOne-Regular.ttf
+
+# ---------------------------------------------------------------------------
+# Built-in font scale (% of display height)  --  for reference:
+#
+#   giant  ~ 68%   big    ~ 30%   small  ~  8%
+#   huge   ~ 45%   med    ~ 20%   tiny   ~  5%
+#                  normal ~ 12%   micro  ~  3%
+#
+# Example pixel sizes at common display heights:
+#   height 320px (480x320):    giant~218  normal~38  tiny~16
+#   height 480px (800x480):    giant~326  normal~58  tiny~24
+#   height 1080px (1920x1080): giant~734  normal~130 tiny~54
+#
+# You can still define a 'fonts:' section for custom overrides or additional
+# named fonts.  Sizes may be integer pixels or percentage strings like "10%".
+# ---------------------------------------------------------------------------
+
+# Display settings are in a display profile  --  pair with one of:
+#   configs/display/ili9486-landscape.yaml     (480x320 SPI display)
+#   configs/display/framebuffer-800x480.yaml   (800x480 framebuffer)
+#   configs/display/framebuffer-1920x1080.yaml (1920x1080 framebuffer)
+
+rows:
+  - name: clock
+    height: "69%"           # 221px @ 320  331px @ 480  745px @ 1080
+    panels:
+      - type: clock
+        justify: center
+        timezone: US/Mountain
+        time_format: 24hs
+        font_behavior: scale
+        color: darkorange   # classic warm nixie yellow-orange
+        font_size: giant    # ~68% of display height - fills the row
+
+  - name: divider-1
+    height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
+    panels:
+      - type: divider
+        height: 1px
+        color: rust
+
+  - name: date
+    height: "15%"           #  48px @ 320   72px @ 480  162px @ 1080
+    panels:
+      - type: date
+        justify: center
+        timezone: US/Mountain
+        date_format: "%A, %B %-d"
+        color: darkorange
+        font_size: normal       # ~12% of display height - fits the date row
+
+  - name: divider-2
+    height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
+    panels:
+      - type: divider
+        height: 1px
+        color: rust
+
+  - name: info
+    height: "10%"           #  32px @ 320   48px @ 480  108px @ 1080
+    panels:
+      - type: wifi_graphic
+        width: 9.17%
+        color: orange
+      - type: fact
+        width: 15%
+        source: wifi_status
+        color: darkorange
+        font_size: auto
+      - type: fact
+        source: hostname
+        color: orange
+        font_size: tiny
+      - type: fact
+        source: ip
+        color: darkorange
+        font_size: tiny
+      - type: fact
+        width: 10%
+        justify: center
+        source: cpu
+        color: rust
+        font_size: auto
+      - type: fact
+        source: ntp_all
+        color: rust
+        font_size: auto
