@@ -295,4 +295,3 @@ def apply_transforms(value: str, transform_list: list | None, *, debug: bool = F
                 print(f"DEBUG: transform '{name}' failed on {result!r}: {e}")
             # leave result unchanged for this step
     return result
-
