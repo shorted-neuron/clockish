@@ -366,6 +366,9 @@ def render_config(config_path: str, out_path: str) -> None:
     # (custom names only) leaves stale, wrongly-scaled built-in fonts behind
     # when configs with different canvas sizes render in the same process.
     _ppd._FONTS.clear()
+    # Also reset the load-once flag so each config's named-scale fonts
+    # (giant/normal/...) get reloaded fresh, not skipped.
+    _ppd._SCALE_FONTS_LOADED = False
 
     _ppd._config = cfg_copy
     # 'config_file' fact source reads _args.config directly.

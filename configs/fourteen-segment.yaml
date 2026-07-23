@@ -39,8 +39,8 @@ rows:
         justify: center
         timezone: US/Mountain
         time_format: 24h
-        color: lawngreen
-        font_size: huge
+        color: aqua
+        font_size: auto
 
   - name: divider-1
     height: "1%"
@@ -56,13 +56,13 @@ rows:
         justify: left
         timezone: US/Mountain
         date_format: "%a, %B %-d"   # 14-seg handles letters  --  no need to fall back to DejaVu
-        color: medspringgreen
+        color: yellow
         font_size: normal
       - type: clock
         justify: right
         timezone: US/Mountain
         time_format: 24hs
-        color: seagreen
+        color: olive
         font_size: small
 
   - name: divider-2
@@ -76,20 +76,20 @@ rows:
     height: "11%"
     panels:
       - type: wifi_graphic
-        width: 10.42%
-        color: seagreen
+        width: 12%
+        color: brightgreen
       - type: fact
         width: 20%
         source: wifi_status
-        color: seagreen
+        color: white
         font_size: tiny
       - type: fact
         width: 20%
         source: wifi_ssid
-        color: forestgreen
+        color: grey
         font_size: tiny
       - type: fact
-        width: 35%
+        width: 30%
         source: wifi_signal
         # label: "sig: "
         color: forestgreen
@@ -98,7 +98,7 @@ rows:
         width: 18%
         source: wifi_quality
         label: "q:"
-        color: forestgreen
+        color: cyan
         font_size: tiny
 
   - name: host-ip
@@ -108,14 +108,14 @@ rows:
         width: 30%
         justify: left
         source: hostname
-        color: seagreen
+        color: lightgreen
         font_size: tiny
       - type: fact
         width: 38%
         justify: center
         source: ip
-        color: seagreen
+        color: orange
         font_size: tiny
       - type: debug
-        color: forestgreen
+        color: silver
         font: debug

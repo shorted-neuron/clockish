@@ -190,6 +190,10 @@ def _find_font(name: str) -> str:
     return name   # fall back; Pillow will raise a clear error if not found
 
 _FONTS: dict = {}
+#: True once the named-scale fonts (giant/huge/.../micro) are loaded into
+#: _FONTS. Other code (_init_layout()) also writes directly into _FONTS, so
+#: checking "is _FONTS empty" isn't a reliable load-once signal -- this flag is.
+_SCALE_FONTS_LOADED: bool = False
 
 # ---------------------------------------------------------------------------
 # Standard font scale  --  each name maps to a fraction of the display height.
@@ -248,7 +252,8 @@ def _resolve_dimension(raw, base: int) -> int:
 
 
 def _get_font(name: str) -> ImageFont.FreeTypeFont:
-    if not _FONTS:
+    global _SCALE_FONTS_LOADED
+    if not _SCALE_FONTS_LOADED:
         # Use 'default_font' from config as the typeface for all built-in
         # scale names; fall back to DejaVu Sans if not set.
         _default_font_file = _config.get('default_font')
@@ -256,6 +261,7 @@ def _get_font(name: str) -> ImageFont.FreeTypeFont:
         for _scale_name, _fraction in BUILTIN_FONT_SCALE.items():
             _px = max(1, int(height * _fraction))
             _FONTS[_scale_name] = ImageFont.truetype(_scale_font_path, _px)
+        _SCALE_FONTS_LOADED = True
     if name not in _FONTS:
         # Try to load a custom font defined in the config's 'fonts:' section.
         # Entries with both 'file' and 'size' are loaded here; file-only entries
@@ -839,7 +845,9 @@ def _init_layout() -> None:
       font_size: <name|%|px|auto>
         Uses default_font (or DejaVu) as the typeface.  Named scale names
         (giant, huge, ...) are pre-loaded at startup.  'auto' sizes to 75% of
-        the row height.  '%' and integer values resolve against display height.
+        the row height.  '%' and 'Npx' resolve against display height / literal
+        pixels respectively; a plain number is treated as a fraction (<=1.0)
+        or literal pixels (>1.0) of display height.
 
       font: <name>   [+ font_size: <name|%|px|auto>]
         'name' is a key in the fonts: section (file-only entry) or the
@@ -871,6 +879,8 @@ def _init_layout() -> None:
             return max(1, int(rh * _AUTO_FONT_FRACTION))
         if isinstance(font_size_raw, str) and font_size_raw.endswith('%'):
             return max(1, int(height * float(font_size_raw[:-1]) / 100))
+        if isinstance(font_size_raw, str) and font_size_raw.endswith('px'):
+            return max(1, int(round(float(font_size_raw[:-2]))))
         if isinstance(font_size_raw, str) and font_size_raw in BUILTIN_FONT_SCALE:
             return max(1, int(height * BUILTIN_FONT_SCALE[font_size_raw]))
         f = float(font_size_raw)
@@ -901,18 +911,23 @@ def _init_layout() -> None:
                 p['font_size'] = syn_name
                 del p['font']   # consumed; renderers only use font_size
 
-            elif font_size == 'auto':
-                # No font: but font_size: auto  --  default_font at row-relative size
-                auto_name = f'_auto_{rh}'
-                if auto_name not in _FONTS:
-                    px = max(1, int(rh * _AUTO_FONT_FRACTION))
-                    _FONTS[auto_name] = ImageFont.truetype(_auto_path, px)
+            elif font_size is not None and font_size not in BUILTIN_FONT_SCALE:
+                # No font: attribute, and font_size isn't a bare named scale
+                # (giant/huge/...) -- i.e. it's 'auto', an explicit '%'/'px'
+                # string, or a plain number. Resolve against default_font.
+                # 'auto' is row-relative so it's keyed by row height (rh);
+                # everything else resolves to an absolute pixel size, so it's
+                # keyed (and cached/shared) by that pixel size instead.
+                size_px = _resolve_size(font_size, rh)
+                syn_name = f'_auto_{rh}' if font_size == 'auto' else f'_sz_{size_px}'
+                if syn_name not in _FONTS:
+                    _FONTS[syn_name] = ImageFont.truetype(_auto_path, size_px)
                     if DEBUG:
-                        print(f"  auto font '{auto_name}': {px}px "
-                              f"({_AUTO_FONT_FRACTION*100:.0f}% of {rh}px row)")
-                p['font_size'] = auto_name
+                        print(f"  font_size '{font_size}' (no font:) -> "
+                              f"{size_px}px  (key={syn_name})")
+                p['font_size'] = syn_name
 
-            # Named scale, explicit %, or integer with no font: ->
+            # Named scale (or unset, defaults to 'normal') with no font: ->
             # handled by _get_font() at render time using default_font.
 
     _LAYOUT = layout

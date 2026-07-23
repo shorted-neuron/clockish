@@ -13,6 +13,10 @@ Pattern: `[thing] [action] [reason]. [next step].`
 
 Git: commit/PR messages normal. Otherwise check before `git add` / `git commit`.
 
+Git pager: repo has `core.pager=cat` set locally (`.git/config`) -- git commands
+never invoke `less`. Still use `--no-pager` / pipe to `cat` explicitly in any
+new command for safety (e.g. a fresh clone won't have this local config set).
+
 Remember: major pattern change require update AGENTS.md also
 
 ### File Modification Tracking (for AI agents & handoff)
