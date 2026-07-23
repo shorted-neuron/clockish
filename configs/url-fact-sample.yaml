@@ -6,7 +6,7 @@ rows:
     height: 33%
     panels:
       - type: clock
-        font_size: huge
+        font_size: 100px
         color: '#00ff00'
 
   - name: external-ip
@@ -19,7 +19,7 @@ rows:
         timeout: 5
         label: "Public IP "
         color: '#ffffff'
-        font_size: normal
+        font_size: 24px
 
   - name: random-quote
     height: 22%
@@ -45,29 +45,29 @@ rows:
         fallback: "example"
         label: "title "
         color: '#aaaaaa'
-        font_size: normal
+        font_size: 16px
 
       - type: url-fact
-        width: 15%
+        width: 20%
         justify: right
         url: http://sensor-master.lan/last-json
         json_path: tempF
         interval: 33s
         timeout: 5
         color: darkorange
-        font_size: auto
+        font_size: 16px
         # string "71.8" -> float -> int, rounded up to "72"
         transform: [round]
 
       - type: url-fact
-        width: 15%
+        width: 20%
         justify: right
         url: http://sensor-master.lan/last-json
         json_path: tempF
         interval: 33s
         timeout: 5
         color: darkorange
-        font_size: auto
+        font_size: 16px
         # 'format' escape hatch: string "71.8" -> float -> "71.8F"
         transform: [{format: "{:.1f}F"}]
 
@@ -76,21 +76,21 @@ rows:
     panels:
       - type: text
         label: "HELLO"
-        font_size: auto
+        font_size: 16px
         color: white
         background: navy
         # "HELLO" -> "hello"
         transform: [lower]
       - type: text
         label: "hello world"
-        font_size: auto
+        font_size: 16px
         color: yellow
         background: darkgrey
         # "hello world" -> "HelloWorld" (TitleCase / PascalCase)
         transform: [titlecase]
       - type: text
         label: "hello world"
-        font_size: auto
+        font_size: 16px
         color: '#00ffff'
         background: darkgrey
         # "hello world" -> "helloWorld" (true camelCase)

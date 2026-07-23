@@ -40,7 +40,7 @@ rows:
         timezone: US/Mountain
         time_format: 24h
         color: lawngreen
-        font_size: huge
+        font_size: auto
 
   - name: divider-1
     height: "1%"
@@ -76,7 +76,7 @@ rows:
     height: "11%"
     panels:
       - type: wifi_graphic
-        width: 10.42%
+        width: 12%
         color: seagreen
       - type: fact
         width: 20%
@@ -89,7 +89,7 @@ rows:
         color: forestgreen
         font_size: tiny
       - type: fact
-        width: 35%
+        width: 30%
         source: wifi_signal
         # label: "sig: "
         color: forestgreen
