@@ -50,7 +50,16 @@ from typing import Any
 
 import yaml
 
-from clockish.transforms import (
+# When run as a bare script (e.g. the clockish-validate pre-commit hook:
+# `python src/clockish/config_validator.py`), Python puts this file's own
+# directory (src/clockish/) on sys.path but not its parent (src/), so
+# `import clockish.*` fails with ModuleNotFoundError. Insert src/ ahead of the
+# sibling-module import below so this works with or without an editable
+# package install.
+if __package__ in (None, ''):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
     NO_ARG_TRANSFORMS,
     OPTIONAL_NUMERIC_ARG_TRANSFORMS,

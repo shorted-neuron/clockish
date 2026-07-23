@@ -155,5 +155,3 @@ class TestRegistryCompleteness:
     def test_known_transform_names_are_applyable(self, name):
         # Just verify each registered name can be invoked without raising.
         apply_transforms("42", [name])
-
-

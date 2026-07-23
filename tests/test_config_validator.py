@@ -887,4 +887,3 @@ class TestTransform:
         result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
         assert any('transform entry' in m.lower() for m in msgs)
-
