@@ -258,9 +258,6 @@ _REAL_get_uptime_str  = _ppd.get_uptime_str
 # ---------------------------------------------------------------------------
 _ppd.get_ip_address      = lambda: "192.168.1.42"
 _ppd.get_hostname        = lambda: "raspberrypi"
-# get_cpu_percent() diffs two /proc/stat reads; the static stub makes delta=0
-# so it always returns 0.0  --  override it directly instead.
-_ppd.get_cpu_percent     = lambda: 42.0
 # disp= value in the debug panel comes from this module-level variable.
 _ppd._last_display_ms    = 198.0
 # _FONT_PATH is normally set by _init() (never called in preview); _init_layout()
