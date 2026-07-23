@@ -86,3 +86,25 @@ repos:
         args: ["--ignore-missing-imports", "--no-check-untyped-defs"]
         files: ^src/clockish/.*\.py$
         pass_filenames: false
+
+  # ---------------------------------------------------------------------------
+  # Preview regeneration -- NOT run automatically on every commit (manual
+  # stage only): rewrites docs/previews/*.png ('live', tracked, near-"now")
+  # and docs/previews/mock/*.png ('mock', gitignored, worst-case-width dev
+  # review). Run explicitly whenever a config/display.py/render_preview.py
+  # change might affect layout, from a human OR an agent -- not tied to
+  # either:
+  #   pre-commit run --hook-stage manual clockish-preview
+  # Runs render_preview.py directly as a script (like clockish-validate
+  # above) -- it has its own sys.path shim, no editable install needed.
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: clockish-preview
+        name: clockish-preview (regenerate docs/previews/*.png)
+        entry: python src/clockish/render_preview.py
+        language: python
+        additional_dependencies: ["PyYAML>=6.0", "Pillow>=10.0"]
+        stages: [manual]
+        pass_filenames: false
+        always_run: true

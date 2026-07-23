@@ -4,8 +4,17 @@
 Usage:
     python render_preview.py [--outdir docs/previews] [config ...]
 
+Every config renders TWICE, to two different destinations:
+  {outdir}/{name}.png       -- 'live' render: real current time/date/cpu%/uptime
+                                (hostname/IP/wifi SSID always mocked, see below).
+                                Tracked in git; overwritten on each run so a
+                                tagged release ships previews that look "now".
+  {outdir}/mock/{name}.png  -- 'mock' render: fixed worst-case-width time/date
+                                and cpu=100%/huge uptime, for spotting layout
+                                regressions via a stable, comparable diff.
+                                Gitignored -- local dev/review artifact only.
+
 If no config paths are given, all YAML files under configs/ are rendered.
-Output PNGs are written to --outdir (default: docs/previews/).
 
 The script stubs out every hardware dependency (RPi.GPIO, spidev, ILI9486)
 so it runs on any platform with Python 3.11+ and Pillow installed.
@@ -15,6 +24,7 @@ import argparse
 import datetime
 import os
 import sys
+import time
 import types
 
 # ---------------------------------------------------------------------------
@@ -125,6 +135,13 @@ _PROC_STUBS: dict[str, str] = {
     "/run/systemd/timesync/synchronized": "",
 }
 
+# /proc/uptime and /proc/stat feed get_uptime_str()/get_cpu_percent() -- the
+# only two facts that go "live" (real host value) in non-mock rendering; every
+# other stub above always stays faked (hostname/IP/wifi SSID mocking is a
+# separate, unconditional patch below -- see 'Preview data patches').
+_LIVE_REAL_PROC_PATHS = ("/proc/uptime", "/proc/stat")
+_ORIGINAL_PROC_STUBS = dict(_PROC_STUBS)
+
 import io as _io
 
 class _StubFile:
@@ -224,15 +241,23 @@ _ImageFont.truetype = _patched_truetype
 # ---------------------------------------------------------------------------
 import clockish.display as _ppd
 
+# Capture the real implementations BEFORE any mocking below overwrites them --
+# 'live' mode (see _set_render_mode()) restores these instead of using canned
+# values, so it shows this host's actual current CPU%/uptime.
+_REAL_get_cpu_percent = _ppd.get_cpu_percent
+_REAL_get_uptime_str  = _ppd.get_uptime_str
+
 # ---------------------------------------------------------------------------
 # Preview data patches  --  replace live system calls with canned values so
 # every preview looks realistic regardless of the host machine.
+#
+# hostname / IP / wifi SSID (via /proc/net/wireless + iwgetid stubs above):
+# ALWAYS mocked, in both 'mock' and 'live' render modes -- these don't vary
+# in any way worth showing "live", and mocking them keeps previews usable on
+# a dev machine with no real network state to report.
 # ---------------------------------------------------------------------------
 _ppd.get_ip_address      = lambda: "192.168.1.42"
 _ppd.get_hostname        = lambda: "raspberrypi"
-# get_cpu_percent() diffs two /proc/stat reads; the static stub makes delta=0
-# so it always returns 0.0  --  override it directly instead.
-_ppd.get_cpu_percent     = lambda: 6.8
 # disp= value in the debug panel comes from this module-level variable.
 _ppd._last_display_ms    = 198.0
 # _FONT_PATH is normally set by _init() (never called in preview); _init_layout()
@@ -242,11 +267,11 @@ _ppd._FONT_PATH          = _ppd._find_font('DejaVuSans.ttf')
 # reads _args.config directly, so it crashes (AttributeError on None) if left unset.
 _ppd._args               = types.SimpleNamespace(config=None)
 
-# Fixed "now" for every clock/date panel (all timezones), instead of the real
-# wall-clock time -- makes every preview render deterministic AND exercises
-# worst-case width/ink for time_format/date_format strings, so overlap/
-# clipping/vertical-centring problems are visible on every run, not just
-# whenever someone happens to render at a lucky moment:
+# Fixed "now" for every clock/date panel (all timezones) in 'mock' mode,
+# instead of the real wall-clock time -- makes mock renders deterministic AND
+# exercises worst-case width/ink for time_format/date_format strings, so
+# overlap/clipping/vertical-centring problems are visible on every run, not
+# just whenever someone happens to render at a lucky moment:
 #   22:08:08  -- hour=22 is the sweet spot: 24h/24hs formats (%H, always
 #                zero-padded) render any hour as 2 digits regardless, but
 #                no-pad 12h formats (%-I, e.g. nixie.yaml/big-red.yaml's
@@ -260,6 +285,55 @@ _ppd._args               = types.SimpleNamespace(config=None)
 #                centring (the reason clip_numeric font_behavior exists).
 _PREVIEW_NOW = datetime.datetime(2028, 12, 20, 22, 8, 8)
 
+#: Mock-mode uptime -- deliberately huge/wide to exercise the same
+#: worst-case-width idea as _PREVIEW_NOW, for the 'uptime' fact source.
+#: Matches get_uptime_str()'s real "up {d}d {h}h {m}m" format.
+_MOCK_UPTIME_STR = "up 804d 20h 46m"
+
+
+def _set_render_mode(mock: bool) -> None:
+    """Toggle cpu%/uptime facts and /proc stub coverage for this render.
+
+    mock=True:  cpu=100.0, huge fixed uptime string, /proc/uptime+/proc/stat
+                stay faked (deterministic, worst-case width).
+    mock=False: real get_cpu_percent()/get_uptime_str(), and /proc/uptime +
+                /proc/stat are UNstubbed so they read this host's real files.
+    """
+    if mock:
+        _ppd.get_cpu_percent = lambda: 100.0
+        _ppd.get_uptime_str  = lambda: _MOCK_UPTIME_STR
+        for path in _LIVE_REAL_PROC_PATHS:
+            _PROC_STUBS[path] = _ORIGINAL_PROC_STUBS[path]
+    else:
+        _ppd.get_cpu_percent = _REAL_get_cpu_percent
+        _ppd.get_uptime_str  = _REAL_get_uptime_str
+        for path in _LIVE_REAL_PROC_PATHS:
+            _PROC_STUBS.pop(path, None)
+
+
+def _config_uses_cpu_fact(cfg: dict) -> bool:
+    """True if any panel in cfg is a 'fact' panel with source: cpu."""
+    for r in cfg.get("rows", []) or []:
+        for p in r.get("panels", []) or []:
+            if p.get("type") == "fact" and p.get("source") == "cpu":
+                return True
+    return False
+
+
+def _prime_real_cpu_percent_if_used(cfg: dict) -> None:
+    """Prime a genuine ~1s CPU-usage delta before rendering, in 'live' mode.
+
+    get_cpu_percent() computes usage as a delta between two /proc/stat reads,
+    cached for 1s (see display.py). A single render calls it exactly once, so
+    without priming it would report the average utilisation since boot (from
+    the (0, 0) baseline) instead of anything resembling "current". Only pay
+    the ~1s cost when a config actually shows a cpu fact.
+    """
+    if not _config_uses_cpu_fact(cfg):
+        return
+    _ppd.get_cpu_percent()          # discard: seeds _cpu_stat_prev + cache_time
+    time.sleep(1.05)                # clear the 1s cache gate in display.py
+    # The next call (during the real render below) returns a genuine delta.
 
 
 # Restore parse_args (cleanup)
@@ -351,8 +425,13 @@ def _resolve_preview_dimensions(cfg: dict, config_path: str) -> tuple[int, int]:
     return (480, 320) if cfg.get("orientation") == "landscape" else (320, 480)
 
 
-def render_config(config_path: str, out_path: str) -> None:
-    """Load a YAML config, render one frame, and save to out_path (PNG)."""
+def render_config(config_path: str, out_path: str, mock: bool) -> None:
+    """Load a YAML config, render one frame, and save to out_path (PNG).
+
+    mock=True:  fixed worst-case time/date, cpu=100%, huge fixed uptime.
+    mock=False: real current time/date (per panel timezone) and this host's
+                real cpu%/uptime (hostname/IP/wifi SSID still always mocked).
+    """
     import yaml
     from PIL import Image, ImageDraw
     import platform
@@ -368,6 +447,10 @@ def render_config(config_path: str, out_path: str) -> None:
     # Resolve colors in the loaded config (same as production code)
     cfg_copy = cfg.copy()
     _ppd._resolve_colors(cfg_copy)
+
+    _set_render_mode(mock)
+    if not mock:
+        _prime_real_cpu_percent_if_used(cfg_copy)
 
     w, h = _resolve_preview_dimensions(cfg_copy, config_path)
 
@@ -403,22 +486,20 @@ def render_config(config_path: str, out_path: str) -> None:
     drw  = ImageDraw.Draw(img)
     drw.rectangle((0, 0, w, h), fill=0)
 
-    # Build timezone cache -- every timezone maps to the same fixed
-    # _PREVIEW_NOW (see definition above) so every clock/date panel renders
-    # a deterministic, worst-case-width string regardless of timezone or
-    # when this script happens to run.
+    # Build timezone cache. 'mock' mode maps every timezone to the same fixed
+    # _PREVIEW_NOW (deterministic, worst-case-width). 'live' mode uses each
+    # panel's real current time in its own timezone, like production does.
     tz_cache: dict = {}
     for r in cfg_copy.get("rows", []):
         for p in r.get("panels", []):
             if p.get("type") in ("clock", "date"):
                 tz = p.get("timezone", "local")
                 if tz not in tz_cache:
-                    tz_cache[tz] = _PREVIEW_NOW
+                    tz_cache[tz] = _PREVIEW_NOW if mock else _ppd._now_in_tz(tz)
 
     timings: dict = {'ntp': 0.001, 'tz': 0.0, 'draw': 0.076}
     # Back-date t0 so the debug panel's prep= value shows a realistic 91 ms.
-    import time as _time
-    t0 = _time.perf_counter() - 0.091
+    t0 = time.perf_counter() - 0.091
 
     for r, ry, rh in _ppd._LAYOUT:
         panels = r.get("panels", [])
@@ -453,7 +534,16 @@ def main() -> None:
     )
     parser.add_argument(
         "--outdir", default=os.path.join(_REPO, "docs", "previews"),
-        help="Directory to write PNG files into (default: docs/previews/)"
+        help="Base directory for live renders (default: docs/previews/); "
+             "mock renders go to {outdir}/mock/."
+    )
+    parser.add_argument(
+        "--skip-live", action="store_true",
+        help="Skip the 'live' (real time/cpu/uptime) render -- mock only.",
+    )
+    parser.add_argument(
+        "--skip-mock", action="store_true",
+        help="Skip the 'mock' (worst-case, deterministic) render -- live only.",
     )
     parser.add_argument(
         "configs", nargs="*",
@@ -474,16 +564,25 @@ def main() -> None:
         print("No config files found.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Rendering {len(configs)} config(s) -> {args.outdir}/")
+    mock_dir = os.path.join(args.outdir, "mock")
+    modes = []
+    if not args.skip_live:
+        modes.append((False, args.outdir))
+    if not args.skip_mock:
+        modes.append((True, mock_dir))
+
+    print(f"Rendering {len(configs)} config(s) x {len(modes)} mode(s) -> {args.outdir}/")
     for cfg_path in configs:
-        name    = os.path.splitext(os.path.basename(cfg_path))[0]
-        out     = os.path.join(args.outdir, f"{name}.png")
+        name = os.path.splitext(os.path.basename(cfg_path))[0]
         print(f"  [{name}]")
-        try:
-            render_config(cfg_path, out)
-        except Exception as exc:
-            print(f"  ERROR rendering {cfg_path}: {exc}", file=sys.stderr)
-            import traceback; traceback.print_exc()
+        for mock, out_dir in modes:
+            out = os.path.join(out_dir, f"{name}.png")
+            try:
+                render_config(cfg_path, out, mock=mock)
+            except Exception as exc:
+                label = "mock" if mock else "live"
+                print(f"  ERROR rendering {cfg_path} ({label}): {exc}", file=sys.stderr)
+                import traceback; traceback.print_exc()
 
 
 if __name__ == "__main__":
