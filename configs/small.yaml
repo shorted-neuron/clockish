@@ -29,7 +29,7 @@ rows:
         font_size: auto
 
   - name: local-clock
-    height: 30px
+    height: 40px
     panels:
       - type: clock
         # justify: center
@@ -40,7 +40,7 @@ rows:
 
   - name: network
     height: 28px
-    background: darkred
+    background: darkgreen
     panels:
       - type: fact
         width: 50%
@@ -48,13 +48,13 @@ rows:
         source: hostname
         # label: "default"
         color: yellow
-        font_size: 16px
+        font_size: 18px
       - type: fact
         justify: right
         source: ip
         # label: "default"
-        color: silver
-        font_size: 16px
+        color: white
+        font_size: 18px
 
 # - name: wifi-status
 #   height: 24px
@@ -76,18 +76,22 @@ rows:
 #       color: darklime
 #       font_size: tiny
 
-  - name: cpu
+  - name: facts
     height: 26px
     panels:
       - type: fact
+        width: 35%
+        # justify: center
+        source: wifi_status
+        # label: "default"
+        font_size: auto
+      - type: wifi_graphic
+        width: 15%
+        color: silver
+      - type: fact
+        width: 50%
         # justify: center
         source: cpu
         label: "default"
-        color: yellow
-        font_size: auto
-      - type: fact
-        # justify: center
-        source: cpu_load
-        label: "default"
-        color: darkyellow
+        color: brightred
         font_size: auto
