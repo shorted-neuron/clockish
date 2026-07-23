@@ -29,25 +29,25 @@ rows:
         font_size: auto
 
   - name: local-clock
-    height: 40px
+    height: 48px
     panels:
       - type: clock
         # justify: center
         timezone: local
         time_format: 24hs
-        color: white
+        color: pink
         font_size: auto
 
   - name: network
-    height: 28px
-    background: darkgreen
+    height: 32px
+    background: darkgrey
     panels:
       - type: fact
         width: 50%
         justify: left
         source: hostname
         # label: "default"
-        color: yellow
+        color: hotpink
         font_size: 18px
       - type: fact
         justify: right
@@ -76,8 +76,16 @@ rows:
 #       color: darklime
 #       font_size: tiny
 
+  - name: divider-1
+    height: 1px
+    background: black
+    panels:
+      - type: divider
+        height: 1px
+        color: black
+
   - name: facts
-    height: 26px
+    height: 24px
     panels:
       - type: fact
         width: 35%
@@ -93,5 +101,5 @@ rows:
         # justify: center
         source: cpu
         label: "default"
-        color: brightred
+        color: magenta
         font_size: auto
