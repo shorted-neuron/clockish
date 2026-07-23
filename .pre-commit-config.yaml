@@ -55,9 +55,12 @@ repos:
   # clockish schema + deprecation validation
   #
   # Runs config_validator.py directly as a script -- no clockish package install
-  # needed. The module only imports stdlib + yaml + jsonschema, all provided by
-  # additional_dependencies below. (additional_dependencies: ["."] does NOT work
-  # because pre-commit's pip runs from its cache dir, not the repo root.)
+  # needed. The module imports stdlib + yaml + jsonschema (provided by
+  # additional_dependencies below) plus its sibling clockish.transforms module;
+  # a sys.path shim at the top of config_validator.py makes that sibling import
+  # resolve even though clockish isn't installed in this hook's isolated venv.
+  # (additional_dependencies: ["."] does NOT work because pre-commit's pip runs
+  # from its cache dir, not the repo root.)
   # --no-yamllint: yamllint already ran in the hook above.
   # ---------------------------------------------------------------------------
   - repo: local

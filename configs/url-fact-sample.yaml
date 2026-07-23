@@ -17,7 +17,7 @@ rows:
         json_path: ip
         interval: 5m
         timeout: 5
-        label: "IP "
+        label: "Public IP "
         color: '#ffffff'
         font_size: normal
 
@@ -47,16 +47,51 @@ rows:
         color: '#aaaaaa'
         font_size: normal
 
+      - type: url-fact
+        width: 15%
+        justify: right
+        url: http://sensor-master.lan/last-json
+        json_path: tempF
+        interval: 33s
+        timeout: 5
+        color: darkorange
+        font_size: auto
+        # string "71.8" -> float -> int, rounded up to "72"
+        transform: [round]
+
+      - type: url-fact
+        width: 15%
+        justify: right
+        url: http://sensor-master.lan/last-json
+        json_path: tempF
+        interval: 33s
+        timeout: 5
+        color: darkorange
+        font_size: auto
+        # 'format' escape hatch: string "71.8" -> float -> "71.8F"
+        transform: [{format: "{:.1f}F"}]
+
   - name: status-fact
     height: 12%
     panels:
       - type: text
-        label: "url-fact sample config"
+        label: "HELLO"
         font_size: small
         color: white
         background: navy
+        # "HELLO" -> "hello"
+        transform: [lower]
       - type: text
-        label: "url-fact sample two!"
+        label: "hello world"
         font_size: small
         color: yellow
         background: darkgrey
+        # "hello world" -> "HelloWorld" (TitleCase / PascalCase)
+        transform: [titlecase]
+      - type: text
+        label: "hello world"
+        font_size: small
+        color: '#00ffff'
+        background: darkgrey
+        # "hello world" -> "helloWorld" (true camelCase)
+        transform: [camelcase]

@@ -33,6 +33,7 @@ import PIL.ImageOps
 from clockish import __version__
 from clockish.colors import rgb_to_hex, BY_NAME
 from clockish.drivers import load_driver
+from clockish.transforms import apply_transforms
 
 
 # ---------------------------------------------------------------------------
@@ -652,9 +653,17 @@ def _extract_value_by_json_path(response_text: str, json_path: str) -> tuple[str
 
         json_path = json_path.strip()
 
-        # Simple key (no dots): extract from first object
+        # Simple key (no dots): try the root object first, then fall back to
+        # scanning one level deep for a wrapped/nested object.
         if '.' not in json_path:
-            # Get first object (dict keys are ordered in Python 3.7+)
+            if json_path in data:
+                value = data.get(json_path)
+                if value is None:
+                    return (None, True)  # Key present but null -- treat as missing
+                return (str(value), False)
+
+            # Root key absent: look for it inside the first nested object
+            # (e.g. {"<device-id>": {"tempF": 71.8}}).
             for obj in data.values():
                 if isinstance(obj, dict):
                     value = obj.get(json_path)
@@ -983,6 +992,7 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
     else:
         fmt = _TIME_FORMATS.get(_time_format, _time_format)
     time_str    = now.strftime(fmt).upper()
+    time_str    = apply_transforms(time_str, p.get('transform'), debug=DEBUG)
     label_str   = p.get('label', '')
 
     if DEBUG_LAYOUT:
@@ -1005,6 +1015,7 @@ def _render_date_panel(p: dict, px: int, py: int, pw: int, ph: int,
     color    = p.get('color', _C_WHITE)
     date_f   = _get_font(p.get('font_size', 'normal'))
     date_str = now.strftime(p.get('date_format', '%a %b %-d, %Y'))
+    date_str = apply_transforms(date_str, p.get('transform'), debug=DEBUG)
 
     if DEBUG_LAYOUT:
         cell_h  = _font_height(date_f)
@@ -1023,6 +1034,7 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     color  = p.get('color', _C_WHITE)
     source = p['source']
     value  = _get_fact(source)
+    value  = apply_transforms(value, p.get('transform'), debug=DEBUG)
 
     if 'label' not in p:
         text = value
@@ -1079,6 +1091,10 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
             # Use cached value
             value = cache_entry['value']
 
+    # Apply transforms to the raw cached value each render (cheap; lets
+    # config edits to 'transform:' take effect without cache invalidation).
+    value = apply_transforms(value, p.get('transform'), debug=DEBUG)
+
     # Render like fact panel
     if label:
         text = label + value
@@ -1090,9 +1106,10 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
 def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
                         d: ImageDraw.ImageDraw) -> None:
-    """Static text panel  --  renders p['label'] as-is, no data lookup."""
+    """Static text panel  --  renders p['label'], optionally transformed."""
+    label = apply_transforms(p.get('label', ''), p.get('transform'), debug=DEBUG)
     _draw_text_line(d, px, py, pw, ph,
-                    p.get('label', ''),
+                    label,
                     _get_font(p.get('font_size', 'normal')),
                     p.get('color', _C_WHITE),
                     justify=p.get('justify', 'center'))

@@ -125,3 +125,19 @@ properties:
               label:
                 type: string
                 description: Static label text prefix. Use 'default' for the built-in label.
+              transform:
+                type: array
+                description: |
+                  Ordered list of value transforms applied to the panel's core text before
+                  the label is added. Entries are either a bare name ('upper', 'lower', 'round',
+                  'ceil', 'floor', 'int', 'titlecase', 'pascalcase', 'camelcase', 'strip', 'abs')
+                  or a single-key mapping for parameterised transforms
+                  ({round: 1}, {multiply: 1.8}, {add: 32}, {replace: {from: a, to: b}},
+                  {prefix: '~'}, {suffix: '%'}, {format: '{:.1f}F'}).
+                  Supported on: clock, date, fact, text, url-fact panels.
+                items:
+                  anyOf:
+                    - type: string
+                    - type: object
+                      minProperties: 1
+                      maxProperties: 1
