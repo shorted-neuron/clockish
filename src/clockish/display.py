@@ -800,6 +800,92 @@ def _font_ink_top(f: ImageFont.FreeTypeFont) -> int:
 
 
 # ---------------------------------------------------------------------------
+# font_behavior  --  per-row/per-panel control over sizing & vertical centring.
+#
+#   default        current behaviour: fixed font_size:, ink metrics from the
+#                  "Ag|" reference glyphs (ascender+descender+full-height bar).
+#   clip_numeric   fixed font_size:, but ink metrics from "0123456789" instead
+#                  -- fixes vertical centring for numeric-only content (clock,
+#                  cpu%, temp, ...) which has no descenders like "Ag|" assumes.
+#   scale          ignore font_size:'s resolved size (keep its resolved font
+#                  file); every draw, pick the largest point size where the
+#                  text fits BOTH the panel's width and height. Aspect-
+#                  preserving (a single TrueType point size scales uniformly).
+#   stretch_y      like 'scale', but constrained by height only -- width may
+#                  overflow/clip depending on justify.
+#
+# Resolved once per panel in _init_layout() (row default, panel override) and
+# stored back onto the panel dict as 'font_behavior'; renderers just read it.
+# ---------------------------------------------------------------------------
+KNOWN_FONT_BEHAVIORS: frozenset[str] = frozenset({
+    'default', 'clip_numeric', 'scale', 'stretch_y',
+})
+
+#: id(font) -> (ink_top, ink_h) computed from digits only. Calculated once per
+#: font object on first use (never per-draw); font objects are already cached
+#: for the lifetime of the process in _FONTS, so this dict stays small.
+_NUMERIC_INK_CACHE: dict[int, tuple[int, int]] = {}
+
+
+def _numeric_ink_metrics(f: ImageFont.FreeTypeFont) -> tuple[int, int]:
+    """Ink top/height for this font using digits only (no descenders)."""
+    key = id(f)
+    cached = _NUMERIC_INK_CACHE.get(key)
+    if cached is not None:
+        return cached
+    try:
+        bbox = f.getbbox("0123456789")
+        ink_top = int(bbox[1])
+        ink_h = int(bbox[3] - bbox[1])
+    except Exception:
+        ink_top, ink_h = _font_ink_top(f), _font_height(f)
+    _NUMERIC_INK_CACHE[key] = (ink_top, ink_h)
+    return ink_top, ink_h
+
+
+#: (font_path, text, avail_w, avail_h, axis) -> fitted FreeTypeFont.
+#: Static configs re-render the same text most frames (fact/text panels), so
+#: this cache makes 'scale'/'stretch_y' free except when content changes.
+_FIT_FONT_CACHE: dict[tuple, ImageFont.FreeTypeFont] = {}
+
+
+def _fit_font(path: str, text: str, avail_w: int, avail_h: int,
+               axis: str) -> ImageFont.FreeTypeFont:
+    """Binary-search the largest point size of *path* where *text* fits.
+
+    axis='height': constrain by ink height <= avail_h only (width may overflow).
+    axis='both':   constrain by ink height <= avail_h AND text width <= avail_w.
+    """
+    key = (path, text, avail_w, avail_h, axis)
+    cached = _FIT_FONT_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    def _fits(size: int) -> bool:
+        f = ImageFont.truetype(path, size)
+        ink_top = _font_ink_top(f)
+        ink_h = _font_height(f) - ink_top
+        if ink_h > avail_h:
+            return False
+        if axis == 'both' and f.getbbox(text)[2] > avail_w:
+            return False
+        return True
+
+    lo, hi, best_size = 1, max(1, avail_h * 2), 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if _fits(mid):
+            best_size = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+
+    fitted = ImageFont.truetype(path, best_size)
+    _FIT_FONT_CACHE[key] = fitted
+    return fitted
+
+
+# ---------------------------------------------------------------------------
 # Row layout  --  uses fixed heights from config (required on every row)
 # ---------------------------------------------------------------------------
 def _measure_rows(rows: list) -> list:
@@ -858,6 +944,9 @@ def _init_layout() -> None:
 
     All resolved fonts are registered in _FONTS under synthetic names so
     renderers just call _get_font(p.get('font_size', 'normal')) as usual.
+
+    Also resolves 'font_behavior' per panel (panel value > row default >
+    'default') -- see KNOWN_FONT_BEHAVIORS docs above _fit_font().
     """
     global _LAYOUT
     rows = _config.get('rows', [])
@@ -889,7 +978,15 @@ def _init_layout() -> None:
         return max(1, int(f))
 
     for row_idx, (r, ry, rh) in enumerate(layout):
+        row_behavior = r.get('font_behavior')
         for p in r.get('panels', []):
+            # Resolve effective font_behavior once: panel override > row
+            # default > 'default'. Renderers just read p['font_behavior'].
+            behavior = p.get('font_behavior') or row_behavior or 'default'
+            if behavior not in KNOWN_FONT_BEHAVIORS:
+                behavior = 'default'
+            p['font_behavior'] = behavior
+
             font_ref  = p.get('font')      # which TTF file to use
             font_size = p.get('font_size') # size spec
 
@@ -980,7 +1077,8 @@ def _init_layout() -> None:
 
 def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
                     text: str, f: ImageFont.FreeTypeFont, color: str,
-                    x_offset: int = 0, justify: str = 'center') -> None:
+                    x_offset: int = 0, justify: str = 'center',
+                    behavior: str = 'default') -> None:
     """Draw a single line of text within the panel rect.
 
     Vertical placement: always centred within [py, py+ph).
@@ -988,9 +1086,22 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
       'center'  --  ink centred within [px+x_offset, px+pw)
       'left'    --  ink starts at px+x_offset
       'right'   --  ink ends at px+pw
+
+    `behavior` (see KNOWN_FONT_BEHAVIORS docs above _fit_font()):
+      'default'/'clip_numeric'  --  use *f* as given (fixed size from font_size:).
+      'scale'/'stretch_y'       --  re-fit *f* to (pw-x_offset, ph) every call
+                                     via _fit_font(), using f.path as the typeface.
     """
-    ink_top = _font_ink_top(f)
-    ink_h   = _font_height(f) - ink_top
+    if behavior in ('scale', 'stretch_y') and getattr(f, 'path', None):
+        axis = 'height' if behavior == 'stretch_y' else 'both'
+        avail_w = max(1, pw - x_offset)
+        f = _fit_font(f.path, text, avail_w, ph, axis)
+
+    if behavior == 'clip_numeric':
+        ink_top, ink_h = _numeric_ink_metrics(f)
+    else:
+        ink_top = _font_ink_top(f)
+        ink_h   = _font_height(f) - ink_top
     cy      = _center_y(py, ph, ink_top, ink_h)
 
     text_w = f.getbbox(text)[2]   # pixel width of rendered text
@@ -1027,11 +1138,12 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
               f"ink_top={ink_top} ink_h={ink_h}  str='{time_str}'")
 
     justify = p.get('justify', 'center')
-    _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify)
+    behavior = p.get('font_behavior', 'default')
+    _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify, behavior=behavior)
 
     if label_str:
         time_w = int(time_f.getbbox(time_str)[2])
-        _draw_text_line(d, px + time_w + 6, py, pw, ph, label_str, time_f, color, justify='left')
+        _draw_text_line(d, px + time_w + 6, py, pw, ph, label_str, time_f, color, justify='left', behavior=behavior)
 
 
 def _render_date_panel(p: dict, px: int, py: int, pw: int, ph: int,
@@ -1049,7 +1161,8 @@ def _render_date_panel(p: dict, px: int, py: int, pw: int, ph: int,
               f"ink_top={ink_top} ink_h={ink_h}  str='{date_str}'")
 
     _draw_text_line(d, px, py, pw, ph, date_str, date_f, color,
-                    x_offset=4, justify=p.get('justify', 'center'))
+                    x_offset=4, justify=p.get('justify', 'center'),
+                    behavior=p.get('font_behavior', 'default'))
 
 
 def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
@@ -1067,7 +1180,8 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     else:
         text = p['label'] + value
 
-    _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'))
+    _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'),
+                    behavior=p.get('font_behavior', 'default'))
 
 
 def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
@@ -1125,7 +1239,8 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     else:
         text = value
 
-    _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'))
+    _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'),
+                    behavior=p.get('font_behavior', 'default'))
 
 
 def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
@@ -1136,7 +1251,8 @@ def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
                     label,
                     _get_font(p.get('font_size', 'normal')),
                     p.get('color', _C_WHITE),
-                    justify=p.get('justify', 'center'))
+                    justify=p.get('justify', 'center'),
+                    behavior=p.get('font_behavior', 'default'))
 
 
 

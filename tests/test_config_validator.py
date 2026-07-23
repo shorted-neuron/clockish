@@ -20,6 +20,7 @@ from pathlib import Path
 from clockish.config_validator import (
     BUILTIN_FONT_NAMES,
     KNOWN_FACT_SOURCES,
+    KNOWN_FONT_BEHAVIORS,
     KNOWN_PANEL_TYPES,
     ValidationResult,
     validate_config_dict,
@@ -913,3 +914,66 @@ class TestTransform:
         result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
         assert any('transform entry' in m.lower() for m in msgs)
+
+
+# ---------------------------------------------------------------------------
+# font_behavior: row-default / panel-override sizing & centring control
+# ---------------------------------------------------------------------------
+
+class TestFontBehavior:
+
+    @pytest.mark.parametrize('behavior', sorted(KNOWN_FONT_BEHAVIORS))
+    def test_valid_panel_level_value_no_warning(self, behavior: str) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'clock', 'font_behavior': behavior}],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok, f"font_behavior: {behavior!r} should be valid, got: {result.issues}"
+
+    @pytest.mark.parametrize('behavior', sorted(KNOWN_FONT_BEHAVIORS))
+    def test_valid_row_level_value_no_warning(self, behavior: str) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40, 'font_behavior': behavior,
+            'panels': [{'type': 'clock'}],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok, f"row font_behavior: {behavior!r} should be valid, got: {result.issues}"
+
+    def test_invalid_panel_level_value_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'clock', 'font_behavior': 'bogus'}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('font_behavior' in m for m in msgs), f"expected warning, got: {msgs}"
+
+    def test_invalid_row_level_value_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40, 'font_behavior': 'bogus',
+            'panels': [{'type': 'clock'}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('font_behavior' in m for m in msgs), f"expected warning, got: {msgs}"
+
+    def test_font_behavior_not_flagged_as_unknown_panel_key(self) -> None:
+        """font_behavior must be a recognised attr for text-drawing panel
+        types (clock/date/fact/text/url-fact), not an 'unknown key' warning."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'clock', 'font_behavior': 'clip_numeric'}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert not any('unknown' in m.lower() and 'font_behavior' in m for m in msgs)
+
+    def test_font_behavior_not_flagged_as_unknown_row_key(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40, 'font_behavior': 'scale',
+            'panels': [{'type': 'clock'}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert not any('unknown row-level key' in m and 'font_behavior' in m for m in msgs)
