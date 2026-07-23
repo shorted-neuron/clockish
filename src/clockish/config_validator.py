@@ -596,6 +596,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                             )
                             continue
 
+                        # Transform names are case-insensitive at runtime (see
+                        # transforms.apply_transforms); normalise before lookup
+                        # so e.g. 'UPPER' / 'PascalCase' validate cleanly.
+                        if isinstance(name, str):
+                            name = name.lower()
+
                         if name not in KNOWN_TRANSFORM_NAMES:
                             warn(
                                 tloc,

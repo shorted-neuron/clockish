@@ -101,4 +101,3 @@ class TestErrorHandling:
         value, missing = _extract_value_by_json_path(response, "  ip  ")
         assert value == "1.2.3.4"
         assert missing is False
-

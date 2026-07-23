@@ -797,6 +797,23 @@ class TestTransform:
         result = validate_config_dict(cfg)
         assert result.ok
 
+    def test_transform_names_are_case_insensitive(self) -> None:
+        """'UPPER', 'PascalCase', 'camelCase', 'Titlecase' validate the same as
+        their lowercase registry equivalents (readability in config, not
+        strict case matching)."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [
+                {'type': 'text', 'label': 'hello world', 'transform': ['UPPER']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['camelCase']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['PascalCase']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['Titlecase']},
+                {'type': 'fact', 'source': 'temp', 'transform': [{'ROUND': 1}]},
+            ],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok, f"expected no issues, got: {result.issues}"
+
     def test_transform_valid_on_fact_panel(self) -> None:
         cfg = _minimal_config(rows=[{
             'name': 'r', 'height': 40,

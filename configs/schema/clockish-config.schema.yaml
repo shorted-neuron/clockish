@@ -142,8 +142,8 @@ properties:
                 type: array
                 description: |
                   Ordered list of value transforms applied to the panel's core text before
-                  the label is added. Entries are either a bare name ('upper', 'lower', 'round',
-                  'ceil', 'floor', 'int', 'titlecase', 'pascalcase', 'camelcase', 'strip', 'abs')
+                  the label is added. Entries are either a bare name ('UPPER', 'lower', 'round',
+                  'ceil', 'floor', 'int', 'Titlecase', 'PascalCase', 'camelCase', 'strip', 'abs')
                   or a single-key mapping for parameterised transforms
                   ({round: 1}, {multiply: 1.8}, {add: 32}, {replace: {from: a, to: b}},
                   {prefix: '~'}, {suffix: '%'}, {format: '{:.1f}F'}).

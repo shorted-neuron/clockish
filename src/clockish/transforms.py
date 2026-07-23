@@ -22,6 +22,11 @@ Chained (applied left-to-right)::
 
     transform: [lower, {suffix: "!"}]
 
+Names are case-insensitive::
+
+    transform: [UPPER]           # same as [upper]
+    transform: [PascalCase]      # same as [pascalcase]
+
 Design notes
 ------------
 - Every transform takes a ``str`` and returns a ``str`` -- panels only ever
@@ -283,6 +288,12 @@ def apply_transforms(value: str, transform_list: list | None, *, debug: bool = F
             name, arg = next(iter(entry.items()))
         else:
             continue
+
+        # Transform names are case-insensitive (config may spell them 'UPPER',
+        # 'Titlecase', 'PascalCase', 'camelCase', etc. for readability) --
+        # the registry itself is keyed lowercase.
+        if isinstance(name, str):
+            name = name.lower()
 
         fn = TRANSFORM_REGISTRY.get(name)
         if fn is None:

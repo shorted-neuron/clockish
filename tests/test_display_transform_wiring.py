@@ -135,4 +135,3 @@ class TestTextTransform:
         cd._render_text_panel({'label': 'hello world', 'transform': ['camelcase']}, 0, 0, 100, 40, d=None)
         cd._render_text_panel({'label': 'hello world', 'transform': ['titlecase']}, 0, 0, 100, 40, d=None)
         assert calls == ['helloWorld', 'HelloWorld']
-
