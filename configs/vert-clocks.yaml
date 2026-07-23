@@ -63,7 +63,7 @@ orientation: portrait
 
 rows:
   - name: utc-clock
-    height: 72
+    height: 15.00%
     # background: black  # black is default
     panels:
       - type: clock
@@ -72,53 +72,53 @@ rows:
         # label: "UTC"
         time_format: 24hs       # HH:MM:SS
         color: lime
-        font_size: huge          # 72pt ~80px
+        font_size: auto
 
   - name: utc-date
-    height: 30        # normal font ink_h=28; 36 gives 4px padding top+bottom
+    height: 6.25%
     panels:
       - type: date
         # justify: center
         timezone: UTC
         date_format: "%a %b %-d, %Y UTC"
         color: darklime
-        font_size: normal
+        font_size: auto
 
   - name: divider-1
-    height: 5
+    height: 5px
     panels:
       - type: divider
-        height: 2
+        height: 2px
         color: grey
 
   - name: den-clock
-    height: 62
+    height: 12.92%
     panels:
       - type: clock
         # justify: center
         width: 70%
         timezone: America/Denver
-        #label: "DEN"
+        # label: "DEN"
         time_format: 12h         # h:MM AM/PM
         color: cornflower
-        font_size: big
+        font_size: auto
       - type: text
         # justify: center
         label: "DEN"
         color: steelblue
 
   - name: den-date
-    height: 30        # normal font ink_h=28; 36px gives 4px padding top+bottom
+    height: 6.25%
     panels:
       - type: date
         # justify: center
         timezone: America/Denver
         date_format: "%A, %B %-d"
         color: steelblue
-        font_size: normal
+        font_size: auto
 
   - name: et-clock
-    height: 68
+    height: 14.17%
     # background: 300080  # indigo... show demo of hex value
     panels:
       - type: clock
@@ -127,18 +127,18 @@ rows:
         # label: "ET" # when label is different size than time, layout gets weird
         time_format: 12h
         color: orange
-          # label:  darkorange
-        font_size: big
+          # label: darkorange
+        font_size: auto
       - type: text
         # justify: center
         label: "ATL"
         color: darkorange
-        font_size: normal
+        font_size: auto
         background: black
         width: 30%
 
   - name: ist-clock
-    height: 60
+    height: 12.50%
     panels:
       - type: clock
         # justify: center
@@ -146,42 +146,42 @@ rows:
         # label: "IST"
         time_format: 12h
         color: brown
-        font_size: big
+        font_size: auto
       - type: text
         # justify: center
         label: "IST"
         color: brown
-        font_size: normal
+        font_size: auto
         background: black
         width: 30%
 
   - name: divider-2
-    height: 1
+    height: 1px
     panels:
       - type: divider
-        height: 1
+        height: 1px
         # color: darkgrey # darkgrey is default
 
   - name: ntp-status
-    height: 22        # small font ink_h=20; 26px gives 3px padding top+bottom
+    height: 4.58%
     background: navy
     panels:
       - type: text
         # justify: center
         label: "Time sync status:"
         color: periwinkle
-        font_size: small
+        font_size: auto
         background: black
         width: 60%
       - type: fact
         # justify: center
         source: ntp_all
         color: white
-        font_size: small
+        font_size: auto
         background: black
 
   - name: ip-wifi
-    height: 32
+    height: 6.67%
     panels:
       - type: fact
         width: 50%
@@ -189,9 +189,9 @@ rows:
         source: ip
         label: ""
         color: grey
-        font_size: small
+        font_size: auto
       - type: wifi_graphic
-        width: 32
+        width: 10.00%
         # justify: center
         color: lime
       - type: fact
@@ -199,34 +199,34 @@ rows:
         source: wifi_signal
         # label: "default"
         color: lime
-        font_size: small
+        font_size: auto
 
   - name: cpu-mem
-    height: 26        # small font ink_h=20; 26px gives 3px padding top+bottom
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: cpu
         label: "cpu: "
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         source: mem
         color: purple
-        font_size: small
+        font_size: auto
 
   - name: disk
-    height: 26        # small font ink_h=20; 26px gives 3px padding top+bottom
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: disk
         color: green
-        font_size: small
+        font_size: auto
 
   - name: debug
-    height: 46
+    height: 9.58%
     panels:
       - type: debug
         color: tan

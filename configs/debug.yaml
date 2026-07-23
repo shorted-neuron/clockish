@@ -9,35 +9,35 @@ orientation: portrait
 
 rows:
   - name: utc-clock
-    height: 72
+    height: 15.00%
     background: darkblue
     panels:
       - type: clock
         timezone: UTC
         time_format: 24hs
         color: lime
-        font_size: huge
+        font_size: auto
 
   - name: utc-date
-    height: 36
+    height: 7.50%
     background: darkblue
     panels:
       - type: date
         timezone: UTC
         date_format: "%a %b %-d, %Y UTC"
         color: darklime
-        font_size: normal
+        font_size: auto
 
   - name: divider-1
-    height: 3
+    height: 3px
     background: grey
     panels:
       - type: divider
-        height: 1
+        height: 1px
         color: red
 
   - name: den-clock
-    height: 64
+    height: 13.33%
     panels:
       - type: clock
         justify: left
@@ -45,100 +45,100 @@ rows:
         label: "DEN"
         time_format: 12h
         color: darkred
-        font_size: big
+        font_size: auto
 
   - name: den-date
-    height: 36
+    height: 7.50%
     panels:
       - type: date
         justify: right
         timezone: America/Denver
         date_format: "%A, %B %-d"
         color: slate
-        font_size: normal
+        font_size: auto
 
   - name: ist-clock
-    height: 68
+    height: 14.17%
     panels:
       - type: clock
         width: 70%
         timezone: Asia/Kolkata
         time_format: 12h
         color: brown
-        font_size: big
+        font_size: auto
       - type: text
         label: "IST"
         color: brown
-        font_size: med
+        font_size: auto
         background: black
 
   - name: divider-2
-    height: 4
+    height: 4px
     panels:
       - type: divider
-        height: 2
+        height: 2px
         color: yellow
 
   - name: ntp-status
-    height: 26
+    height: 5.42%
     panels:
       - type: text
         label: "Time sync status:"
         color: white
-        font_size: small
+        font_size: auto
         background: black
         width: 60%
       - type: fact
         source: ntp_all
         label: " is "
         color: black
-        font_size: small
+        font_size: auto
         background: cyan
 
   - name: ip-disk
-    height: 32
+    height: 6.67%
     panels:
       - type: fact
         source: hostname
         color: lime
-        font_size: small
+        font_size: auto
       - type: fact
         source: ip
         label: "ip "
         color: grey
-        font_size: small
+        font_size: auto
 
   - name: cpu-mem
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         width: 40%
         source: cpu
         label: "cpu: "
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         source: mem
         color: purple
-        font_size: small
+        font_size: auto
 
   - name: load-disk
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         width: 40%
         source: cpu_load
         label: "load: "
         color: green
-        font_size: small
+        font_size: auto
       - type: fact
         width: 60%
         source: disk
         color: green
-        font_size: small
+        font_size: auto
 
   - name: debug
-    height: 80
+    height: 16.67%
     panels:
       - type: debug
         width: 65%

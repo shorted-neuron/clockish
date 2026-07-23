@@ -3,23 +3,30 @@
 # ---------------------------------------------------------------------------
 # System information display: local time + all available fact sources.
 # Display settings are in display.yaml  --  see configs/display/ for profiles.
+#
+# Row heights are percentages of the target 320x480 portrait canvas; panel
+# widths are percentages of the target 320 width. font_size: auto sizes each
+# panel to 75% of its OWN row height, so named-scale mismatches (a named font
+# is a fixed % of the *display* height, not the row) can't happen here.
+# Dividers and blank rows keep pixel heights  --  they're spacers, not
+# content, so there's no font to size against.
 # ---------------------------------------------------------------------------
 
 orientation: portrait
 
 rows:
   - name: app-header
-    height: 40
+    height: 8.33%
     background: navy
     panels:
       - type: text
         # justify: center
         label: "clockish.py"
         color: silver
-        font_size: normal
+        font_size: auto
 
   - name: app-version
-    height: 30
+    height: 6.25%
     background: navy
     panels:
       - type: fact
@@ -27,70 +34,70 @@ rows:
         source: version
         label: "default"
         color: grey
-        font_size: small
+        font_size: auto
 
   - name: divider-1
-    height: 5
+    height: 5px
     background: black
     panels:
       - type: divider
-        height: 1
+        height: 1px
         color: darkgrey
 
   - name: local-clock
-    height: 56
+    height: 11.67%
     panels:
       - type: clock
         # justify: center
         timezone: local
         time_format: 24hs
         color: white
-        font_size: big
+        font_size: auto
 
   - name: local-date
-    height: 36
+    height: 7.50%
     panels:
       - type: date
         # justify: center
         timezone: local
         date_format: "%a, %B %-d %Y"
         color: pink
-        font_size: normal
+        font_size: auto
 
   - name: blank-1
-    height: 6
+    height: 6px
     background: black
     panels:
       - type: blank
 
   - name: help1
-    height: 40
+    height: 8.33%
     background: orange
     panels:
       - type: text
         # justify: center
         label: "check the docs"
         color: black
-        font_size: normal
+        font_size: auto
 
   - name: help2
-    height: 40
+    height: 8.33%
     background: orange
     panels:
       - type: text
         # justify: center
         label: "to configure!"
         color: black
-        font_size: normal
+        font_size: auto
 
   - name: blank-2
-    height: 6
+    height: 6px
     background: black
     panels:
       - type: blank
 
   - name: network
-    height: 28
+    height: 5.83%
     background: darkgrey
     panels:
       - type: fact
@@ -98,26 +105,26 @@ rows:
         source: hostname
         label: "default"
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         source: ip
         # label: "default"
         color: cyan
-        font_size: small
+        font_size: auto
 
   - name: blank-3
-    height: 6
+    height: 6px
     background: black
     panels:
       - type: blank
 
   - name: wifi-status
-    height: 44
+    height: 9.17%
     background: darkred
     panels:
       - type: wifi_graphic
-        width: 44
+        width: 13.75%
         # justify: center
         color: lime
         background: black
@@ -125,16 +132,16 @@ rows:
         # justify: center
         source: wifi_status
         color: lime
-        font_size: normal
+        font_size: auto
       - type: fact
         # justify: center
         source: wifi_ssid
         label: "default"
         color: darklime
-        font_size: normal
+        font_size: auto
 
 # - name: wifi-signal
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -150,13 +157,13 @@ rows:
 #       font_size: small
 
   - name: blank-4
-    height: 6
+    height: 6px
     background: black
     panels:
       - type: blank
 
 # - name: ntp
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -172,30 +179,30 @@ rows:
 #       font_size: small
 
 # - name: divider-3
-#   height: 3
+#   height: 3px
 #   panels:
 #     - type: divider
-#       height: 1
+#       height: 1px
 #       color: darkgrey
 
   - name: cpu
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         # justify: center
         source: cpu
         label: "default"
         color: yellow
-        font_size: small
+        font_size: auto
       - type: fact
         # justify: center
         source: cpu_load
         label: "default"
         color: darkyellow
-        font_size: small
+        font_size: auto
 
 # - name: memory
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -205,7 +212,7 @@ rows:
 #       font_size: small
 
 # - name: disk
-#   height: 26
+#   height: 26px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -215,7 +222,7 @@ rows:
 #       font_size: small
 
 # - name: temp
-#   height: 27
+#   height: 27px
 #   panels:
 #     - type: fact
 #       # justify: center
@@ -224,35 +231,35 @@ rows:
 #       color: orange
 #       font_size: small
 
-  - name: divider-3
-    height: 5
+  - name: divider-2
+    height: 5px
     panels:
       - type: divider
-        height: 1
+        height: 1px
         color: darkgrey
 
   - name: uptime
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         justify: left
         source: uptime
         label: "default"
         color: grey
-        font_size: small
+        font_size: auto
 
   - name: config
-    height: 26
+    height: 5.42%
     panels:
       - type: fact
         justify: right
         source: config_file
         label: "config: "
         color: pink
-        font_size: small
+        font_size: auto
 
   - name: debug
-    height: 52
+    height: 10.83%
     background: chocolate
     panels:
       - type: debug

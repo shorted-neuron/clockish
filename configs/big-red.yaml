@@ -30,7 +30,7 @@ rows:
     height: 2%
     panels:
       - type: divider
-        height: 1
+        height: 1px
         color: dimred
 
   - name: date
@@ -47,14 +47,14 @@ rows:
     height: 2%
     panels:
       - type: divider
-        height: 1
+        height: 1px
         color: dimred
 
   - name: wifi-info
     height: 15%
     panels:
       - type: wifi_graphic
-        width: 44
+        width: 44px
         # justify: center
         color: red
       - type: fact

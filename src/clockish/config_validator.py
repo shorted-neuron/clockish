@@ -175,8 +175,11 @@ _KNOWN_ROW_KEYS: frozenset[str] = frozenset({
 
 #: Valid top-level config keys.
 _KNOWN_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
-    'orientation', 'default_font', 'fonts', 'rows', 'display',
+    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size',
 })
+
+#: Format for preview_size: "WxH", e.g. "240x135". Preview-tool only; ignored by production.
+_PREVIEW_SIZE_RE = re.compile(r'^\d+x\d+$')
 
 
 # ---------------------------------------------------------------------------
@@ -184,16 +187,23 @@ _KNOWN_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
 # ---------------------------------------------------------------------------
 
 _HEIGHT_SCHEMA: dict = {
-    "description": "Row height: integer pixels >= 1, float fraction 0 < x < 1, or percentage string like '15%'.",
+    "description": (
+        "Row height: integer pixels >= 1, 'Npx' string, float fraction 0 < x < 1, "
+        "or percentage string like '15%'."
+    ),
     "anyOf": [
         {"type": "integer", "minimum": 1},
         {"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 1.0},
         {"type": "string", "pattern": r"^\d+(\.\d+)?%$"},
+        {"type": "string", "pattern": r"^\d+(\.\d+)?px$"},
     ],
 }
 
 _WIDTH_SCHEMA: dict = {
-    "description": "Panel width: integer pixels >= 1, float fraction 0 < x < 1, percentage string, 'auto', or 'default'.",
+    "description": (
+        "Panel width: integer pixels >= 1, 'Npx' string, float fraction 0 < x < 1, "
+        "percentage string, 'auto', or 'default'."
+    ),
     "anyOf": [
         {"type": "integer", "minimum": 1},
         {"type": "number", "exclusiveMinimum": 0.0, "exclusiveMaximum": 1.0},
@@ -202,10 +212,12 @@ _WIDTH_SCHEMA: dict = {
 }
 
 #: JSON Schema (Draft 7) for a clockish layout config.
-#: Defined in configs/clockish-config.schema.yaml; loaded at module init.
+#: Defined in configs/schema/clockish-config.schema.yaml; loaded at module init.
 def _load_schema() -> dict:
-    """Load JSON Schema from configs/clockish-config.schema.yaml."""
-    schema_path = os.path.join(os.path.dirname(__file__), '..', '..', 'configs', 'clockish-config.schema.yaml')
+    """Load JSON Schema from configs/schema/clockish-config.schema.yaml."""
+    schema_path = os.path.join(
+        os.path.dirname(__file__), '..', '..', 'configs', 'schema', 'clockish-config.schema.yaml'
+    )
     with open(schema_path, encoding='utf-8') as f:
         return yaml.safe_load(f)
 
@@ -411,6 +423,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
         if key not in _KNOWN_TOP_LEVEL_KEYS:
             warn('(root)', f"unknown top-level key '{key}'")
 
+    # -- preview_size ---------------------------------------------------------
+    preview_size = config.get('preview_size')
+    if preview_size is not None:
+        if not isinstance(preview_size, str) or not _PREVIEW_SIZE_RE.match(preview_size):
+            err('(root)', f"preview_size '{preview_size}' must be a string 'WxH' (e.g. '240x135')")
+
     # -- fonts section ------------------------------------------------------
     fonts_cfg = config.get('fonts', {})
     if isinstance(fonts_cfg, dict):
@@ -577,6 +595,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                 "or a single-key mapping (e.g. {round: 1})",
                             )
                             continue
+
+                        # Transform names are case-insensitive at runtime (see
+                        # transforms.apply_transforms); normalise before lookup
+                        # so e.g. 'UPPER' / 'PascalCase' validate cleanly.
+                        if isinstance(name, str):
+                            name = name.lower()
 
                         if name not in KNOWN_TRANSFORM_NAMES:
                             warn(

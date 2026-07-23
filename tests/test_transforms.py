@@ -40,6 +40,26 @@ class TestCaseTransforms:
         assert apply_transforms("hello_world-again", ["camelcase"]) == "helloWorldAgain"
 
 
+class TestCaseInsensitiveNames:
+    """Transform names are case-insensitive (config authors may write 'UPPER',
+    'Titlecase', 'PascalCase', 'camelCase', etc. for readability)."""
+
+    def test_upper_name_mixed_case(self):
+        assert apply_transforms("hello", ["UPPER"]) == "HELLO"
+
+    def test_pascalcase_name_mixed_case(self):
+        assert apply_transforms("hello world", ["PascalCase"]) == "HelloWorld"
+
+    def test_camelcase_name_mixed_case(self):
+        assert apply_transforms("hello world", ["camelCase"]) == "helloWorld"
+
+    def test_titlecase_name_mixed_case(self):
+        assert apply_transforms("hello world", ["Titlecase"]) == "HelloWorld"
+
+    def test_mixed_case_name_with_arg_mapping(self):
+        assert apply_transforms("71.8", [{"ROUND": 0}]) == "72"
+
+
 class TestRoundingTransforms:
     """string -> float -> int rounding, three distinct modes."""
 

@@ -3,7 +3,7 @@
 #
 # Editor integration (VS Code YAML extension / yaml-language-server):
 #   Add to .vscode/settings.json:
-#     yaml.schemas: { ./configs/clockish-config.schema.yaml: [configs/*.yaml] }
+#     yaml.schemas: { ./configs/schema/clockish-config.schema.yaml: [configs/*.yaml] }
 #
 $schema: https://json-schema.org/draft-07/schema#
 title: Clockish Layout Config
@@ -51,6 +51,15 @@ properties:
   display:
     type: object
     description: Display hardware profile. Usually provided by a separate display.yaml file.
+  preview_size:
+    type: string
+    pattern: '^\d+x\d+$'
+    description: |
+      Preview-tool-only override for non-standard target resolutions (e.g. small ST7789
+      panels or oversized framebuffers). Format "WxH" pixels, e.g. "240x135".
+      Ignored by production (which always uses the real display profile / display: section).
+      Only needed when the orientation-based preview default (480x320 landscape /
+      320x480 portrait) doesn't match the config's intended display.
   rows:
     type: array
     minItems: 1
@@ -66,7 +75,9 @@ properties:
           type: string
           description: Unique label for this row (used in debug output).
         height:
-          description: 'Row height: integer pixels >= 1, float fraction 0 < x < 1, or percentage string like ''15%''.'
+          description: >-
+            Row height: integer pixels >= 1, "Npx" string, float fraction 0 < x < 1,
+            or percentage string like '15%'.
           anyOf:
             - type: integer
               minimum: 1
@@ -75,6 +86,8 @@ properties:
               exclusiveMaximum: 1.0
             - type: string
               pattern: ^\d+(\.\d+)?%$
+            - type: string
+              pattern: ^\d+(\.\d+)?px$
         background:
           type: string
           description: 'Row background color (name or hex). Default: black.'
@@ -111,9 +124,9 @@ properties:
                   Do NOT use built-in scale names here  --  use 'font_size:' instead.
               font_size:
                 description: 'Font size: built-in scale name (giant/huge/big/med/normal/small/tiny/micro),
-                  percentage string like ''10%'', integer pixels, or ''auto'' (75% of row height).'
+                  percentage string like ''10%'', "Npx" string, integer pixels, or ''auto'' (75% of row height).'
               width:
-                description: 'Panel width: integer pixels >= 1, float fraction 0 < x < 1,
+                description: 'Panel width: integer pixels >= 1, "Npx" string, float fraction 0 < x < 1,
                   percentage string, ''auto'', or ''default''.'
                 anyOf:
                   - type: integer
@@ -129,8 +142,8 @@ properties:
                 type: array
                 description: |
                   Ordered list of value transforms applied to the panel's core text before
-                  the label is added. Entries are either a bare name ('upper', 'lower', 'round',
-                  'ceil', 'floor', 'int', 'titlecase', 'pascalcase', 'camelcase', 'strip', 'abs')
+                  the label is added. Entries are either a bare name ('UPPER', 'lower', 'round',
+                  'ceil', 'floor', 'int', 'Titlecase', 'PascalCase', 'camelCase', 'strip', 'abs')
                   or a single-key mapping for parameterised transforms
                   ({round: 1}, {multiply: 1.8}, {add: 32}, {replace: {from: a, to: b}},
                   {prefix: '~'}, {suffix: '%'}, {format: '{:.1f}F'}).

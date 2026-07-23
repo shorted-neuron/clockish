@@ -301,6 +301,15 @@ class TestOptionalAttributes:
             assert not validate_config_dict(cfg).has_errors, \
                 f"height: '{h}' should be valid"
 
+    def test_height_pixel_suffix_string_valid(self) -> None:
+        for h in ['1px', '5px', '40px', '3.5px']:
+            cfg = _minimal_config(rows=[{
+                'name': 'r', 'height': h,
+                'panels': [{'type': 'text'}],
+            }])
+            assert not validate_config_dict(cfg).has_errors, \
+                f"height: '{h}' should be valid"
+
     def test_height_float_fraction_valid(self) -> None:
         for h in [0.1, 0.25, 0.5, 0.69]:
             cfg = _minimal_config(rows=[{
@@ -319,7 +328,7 @@ class TestOptionalAttributes:
         assert result.has_errors, "height: 0 should be an error"
 
     def test_height_bad_string_errors(self) -> None:
-        for h in ['big', 'auto', '55px', '-5%']:
+        for h in ['big', 'auto', '55pixels', '-5%']:
             cfg = _minimal_config(rows=[{
                 'name': 'r', 'height': h,
                 'panels': [{'type': 'text'}],
@@ -787,6 +796,23 @@ class TestTransform:
         }])
         result = validate_config_dict(cfg)
         assert result.ok
+
+    def test_transform_names_are_case_insensitive(self) -> None:
+        """'UPPER', 'PascalCase', 'camelCase', 'Titlecase' validate the same as
+        their lowercase registry equivalents (readability in config, not
+        strict case matching)."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [
+                {'type': 'text', 'label': 'hello world', 'transform': ['UPPER']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['camelCase']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['PascalCase']},
+                {'type': 'text', 'label': 'hello world', 'transform': ['Titlecase']},
+                {'type': 'fact', 'source': 'temp', 'transform': [{'ROUND': 1}]},
+            ],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok, f"expected no issues, got: {result.issues}"
 
     def test_transform_valid_on_fact_panel(self) -> None:
         cfg = _minimal_config(rows=[{

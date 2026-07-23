@@ -235,6 +235,13 @@ _ppd.get_hostname        = lambda: "raspberrypi"
 _ppd.get_cpu_percent     = lambda: 6.8
 # disp= value in the debug panel comes from this module-level variable.
 _ppd._last_display_ms    = 198.0
+# _FONT_PATH is normally set by _init() (never called in preview); _init_layout()
+# and _get_font() both fall back to it for the 'debug' font key and default typeface.
+_ppd._FONT_PATH          = _ppd._find_font('DejaVuSans.ttf')
+# _args is normally set by _init() from argparse; the 'config_file' fact source
+# reads _args.config directly, so it crashes (AttributeError on None) if left unset.
+_ppd._args               = types.SimpleNamespace(config=None)
+
 
 # Restore parse_args (cleanup)
 _argparse.ArgumentParser.parse_args = _real_parse_args
@@ -287,6 +294,44 @@ def _normalize_strftime_formats(obj) -> None:
             _normalize_strftime_formats(item)
 
 
+def _resolve_preview_dimensions(cfg: dict, config_path: str) -> tuple[int, int]:
+    """Resolve (width, height) for a preview render, matching production as closely
+    as possible while covering dev machines that have no real display profile.
+
+    Priority:
+      1. Inline 'display:' section in the config itself (ground truth, same as prod).
+      2. Real display profile file  --  configs/display.yaml alongside the config,
+         or ~/.config/clockish/display.yaml (installed by install.sh). Rare on dev
+         machines but matches production exactly when present.
+      3. 'preview_size: "WxH"' hint  --  for configs built for a specific non-standard
+         target (e.g. small.yaml's 240x135 ST7789) where the orientation fallback
+         below would be wrong.
+      4. 'orientation:' fallback  --  landscape -> 480x320, else -> 320x480.
+    """
+    disp = cfg.get("display")
+    if isinstance(disp, dict) and "width" in disp and "height" in disp:
+        return disp["width"], disp["height"]
+
+    profile_path = _ppd._find_display_profile(config_path)
+    if profile_path:
+        import yaml
+        with open(profile_path) as f:
+            profile = yaml.safe_load(f) or {}
+        profile_disp = profile.get("display", {})
+        if "width" in profile_disp and "height" in profile_disp:
+            return profile_disp["width"], profile_disp["height"]
+
+    preview_size = cfg.get("preview_size")
+    if isinstance(preview_size, str) and "x" in preview_size:
+        try:
+            w_str, h_str = preview_size.split("x", 1)
+            return int(w_str), int(h_str)
+        except ValueError:
+            pass
+
+    return (480, 320) if cfg.get("orientation") == "landscape" else (320, 480)
+
+
 def render_config(config_path: str, out_path: str) -> None:
     """Load a YAML config, render one frame, and save to out_path (PNG)."""
     import yaml
@@ -305,19 +350,32 @@ def render_config(config_path: str, out_path: str) -> None:
     cfg_copy = cfg.copy()
     _ppd._resolve_colors(cfg_copy)
 
-    # Point display module at this config so _get_font() can resolve any
-    # custom font names defined in the config's 'fonts:' section.
-    # Evict previously-cached custom font names first so they are re-loaded
-    # from the new config rather than reused from a prior render.
-    _STANDARD_FONT_NAMES = {'giant', 'huge', 'big', 'med', 'normal', 'small', 'tiny'}
-    for _custom_name in list(_ppd._FONTS.keys()):
-        if _custom_name not in _STANDARD_FONT_NAMES:
-            del _ppd._FONTS[_custom_name]
-    _ppd._config = cfg_copy
+    w, h = _resolve_preview_dimensions(cfg_copy, config_path)
 
-    disp   = cfg_copy.get("display", {})
-    w      = disp.get("width",  320)
-    h      = disp.get("height", 480)
+    # Sync the display module's globals so _get_font()'s named-scale fractions
+    # (giant/huge/big/.../micro) and _init_layout()'s row-relative sizing are
+    # computed against THIS config's canvas, not whatever the previous config
+    # in the batch happened to leave behind.
+    _ppd.width  = w
+    _ppd.height = h
+    _ppd.top    = 0
+    _ppd.bottom = h
+
+    # Fully clear the font cache  --  named scales are lazily computed from
+    # module height/width on first use and cached forever; a partial eviction
+    # (custom names only) leaves stale, wrongly-scaled built-in fonts behind
+    # when configs with different canvas sizes render in the same process.
+    _ppd._FONTS.clear()
+
+    _ppd._config = cfg_copy
+    # 'config_file' fact source reads _args.config directly.
+    _ppd._args.config = config_path
+
+    # Run the real layout pass  --  resolves font: / font_size: auto into
+    # row-relative synthetic font entries and pre-computes panel widths,
+    # exactly as production _init() does. Keeps preview 1:1 with the real
+    # renderer instead of a parallel reimplementation that can drift.
+    _ppd._init_layout()
 
     img  = Image.new("RGB", (w, h))
     drw  = ImageDraw.Draw(img)
@@ -332,14 +390,12 @@ def render_config(config_path: str, out_path: str) -> None:
                 if tz not in tz_cache:
                     tz_cache[tz] = _ppd._now_in_tz(tz)
 
-    layout = _ppd._measure_rows(cfg_copy.get("rows", []))
-
     timings: dict = {'ntp': 0.001, 'tz': 0.0, 'draw': 0.076}
     # Back-date t0 so the debug panel's prep= value shows a realistic 91 ms.
     import time as _time
     t0 = _time.perf_counter() - 0.091
 
-    for row_idx, (r, ry, rh) in enumerate(layout):
+    for r, ry, rh in _ppd._LAYOUT:
         panels = r.get("panels", [])
         if not panels:
             continue
@@ -348,7 +404,7 @@ def render_config(config_path: str, out_path: str) -> None:
         row_img = Image.new("RGB", (w, rh), row_bg)
         row_drw = ImageDraw.Draw(row_img)
 
-        widths = _ppd._resolve_panel_widths(panels, w, row_idx)
+        widths = r.get('_widths', [])
         px = 0
         for p, pw in zip(panels, widths):
             _ppd._dispatch_panel(p, px, 0, pw, rh, tz_cache, timings, t0, row_drw)
@@ -359,6 +415,7 @@ def render_config(config_path: str, out_path: str) -> None:
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     img.save(out_path)
     print(f"  Saved: {out_path}  ({w}x{h})")
+
 
 
 # ---------------------------------------------------------------------------

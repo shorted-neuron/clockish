@@ -70,7 +70,7 @@ repos:
         entry: python src/clockish/config_validator.py --no-yamllint
         language: python
         additional_dependencies: ["jsonschema>=4.17", "PyYAML>=6.0"]
-        files: ^configs/(?!display/|clockish-config\.schema).*\.yaml$
+        files: ^configs/(?!display/|schema/|clockish-config\.schema).*\.yaml$
         pass_filenames: true
 
   # ---------------------------------------------------------------------------

@@ -226,12 +226,21 @@ def _resolve_dimension(raw, base: int) -> int:
     """Resolve a config dimension value to an integer number of pixels.
 
     Accepts:
-      str ending in '%'   --  percentage of *base*, e.g. "68%"
-      float in 0.0 - 1.0    --  fraction of *base*, e.g. 0.68
-      int / float > 1.0   --  direct pixel value (rounded to int)
+      str ending in '%'    --  percentage of *base*, e.g. "68%"
+      str ending in 'px'   --  explicit pixel value, e.g. "40px" (never a fraction)
+      float in 0.0 - 1.0     --  fraction of *base*, e.g. 0.68
+      int / float > 1.0    --  direct pixel value (rounded to int)
+
+    Plain ints are ALWAYS pixels, even '1'  --  a literal-1-pixel divider row
+    is common; treating int 1 as a 1.0 (=100%) fraction would silently blow
+    it up to the full display height/width.
     """
     if isinstance(raw, str) and raw.endswith('%'):
         return max(1, int(base * float(raw[:-1]) / 100))
+    if isinstance(raw, str) and raw.endswith('px'):
+        return max(1, int(round(float(raw[:-2]))))
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return max(1, raw)
     f = float(raw)
     if 0.0 <= f <= 1.0:
         return max(1, int(base * f))
@@ -1214,7 +1223,7 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
 def _render_divider_panel(p: dict, px: int, py: int, pw: int, ph: int,
                            d: ImageDraw.ImageDraw) -> None:
     clr    = p.get('color', _C_DARKGREY)
-    line_h = int(p.get('height', 2))
+    line_h = _resolve_dimension(p.get('height', 2), ph)
     line_y = py + (ph - line_h) // 2
     if DEBUG_LAYOUT:
         print(f"      [divider] line_h={line_h} line_y={line_y}")
@@ -1273,6 +1282,7 @@ def _resolve_panel_widths(panels: list, row_w: int, row_idx: int) -> list[int]:
 
     Each panel may specify 'width' as:
       - integer pixels:  width: 120
+      - "Npx" string:    width: "44px"  (explicit pixels, never a fraction)
       - float fraction:  width: 0.33   (proportion of row_w)
       - percentage str:  width: "44%"
     Panels without 'width' share the remaining space equally.
@@ -1288,12 +1298,8 @@ def _resolve_panel_widths(panels: list, row_w: int, row_idx: int) -> list[int]:
         raw = p.get('width')
         if raw is None:
             auto_indices.append(i)
-        elif isinstance(raw, str) and raw.endswith('%'):
-            fixed_widths[i] = int(row_w * float(raw[:-1]) / 100)
-        elif isinstance(raw, float) and raw <= 1.0:
-            fixed_widths[i] = int(row_w * raw)
         else:
-            fixed_widths[i] = int(raw)
+            fixed_widths[i] = _resolve_dimension(raw, row_w)
 
     # Distribute remaining pixels evenly among auto panels
     used = sum(fixed_widths.values())

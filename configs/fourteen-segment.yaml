@@ -46,7 +46,7 @@ rows:
     height: "1%"
     panels:
       - type: divider
-        height: 1
+        height: 1px
         color: seagreen
 
   - name: date
@@ -69,14 +69,14 @@ rows:
     height: "1%"
     panels:
       - type: divider
-        height: 1
+        height: 1px
         color: seagreen
 
   - name: wifi-info
     height: "11%"
     panels:
       - type: wifi_graphic
-        width: 50
+        width: 10.42%
         color: seagreen
       - type: fact
         width: 20%
