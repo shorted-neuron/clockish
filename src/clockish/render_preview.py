@@ -242,6 +242,25 @@ _ppd._FONT_PATH          = _ppd._find_font('DejaVuSans.ttf')
 # reads _args.config directly, so it crashes (AttributeError on None) if left unset.
 _ppd._args               = types.SimpleNamespace(config=None)
 
+# Fixed "now" for every clock/date panel (all timezones), instead of the real
+# wall-clock time -- makes every preview render deterministic AND exercises
+# worst-case width/ink for time_format/date_format strings, so overlap/
+# clipping/vertical-centring problems are visible on every run, not just
+# whenever someone happens to render at a lucky moment:
+#   22:08:08  -- hour=22 is the sweet spot: 24h/24hs formats (%H, always
+#                zero-padded) render any hour as 2 digits regardless, but
+#                no-pad 12h formats (%-I, e.g. nixie.yaml/big-red.yaml's
+#                "%-I:%M") render hour 1-9 as ONE digit -- narrower than
+#                10/11/12. hour=22 -> 12h hour = 22-12 = 10, so BOTH formats
+#                get their widest (2-digit) hour from this single value.
+#                (hour=20 looked right for 24h but 12h-collapsed to "8:08",
+#                narrower than "10:08" -- the bug this constant now avoids.)
+#   Wednesday, December 20 2028 -- longest weekday name + longest month name,
+#                and "Wednesday"'s 'y' exercises descender-ink clipping/
+#                centring (the reason clip_numeric font_behavior exists).
+_PREVIEW_NOW = datetime.datetime(2028, 12, 20, 22, 8, 8)
+
+
 
 # Restore parse_args (cleanup)
 _argparse.ArgumentParser.parse_args = _real_parse_args
@@ -384,14 +403,17 @@ def render_config(config_path: str, out_path: str) -> None:
     drw  = ImageDraw.Draw(img)
     drw.rectangle((0, 0, w, h), fill=0)
 
-    # Build timezone cache
+    # Build timezone cache -- every timezone maps to the same fixed
+    # _PREVIEW_NOW (see definition above) so every clock/date panel renders
+    # a deterministic, worst-case-width string regardless of timezone or
+    # when this script happens to run.
     tz_cache: dict = {}
     for r in cfg_copy.get("rows", []):
         for p in r.get("panels", []):
             if p.get("type") in ("clock", "date"):
                 tz = p.get("timezone", "local")
                 if tz not in tz_cache:
-                    tz_cache[tz] = _ppd._now_in_tz(tz)
+                    tz_cache[tz] = _PREVIEW_NOW
 
     timings: dict = {'ntp': 0.001, 'tz': 0.0, 'draw': 0.076}
     # Back-date t0 so the debug panel's prep= value shows a realistic 91 ms.
