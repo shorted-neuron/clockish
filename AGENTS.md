@@ -247,20 +247,20 @@ Validation layers:
 
 `clockish-preview` renders every config **twice**:
 
-| output | mode | time/date | cpu% / uptime | hostname / IP / wifi SSID |
-|--------|------|-----------|----------------|---------------------------|
-| `docs/previews/{name}.png` | live | real, per-panel timezone (`_ppd._now_in_tz`) | real (`get_cpu_percent()`/`get_uptime_str()`, unstubbed `/proc/uptime`+`/proc/stat`) | always mocked |
-| `docs/previews/mock/{name}.png` | mock | fixed `_PREVIEW_NOW` (2028-12-20 22:08:08 -- see comment at definition, worst-case digit-width for both 24h and no-pad-12h formats, plus longest weekday/month) | fixed (cpu=100.0, `_MOCK_UPTIME_STR`) | always mocked |
+| output | mode | time/date | cpu% | uptime | hostname / IP / wifi SSID |
+|--------|------|-----------|------|--------|---------------------------|
+| `docs/previews/{name}.png` | live | real, per-panel timezone (`_ppd._now_in_tz`) | fixed `_LIVE_CPU_PERCENT` (42.7) | real (`get_uptime_str()`, unstubbed `/proc/uptime`) | always mocked |
+| `docs/previews/mock/{name}.png` | mock | fixed `_PREVIEW_NOW` (2028-12-20 22:08:08 -- see comment at definition, worst-case digit-width for both 24h and no-pad-12h formats, plus longest weekday/month) | fixed `_MOCK_CPU_PERCENT` (100.0, worst-case width) | fixed `_MOCK_UPTIME_STR` | always mocked |
 
 `docs/previews/*.png` is tracked in git (so a tagged release ships previews
 that look close to "now"); `docs/previews/mock/` is gitignored (local dev/
 review artifact for spotting layout regressions via a deterministic,
 comparable render -- not meant to be committed).
 
-Live mode's `get_cpu_percent()` needs a real ~1s delta between two `/proc/stat`
-reads to report anything meaningful (not the since-boot average from an
-unprimed baseline); `_prime_real_cpu_percent_if_used()` only pays that cost
-when a config actually has a `source: cpu` fact panel.
+cpu% is fixed in **both** modes (just a different constant) rather than read
+live -- real usage changes every render and is noisy/non-reproducible for
+git-diffing the tracked `docs/previews/*.png` set. Only time/date (mock only)
+and uptime (live only) read anything dynamic.
 
 `--skip-live` / `--skip-mock` CLI flags render only one set. A manual-stage
 pre-commit hook (`pre-commit run --hook-stage manual clockish-preview`)

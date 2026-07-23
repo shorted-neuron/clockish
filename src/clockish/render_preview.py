@@ -5,13 +5,15 @@ Usage:
     python render_preview.py [--outdir docs/previews] [config ...]
 
 Every config renders TWICE, to two different destinations:
-  {outdir}/{name}.png       -- 'live' render: real current time/date/cpu%/uptime
-                                (hostname/IP/wifi SSID always mocked, see below).
-                                Tracked in git; overwritten on each run so a
-                                tagged release ships previews that look "now".
+  {outdir}/{name}.png       -- 'live' render: real current time/date/uptime,
+                                fixed cpu%=42.7 (hostname/IP/wifi SSID always
+                                mocked too, see below). Tracked in git;
+                                overwritten on each run so a tagged release
+                                ships previews that look close to "now".
   {outdir}/mock/{name}.png  -- 'mock' render: fixed worst-case-width time/date
-                                and cpu=100%/huge uptime, for spotting layout
-                                regressions via a stable, comparable diff.
+                                and huge fixed uptime, cpu%=100.0 (worst-case
+                                width), for spotting layout regressions via a
+                                stable, comparable diff.
                                 Gitignored -- local dev/review artifact only.
 
 If no config paths are given, all YAML files under configs/ are rendered.
@@ -135,11 +137,13 @@ _PROC_STUBS: dict[str, str] = {
     "/run/systemd/timesync/synchronized": "",
 }
 
-# /proc/uptime and /proc/stat feed get_uptime_str()/get_cpu_percent() -- the
-# only two facts that go "live" (real host value) in non-mock rendering; every
-# other stub above always stays faked (hostname/IP/wifi SSID mocking is a
-# separate, unconditional patch below -- see 'Preview data patches').
-_LIVE_REAL_PROC_PATHS = ("/proc/uptime", "/proc/stat")
+# /proc/uptime feeds get_uptime_str() -- the only fact that goes "live" (real
+# host value) in non-mock rendering; cpu% is a fixed value in BOTH modes (see
+# _MOCK_CPU_PERCENT/_LIVE_CPU_PERCENT below), so /proc/stat is never read and
+# stays stubbed unconditionally. Every other stub above always stays faked
+# too (hostname/IP/wifi SSID mocking is a separate, unconditional patch below
+# -- see 'Preview data patches').
+_LIVE_REAL_UPTIME_PATH = "/proc/uptime"
 _ORIGINAL_PROC_STUBS = dict(_PROC_STUBS)
 
 import io as _io
@@ -241,10 +245,11 @@ _ImageFont.truetype = _patched_truetype
 # ---------------------------------------------------------------------------
 import clockish.display as _ppd
 
-# Capture the real implementations BEFORE any mocking below overwrites them --
-# 'live' mode (see _set_render_mode()) restores these instead of using canned
-# values, so it shows this host's actual current CPU%/uptime.
-_REAL_get_cpu_percent = _ppd.get_cpu_percent
+# Capture the real uptime implementation BEFORE any mocking below overwrites
+# it -- 'live' mode (see _set_render_mode()) restores this instead of using a
+# canned value, so it shows this host's actual current uptime. cpu% is fixed
+# in BOTH modes (just different values -- see _MOCK_CPU_PERCENT/
+# _LIVE_CPU_PERCENT below), so there's no real get_cpu_percent to capture.
 _REAL_get_uptime_str  = _ppd.get_uptime_str
 
 # ---------------------------------------------------------------------------
@@ -290,50 +295,32 @@ _PREVIEW_NOW = datetime.datetime(2028, 12, 20, 22, 8, 8)
 #: Matches get_uptime_str()'s real "up {d}d {h}h {m}m" format.
 _MOCK_UPTIME_STR = "up 804d 20h 46m"
 
+#: Mock-mode cpu% -- worst-case width (the '.1f%' format's widest value:
+#: "100.0%" is one character wider than any other 0-100 value).
+_MOCK_CPU_PERCENT = 100.0
+
+#: Live-mode cpu% -- fixed at a steady, realistic-looking value rather than
+#: this host's real (and constantly-changing, git-diff-noisy) usage. Only
+#: cpu% is fixed this way in 'live' mode; time/date/uptime stay real -- see
+#: module docstring.
+_LIVE_CPU_PERCENT = 42.7
+
 
 def _set_render_mode(mock: bool) -> None:
-    """Toggle cpu%/uptime facts and /proc stub coverage for this render.
+    """Toggle cpu%/uptime facts and /proc/uptime stub coverage for this render.
 
-    mock=True:  cpu=100.0, huge fixed uptime string, /proc/uptime+/proc/stat
-                stay faked (deterministic, worst-case width).
-    mock=False: real get_cpu_percent()/get_uptime_str(), and /proc/uptime +
-                /proc/stat are UNstubbed so they read this host's real files.
+    mock=True:  cpu=_MOCK_CPU_PERCENT (100.0), huge fixed uptime string.
+    mock=False: cpu=_LIVE_CPU_PERCENT (42.7), real get_uptime_str() (with
+                /proc/uptime UNstubbed so it reads this host's real file).
     """
     if mock:
-        _ppd.get_cpu_percent = lambda: 100.0
+        _ppd.get_cpu_percent = lambda: _MOCK_CPU_PERCENT
         _ppd.get_uptime_str  = lambda: _MOCK_UPTIME_STR
-        for path in _LIVE_REAL_PROC_PATHS:
-            _PROC_STUBS[path] = _ORIGINAL_PROC_STUBS[path]
+        _PROC_STUBS[_LIVE_REAL_UPTIME_PATH] = _ORIGINAL_PROC_STUBS[_LIVE_REAL_UPTIME_PATH]
     else:
-        _ppd.get_cpu_percent = _REAL_get_cpu_percent
+        _ppd.get_cpu_percent = lambda: _LIVE_CPU_PERCENT
         _ppd.get_uptime_str  = _REAL_get_uptime_str
-        for path in _LIVE_REAL_PROC_PATHS:
-            _PROC_STUBS.pop(path, None)
-
-
-def _config_uses_cpu_fact(cfg: dict) -> bool:
-    """True if any panel in cfg is a 'fact' panel with source: cpu."""
-    for r in cfg.get("rows", []) or []:
-        for p in r.get("panels", []) or []:
-            if p.get("type") == "fact" and p.get("source") == "cpu":
-                return True
-    return False
-
-
-def _prime_real_cpu_percent_if_used(cfg: dict) -> None:
-    """Prime a genuine ~1s CPU-usage delta before rendering, in 'live' mode.
-
-    get_cpu_percent() computes usage as a delta between two /proc/stat reads,
-    cached for 1s (see display.py). A single render calls it exactly once, so
-    without priming it would report the average utilisation since boot (from
-    the (0, 0) baseline) instead of anything resembling "current". Only pay
-    the ~1s cost when a config actually shows a cpu fact.
-    """
-    if not _config_uses_cpu_fact(cfg):
-        return
-    _ppd.get_cpu_percent()          # discard: seeds _cpu_stat_prev + cache_time
-    time.sleep(1.05)                # clear the 1s cache gate in display.py
-    # The next call (during the real render below) returns a genuine delta.
+        _PROC_STUBS.pop(_LIVE_REAL_UPTIME_PATH, None)
 
 
 # Restore parse_args (cleanup)
@@ -428,9 +415,10 @@ def _resolve_preview_dimensions(cfg: dict, config_path: str) -> tuple[int, int]:
 def render_config(config_path: str, out_path: str, mock: bool) -> None:
     """Load a YAML config, render one frame, and save to out_path (PNG).
 
-    mock=True:  fixed worst-case time/date, cpu=100%, huge fixed uptime.
+    mock=True:  fixed worst-case time/date, cpu%=100.0, huge fixed uptime.
     mock=False: real current time/date (per panel timezone) and this host's
-                real cpu%/uptime (hostname/IP/wifi SSID still always mocked).
+                real uptime; cpu%=42.7 fixed (hostname/IP/wifi SSID still
+                always mocked).
     """
     import yaml
     from PIL import Image, ImageDraw
@@ -449,8 +437,6 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
     _ppd._resolve_colors(cfg_copy)
 
     _set_render_mode(mock)
-    if not mock:
-        _prime_real_cpu_percent_if_used(cfg_copy)
 
     w, h = _resolve_preview_dimensions(cfg_copy, config_path)
 
@@ -539,7 +525,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--skip-live", action="store_true",
-        help="Skip the 'live' (real time/cpu/uptime) render -- mock only.",
+        help="Skip the 'live' (real time/date/uptime) render -- mock only.",
     )
     parser.add_argument(
         "--skip-mock", action="store_true",
