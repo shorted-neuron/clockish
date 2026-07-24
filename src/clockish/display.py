@@ -1095,7 +1095,7 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
     if behavior in ('scale', 'stretch_y') and getattr(f, 'path', None):
         axis = 'height' if behavior == 'stretch_y' else 'both'
         avail_w = max(1, pw - x_offset)
-        f = _fit_font(f.path, text, avail_w, ph, axis)
+        f = _fit_font(str(f.path), text, avail_w, ph, axis)
 
     if behavior == 'clip_numeric':
         ink_top, ink_h = _numeric_ink_metrics(f)
