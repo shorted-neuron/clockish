@@ -84,7 +84,14 @@ All pull requests are automatically tested with GitHub Actions, which runs:
 - **ruff**: code linting and style checks
 - **mypy**: type checking
 
-Coverage reports are attached to each workflow run as artifacts. You can also run these locally:
+Coverage reports are attached to each workflow run as artifacts. You can also run these locally,
+either all at once with the bundled script:
+
+```bash
+bash scripts/pre-pr-check.sh
+```
+
+or individually:
 
 ```bash
 # Install dev dependencies

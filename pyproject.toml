@@ -77,6 +77,17 @@ dev = [
     "ruff",          # linter + formatter
     "mypy",          # type checker
     "pre-commit>=3.5", # git hook framework (run: pre-commit install)
+    # numpy<2.5 -- numpy 2.5.0 (2026) ships typing stubs using PEP 695 "type X = ..."
+    # syntax UNCONDITIONALLY (not version-guarded), which mypy refuses to parse
+    # under --python-version 3.11 (this project's pinned target, matching
+    # Raspberry Pi OS "bookworm"): "Type statement is only supported in Python
+    # 3.12 and greater". This is a mypy/numpy-stub compatibility gap, NOT a
+    # runtime issue -- clockish's actual numpy usage (drivers/framebuffer.py)
+    # is unaffected at any version. Capped here (dev/CI/mypy tooling only) so
+    # `pip install -e ".[dev]"` always resolves a numpy whose stubs mypy can
+    # parse; end users installing plain `clockish` are NOT constrained by this.
+    # Bump/remove once mypy or numpy resolves the incompatibility upstream.
+    "numpy<2.5",
 ]
 
 # -- CLI entry points ----------------------------------------------------------

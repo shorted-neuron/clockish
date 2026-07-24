@@ -325,6 +325,14 @@ ruff check .
 mypy src/clockish
 ```
 
+**Before raising a PR**: run everything CI runs (pre-commit + pytest + ruff + mypy,
+in that order) with one script:
+```bash
+bash scripts/pre-pr-check.sh
+```
+Hard-fails on pre-commit/pytest/mypy issues; reports (but doesn't fail on) ruff
+findings, matching CI's `ruff check . || true`.
+
 **On Pi** (systemd service):
 ```bash
 bash install.sh  # venv, system deps, run-clockish.sh, edit-clockish-config.sh
