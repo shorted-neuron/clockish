@@ -115,7 +115,8 @@ class TestArithmeticTransforms:
 
 class TestStringTransforms:
     def test_replace(self):
-        assert apply_transforms("hello world", [{"replace": {"from": "world", "to": "there"}}]) == "hello there"
+        result = apply_transforms("hello world", [{"replace": {"from": "world", "to": "there"}}])
+        assert result == "hello there"
 
     def test_prefix(self):
         assert apply_transforms("72", [{"prefix": "IP: "}]) == "IP: 72"
