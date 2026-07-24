@@ -291,7 +291,9 @@ class TestFitFont:
         ink_top = d._font_ink_top(f)
         ink_h = d._font_height(f) - ink_top
         assert ink_h <= ph
-        assert f.getbbox(text)[2] <= pw
+        # Bound is on the TIGHT ink width (_ink_extent()), not the advance
+        # width (f.getbbox(text)[2]) -- see bug history above _ink_extent().
+        assert d._ink_extent(f, text)[1] <= pw
 
     def test_fit_height_axis_ignores_width(self) -> None:
         _reset_font_state()

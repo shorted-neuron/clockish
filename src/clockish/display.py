@@ -881,12 +881,39 @@ def _numeric_ink_metrics(f: ImageFont.FreeTypeFont) -> tuple[int, int]:
 _FIT_FONT_CACHE: dict[tuple, ImageFont.FreeTypeFont] = {}
 
 
+def _ink_extent(f: ImageFont.FreeTypeFont, text: str) -> tuple[int, int]:
+    """(left_offset, tight_width) of *text*'s actual painted pixels.
+
+    BUG HISTORY: f.getbbox(text)[2] (used here previously) returns the
+    ADVANCE width -- text[0]'s pen origin to text[-1]'s pen origin plus its
+    advance -- which for most fonts is close to the tight ink width, but NOT
+    the same thing. Fonts with deliberate per-glyph side-bearing (e.g.
+    tabular/monospace-style digit fonts like Nixie One, which pads each
+    digit's advance cell so digits line up evenly) can have a LARGE gap
+    between the two: verified directly for Nixie One's '0' at a 271pt probe
+    size -- advance width 177px, but getmask("0").getbbox() (the actual
+    rendered mask -- what d.text() really paints) shows ink only spans
+    [17,161], i.e. 144px, a ~19% margin baked into the glyph on purpose.
+    _fit_font()'s 'scale'/'scale_numeric' search used to treat that whole
+    177px as "needed" width, stopping the point-size search early and
+    leaving the panel with tens of pixels of unused horizontal space even at
+    the 'maximum' fitted size. Measuring via the rendered mask instead lets
+    the search grow until the ACTUAL ink reaches the edge.
+    """
+    mask = f.getmask(text, mode='L')
+    bbox = mask.getbbox()
+    if bbox is None:
+        return 0, 0
+    return bbox[0], bbox[2] - bbox[0]
+
+
 def _fit_font(path: str, text: str, avail_w: int, avail_h: int,
                axis: str, numeric: bool = False) -> ImageFont.FreeTypeFont:
     """Binary-search the largest point size of *path* where *text* fits.
 
     axis='height': constrain by ink height <= avail_h only (width may overflow).
-    axis='both':   constrain by ink height <= avail_h AND text width <= avail_w.
+    axis='both':   constrain by ink height <= avail_h AND text's tight ink
+                   width (_ink_extent(), NOT the advance width) <= avail_w.
     numeric=True:  measure ink height from "0123456789" (_numeric_ink_metrics)
                    instead of the "Ag|" reference -- used by 'scale_numeric'.
     """
@@ -904,7 +931,7 @@ def _fit_font(path: str, text: str, avail_w: int, avail_h: int,
             ink_h = _font_height(f) - ink_top
         if ink_h > avail_h:
             return False
-        if axis == 'both' and f.getbbox(text)[2] > avail_w:
+        if axis == 'both' and _ink_extent(f, text)[1] > avail_w:
             return False
         return True
 
@@ -1306,12 +1333,13 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
             return
         behavior = 'default'  # no Image available -- degrade gracefully
 
+    fitted = False
     if behavior in ('scale', 'stretch_y', 'scale_numeric') and getattr(f, 'path', None):
         axis = 'height' if behavior == 'stretch_y' else 'both'
         avail_w = max(1, pw - x_offset)
         f = _fit_font(str(f.path), measure_text or text, avail_w, ph, axis,
                        numeric=(behavior == 'scale_numeric'))
-
+        fitted = True
 
     if behavior == 'scale_numeric':
         ink_top, ink_h = _numeric_ink_metrics(f)
@@ -1320,15 +1348,24 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
         ink_h   = _font_height(f) - ink_top
     cy      = _center_y(py, ph, ink_top, ink_h)
 
-    text_w = f.getbbox(text)[2]   # pixel width of rendered text
+    if fitted:
+        # Position using the TIGHT ink extent (_ink_extent(), see docs above
+        # _fit_font()), not the advance width -- otherwise the size we just
+        # fit to reach the panel edge would still get positioned as if it
+        # were the wider advance box, undoing the whole point of fitting to
+        # real ink (text would visibly fall short of the edge it was sized
+        # to reach).
+        left_off, text_w = _ink_extent(f, text)
+    else:
+        left_off, text_w = 0, f.getbbox(text)[2]   # unchanged: advance width
 
     if justify == 'right':
-        tx = px + pw - text_w
+        tx = px + pw - text_w - left_off
     elif justify == 'center':
         available = pw - x_offset
-        tx = px + x_offset + max(0, (available - text_w) // 2)
+        tx = px + x_offset + max(0, (available - text_w) // 2) - left_off
     else:  # 'left' or anything else
-        tx = px + x_offset
+        tx = px + x_offset - left_off
 
     d.text((tx, cy), text, font=f, fill=color)
 
