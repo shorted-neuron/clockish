@@ -19,7 +19,8 @@ def _capture_draw_text(monkeypatch):
     """Monkeypatch _draw_text_line to record every text string it's asked to draw."""
     calls: list[str] = []
 
-    def _fake_draw_text_line(d, px, py, pw, ph, text, f, color, x_offset=0, justify='center'):
+    def _fake_draw_text_line(d, px, py, pw, ph, text, f, color, x_offset=0,
+                              justify='center', behavior='default'):
         calls.append(text)
 
     monkeypatch.setattr(cd, '_draw_text_line', _fake_draw_text_line)

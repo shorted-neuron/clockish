@@ -101,9 +101,10 @@ rows:
   - name: row-name
     height: 40  # pixels | float 0-1 | "15%"
     background: navy  # optional; default black
+    font_behavior: default  # optional row-level default: default|clip_numeric|scale|stretch_y
     panels:
       - type: clock | date | fact | text | divider | wifi_graphic | debug | blank | url-fact
-        # common: color, font_size, font, width, background, justify
+        # common: color, font_size, font, font_behavior, width, background, justify
         # clock/date: timezone, time_format / date_format
         # fact: source (required), label
         # text: label
@@ -140,6 +141,31 @@ All renderers: `(panel_dict, px, py, pw, ph, ...)` → draw on `ImageDraw`.
 - **blank**: reserved space, no draw
 
 Text vertical-centering: `_center_y()` aligns ink baseline within row height.
+
+### font_behavior (row-default / panel-override)
+
+Text-drawing panels (`clock`/`date`/`fact`/`text`/`url-fact`) and rows support `font_behavior:`,
+resolved once in `_init_layout()` (panel value > row default > `'default'`) and written back onto
+the panel dict, so renderers just read `p['font_behavior']`. Values (`KNOWN_FONT_BEHAVIORS` in both
+`display.py` and `config_validator.py` -- duplicated, not imported, to keep the validator free of
+`display.py`'s hardware-driver imports):
+
+- `default` -- unchanged: fixed `font_size:`, ink metrics from `"Ag|"` reference glyphs (assumes
+  worst-case ascender+descender). Numeric-only content (clock, cpu%, temp) can look off-center
+  since digits have no descenders.
+- `clip_numeric` -- fixed `font_size:`, but ink metrics computed from `"0123456789"` instead;
+  cached once per font object in `_NUMERIC_INK_CACHE` (keyed by `id(font)`), never per-draw.
+- `scale` -- ignores `font_size:`'s resolved *size* (keeps its resolved *font file*, via
+  `f.path`); every draw, `_fit_font()` binary-searches the largest point size where the text fits
+  both the panel's width and height (aspect-preserving, since a single TrueType point size scales
+  uniformly). Cached by `(font_path, text, avail_w, avail_h, axis)` so unchanged content across
+  frames is free.
+- `stretch_y` -- same as `scale` but constrained by height only; width may overflow/clip
+  depending on `justify`.
+
+Not yet implemented: `stretch_x` (true anisotropic horizontal-only stretch) -- needs the row's
+underlying `Image` object threaded through `_draw_text_line()`/the panel-renderer call chain
+(currently only `ImageDraw` is passed), deferred as a separate phase.
 
 ### Value transforms
 
@@ -217,13 +243,37 @@ Validation layers:
 
 **Font fallback**: `render_preview.py` tries C:\Windows\Fonts\*.ttf, /System/Library/Fonts, /usr/share/fonts before PIL default.
 
+### Preview rendering: live vs mock
+
+`clockish-preview` renders every config **twice**:
+
+| output | mode | time/date | cpu% | uptime | hostname / IP / wifi SSID |
+|--------|------|-----------|------|--------|---------------------------|
+| `docs/previews/{name}.png` | live | real, per-panel timezone (`_ppd._now_in_tz`) | fixed `_LIVE_CPU_PERCENT` (42.7) | real (`get_uptime_str()`, unstubbed `/proc/uptime`) | always mocked |
+| `docs/previews/mock/{name}.png` | mock | fixed `_PREVIEW_NOW` (2028-12-20 22:08:08 -- see comment at definition, worst-case digit-width for both 24h and no-pad-12h formats, plus longest weekday/month) | fixed `_MOCK_CPU_PERCENT` (100.0, worst-case width) | fixed `_MOCK_UPTIME_STR` | always mocked |
+
+`docs/previews/*.png` is tracked in git (so a tagged release ships previews
+that look close to "now"); `docs/previews/mock/` is gitignored (local dev/
+review artifact for spotting layout regressions via a deterministic,
+comparable render -- not meant to be committed).
+
+cpu% is fixed in **both** modes (just a different constant) rather than read
+live -- real usage changes every render and is noisy/non-reproducible for
+git-diffing the tracked `docs/previews/*.png` set. Only time/date (mock only)
+and uptime (live only) read anything dynamic.
+
+`--skip-live` / `--skip-mock` CLI flags render only one set. A manual-stage
+pre-commit hook (`pre-commit run --hook-stage manual clockish-preview`)
+regenerates both -- not run automatically on every commit (slow, and the
+live set changes every time regardless of code changes).
+
 ### Workflows
 
 **Local dev** (Windows):
 ```bash
 pip install -e ".[dev]"
 clockish-validate configs/clockish.yaml
-clockish-preview configs/clockish.yaml  # outputs docs/previews/*.png
+clockish-preview configs/clockish.yaml  # outputs docs/previews/*.png + docs/previews/mock/*.png
 pytest
 ruff check .
 mypy src/clockish
@@ -273,6 +323,12 @@ bash install.sh  # venv, system deps, run-clockish.sh, edit-clockish-config.sh
 3. Add arg-shape validation case in `config_validator.py` if it needs custom checks (e.g. `replace`)
 4. Document in `URL_FACT_GUIDE.md` transforms table
 5. Test in `test_transforms.py` + `test_config_validator.py::TestTransform`
+
+**Add a font_behavior**:
+1. Add name to `KNOWN_FONT_BEHAVIORS` in **both** `display.py` and `config_validator.py`
+   (duplicated on purpose -- see font_behavior section above)
+2. Implement the drawing logic in `_draw_text_line()` in `display.py`
+3. Test in `test_display_fonts.py` + `test_config_validator.py::TestFontBehavior`
 
 ---
 

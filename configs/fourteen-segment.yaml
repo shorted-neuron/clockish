@@ -108,7 +108,7 @@ rows:
         width: 30%
         justify: left
         source: hostname
-        color: lightgreen
+        color: chartreuse
         font_size: tiny
       - type: fact
         width: 38%

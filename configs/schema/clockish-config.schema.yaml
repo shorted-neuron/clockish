@@ -91,6 +91,12 @@ properties:
         background:
           type: string
           description: 'Row background color (name or hex). Default: black.'
+        font_behavior:
+          type: string
+          enum: [default, clip_numeric, scale, stretch_y]
+          description: |
+            Default font_behavior for every panel in this row (panels may override
+            individually). See panel-level 'font_behavior' below for value meanings.
         panels:
           type: array
           minItems: 1
@@ -125,6 +131,22 @@ properties:
               font_size:
                 description: 'Font size: built-in scale name (giant/huge/big/med/normal/small/tiny/micro),
                   percentage string like ''10%'', "Npx" string, integer pixels, or ''auto'' (75% of row height).'
+              font_behavior:
+                type: string
+                enum: [default, clip_numeric, scale, stretch_y]
+                description: |
+                  Controls font sizing/vertical-centring behavior. Overrides the row's
+                  font_behavior if set; falls back to it, then to 'default', if not.
+                    default       -- current behavior: fixed font_size:, ink metrics from
+                                     worst-case ascender+descender reference glyphs.
+                    clip_numeric  -- fixed font_size:, but ink metrics computed from digits
+                                     only (0-9) -- fixes vertical centring for numeric-only
+                                     content (clock, cpu%, temp, ...) with no descenders.
+                    scale         -- ignore font_size:'s resolved size (keep its font file);
+                                     every draw, pick the largest point size where the text
+                                     fits both the panel's width and height (aspect-preserving).
+                    stretch_y     -- like 'scale' but constrained by height only; width may
+                                     overflow/clip depending on justify.
               width:
                 description: 'Panel width: integer pixels >= 1, "Npx" string, float fraction 0 < x < 1,
                   percentage string, ''auto'', or ''default''.'

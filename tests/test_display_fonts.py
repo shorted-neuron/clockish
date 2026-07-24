@@ -178,3 +178,167 @@ class TestBareFontSizeWithoutFontAttr:
         d._init_layout()
         panel = d._config['rows'][0]['panels'][0]
         assert panel['font_size'] == 'small'
+
+
+class TestFontBehaviorResolution:
+    """Row default / panel override resolution, done once in _init_layout()."""
+
+    def test_unspecified_defaults_to_default(self) -> None:
+        _reset_font_state()
+        d._config = {
+            'orientation': 'landscape',
+            'rows': [{
+                'name': 'r', 'height': 100,
+                'panels': [{'type': 'text', 'label': 'x'}],
+            }],
+        }
+        d.width, d.height, d.top, d.bottom = 480, 480, 0, 480
+        d._init_layout()
+        assert d._config['rows'][0]['panels'][0]['font_behavior'] == 'default'
+
+    def test_row_level_default_applies_to_panel(self) -> None:
+        _reset_font_state()
+        d._config = {
+            'orientation': 'landscape',
+            'rows': [{
+                'name': 'r', 'height': 100, 'font_behavior': 'clip_numeric',
+                'panels': [{'type': 'clock'}],
+            }],
+        }
+        d.width, d.height, d.top, d.bottom = 480, 480, 0, 480
+        d._init_layout()
+        assert d._config['rows'][0]['panels'][0]['font_behavior'] == 'clip_numeric'
+
+    def test_panel_level_overrides_row_level(self) -> None:
+        _reset_font_state()
+        d._config = {
+            'orientation': 'landscape',
+            'rows': [{
+                'name': 'r', 'height': 100, 'font_behavior': 'clip_numeric',
+                'panels': [{'type': 'clock', 'font_behavior': 'scale'}],
+            }],
+        }
+        d.width, d.height, d.top, d.bottom = 480, 480, 0, 480
+        d._init_layout()
+        assert d._config['rows'][0]['panels'][0]['font_behavior'] == 'scale'
+
+    def test_unknown_value_falls_back_to_default(self) -> None:
+        _reset_font_state()
+        d._config = {
+            'orientation': 'landscape',
+            'rows': [{
+                'name': 'r', 'height': 100,
+                'panels': [{'type': 'clock', 'font_behavior': 'bogus'}],
+            }],
+        }
+        d.width, d.height, d.top, d.bottom = 480, 480, 0, 480
+        d._init_layout()
+        assert d._config['rows'][0]['panels'][0]['font_behavior'] == 'default'
+
+
+class TestNumericInkMetrics:
+    """clip_numeric: ink metrics from digits only, cached per font object."""
+
+    def test_numeric_metrics_differ_from_default_for_font_with_descenders(self) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 60)
+        default_top = d._font_ink_top(f)
+        default_h = d._font_height(f) - default_top
+        num_top, num_h = d._numeric_ink_metrics(f)
+        # Digits have no descenders, so their ink cell is shorter than the
+        # 'Ag|' reference (which includes a descender via 'g'). Cap-height
+        # ('A' vs digit tops) can differ by a pixel or two due to hinting,
+        # so only assert the height difference, not top ordering.
+        assert num_h > 0
+        assert num_h < default_h
+
+    def test_numeric_metrics_cached_per_font_object(self) -> None:
+        _reset_font_state()
+        d._NUMERIC_INK_CACHE.clear()
+        f = d.ImageFont.truetype(d._FONT_PATH, 40)
+        first = d._numeric_ink_metrics(f)
+        assert id(f) in d._NUMERIC_INK_CACHE
+        second = d._numeric_ink_metrics(f)
+        assert first == second
+
+
+class TestFitFont:
+    """scale/stretch_y: binary-searched point size that fits the panel rect."""
+
+    def test_fit_both_axes_stays_within_bounds(self) -> None:
+        _reset_font_state()
+        path = d._FONT_PATH
+        text = "12:34"
+        pw, ph = 120, 50
+        f = d._fit_font(path, text, pw, ph, axis='both')
+        ink_top = d._font_ink_top(f)
+        ink_h = d._font_height(f) - ink_top
+        assert ink_h <= ph
+        assert f.getbbox(text)[2] <= pw
+
+    def test_fit_height_axis_ignores_width(self) -> None:
+        _reset_font_state()
+        path = d._FONT_PATH
+        # A wide string in a narrow, tall panel: height-only fit should pick
+        # a size taller than a both-axes fit would (and may overflow width).
+        text = "HELLO WORLD"
+        pw, ph = 40, 100
+        f_height = d._fit_font(path, text, pw, ph, axis='height')
+        f_both = d._fit_font(path, text, pw, ph, axis='both')
+        assert f_height.size >= f_both.size
+
+    def test_fit_font_result_cached(self) -> None:
+        _reset_font_state()
+        d._FIT_FONT_CACHE.clear()
+        path = d._FONT_PATH
+        f1 = d._fit_font(path, "72", 60, 40, axis='both')
+        assert (path, "72", 60, 40, 'both') in d._FIT_FONT_CACHE
+        f2 = d._fit_font(path, "72", 60, 40, axis='both')
+        assert f1 is f2
+
+
+class TestDrawTextLineBehavior:
+    """_draw_text_line() dispatches on `behavior` without crashing and
+    respects each mode's contract at the font-selection level."""
+
+    def test_default_behavior_uses_font_as_given(self, monkeypatch) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+        monkeypatch.setattr(d, '_fit_font', lambda *a, **kw: calls.append(a) or f)
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40,
+                           "72", f, '#ffffff', behavior='default')
+        assert calls == []  # _fit_font must not be called for 'default'
+
+    def test_scale_behavior_calls_fit_font(self, monkeypatch) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+
+        def _fake_fit(path, text, avail_w, avail_h, axis):
+            calls.append((text, avail_w, avail_h, axis))
+            return f
+        monkeypatch.setattr(d, '_fit_font', _fake_fit)
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "72", f, '#ffffff', behavior='scale')
+        assert len(calls) == 1
+        assert calls[0][3] == 'both'
+
+    def test_stretch_y_behavior_uses_height_axis(self, monkeypatch) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+
+        def _fake_fit(path, text, avail_w, avail_h, axis):
+            calls.append(axis)
+            return f
+        monkeypatch.setattr(d, '_fit_font', _fake_fit)
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "72", f, '#ffffff', behavior='stretch_y')
+        assert calls == ['height']
+
+
+class _NullDraw:
+    """Minimal stand-in for ImageDraw.ImageDraw -- records nothing, just
+    accepts .text() calls so _draw_text_line() can run without a real canvas."""
+
+    def text(self, *args, **kwargs) -> None:
+        pass

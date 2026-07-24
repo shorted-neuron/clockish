@@ -113,15 +113,23 @@ clockish --debug-layout configs/big-red.yaml   # render one frame then exit
 ### Generating previews (no hardware required)
 
 `render_preview.py` renders any config to a PNG on any platform — no Raspberry Pi or display needed.
+Every config renders **twice**: a "live" version with real current time/date/cpu%/uptime
+(`docs/previews/{name}.png`, tracked in git) and a "mock" version with fixed worst-case-width
+values for spotting layout regressions (`docs/previews/mock/{name}.png`, gitignored, local-only).
+Hostname/IP/wifi SSID are always mocked in both.
 
 ```bash
-# Render a single config
+# Render a single config (both live + mock)
 python3 src/clockish/render_preview.py configs/system-info.yaml
 
-# Render all configs in configs/ (output goes to docs/previews/)
+# Render all configs in configs/ (output goes to docs/previews/ + docs/previews/mock/)
 python3 src/clockish/render_preview.py
 
-# Custom output directory
+# Only one variant
+python3 src/clockish/render_preview.py --skip-mock   # live only
+python3 src/clockish/render_preview.py --skip-live   # mock only
+
+# Custom output directory (mock goes to {outdir}/mock/)
 python3 src/clockish/render_preview.py --outdir /tmp/out configs/big-red.yaml
 ```
 

@@ -121,6 +121,13 @@ BUILTIN_FONT_NAMES: frozenset[str] = frozenset({
     'giant', 'huge', 'big', 'med', 'normal', 'small', 'tiny', 'micro',
 })
 
+#: Valid 'font_behavior' values (row-level default, panel-level override).
+#: Mirrors clockish.display.KNOWN_FONT_BEHAVIORS -- duplicated (not imported)
+#: to keep this module free of display.py's hardware-driver imports.
+KNOWN_FONT_BEHAVIORS: frozenset[str] = frozenset({
+    'default', 'clip_numeric', 'scale', 'stretch_y',
+})
+
 #: Deprecated panel keys  ->  replacement hint.
 _DEPRECATED_PANEL_KEYS: dict[str, str] = {
     'time_font':  "use 'font_size:' instead",
@@ -133,20 +140,20 @@ _DEPRECATED_PANEL_KEYS: dict[str, str] = {
 #: Keys that appear here but are present in the config do NOT trigger unknown-key warnings.
 _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'clock': frozenset({
-        'type', 'justify', 'color', 'font', 'font_size', 'width', 'background', 'label',
-        'timezone', 'time_format', 'transform',
+        'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
+        'background', 'label', 'timezone', 'time_format', 'transform',
     }),
     'date': frozenset({
-        'type', 'justify', 'color', 'font', 'font_size', 'width', 'background',
-        'timezone', 'date_format', 'transform',
+        'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
+        'background', 'timezone', 'date_format', 'transform',
     }),
     'fact': frozenset({
-        'type', 'justify', 'color', 'font', 'font_size', 'width', 'background', 'label',
-        'source', 'transform',
+        'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
+        'background', 'label', 'source', 'transform',
     }),
     'text': frozenset({
-        'type', 'justify', 'color', 'font', 'font_size', 'width', 'background', 'label',
-        'transform',
+        'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
+        'background', 'label', 'transform',
     }),
     'divider': frozenset({
         'type', 'color', 'height', 'width', 'background',
@@ -162,14 +169,14 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     }),
     'url-fact': frozenset({
         'type', 'url', 'pattern', 'json_path', 'interval', 'timeout', 'verify_ssl',
-        'fallback', 'label', 'color', 'font', 'font_size', 'width', 'background', 'justify',
-        'transform',
+        'fallback', 'label', 'color', 'font', 'font_size', 'font_behavior', 'width',
+        'background', 'justify', 'transform',
     }),
 }
 
 #: Valid row-level keys.
 _KNOWN_ROW_KEYS: frozenset[str] = frozenset({
-    'name', 'height', 'panels', 'background',
+    'name', 'height', 'panels', 'background', 'font_behavior',
     '_widths',   # runtime-injected by _init_layout(); harmless if present in config
 })
 
@@ -452,6 +459,15 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
             if key not in _KNOWN_ROW_KEYS:
                 warn(f'rows[{ri}]', f"unknown row-level key '{key}'")
 
+        # Invalid row-level 'font_behavior' (panel-level checked below)
+        row_behavior = row.get('font_behavior')
+        if row_behavior is not None and row_behavior not in KNOWN_FONT_BEHAVIORS:
+            warn(
+                f'rows[{ri}]',
+                f"'font_behavior: {row_behavior!r}' is not a valid value "
+                f"(expected one of: {', '.join(sorted(KNOWN_FONT_BEHAVIORS))})",
+            )
+
         # Missing / empty panels
         panels = row.get('panels')
         if panels is None:
@@ -502,6 +518,15 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                     ploc,
                     f"'justify: {justify!r}' is not a valid value "
                     "(expected: left, right, or center)",
+                )
+
+            # 3b. Invalid panel-level 'font_behavior' value
+            panel_behavior = panel.get('font_behavior')
+            if panel_behavior is not None and panel_behavior not in KNOWN_FONT_BEHAVIORS:
+                warn(
+                    ploc,
+                    f"'font_behavior: {panel_behavior!r}' is not a valid value "
+                    f"(expected one of: {', '.join(sorted(KNOWN_FONT_BEHAVIORS))})",
                 )
 
             # 4. Unknown panel type
