@@ -20,7 +20,7 @@ def _capture_draw_text(monkeypatch):
     calls: list[str] = []
 
     def _fake_draw_text_line(d, px, py, pw, ph, text, f, color, x_offset=0,
-                              justify='center', behavior='default'):
+                              justify='center', behavior='default', img=None):
         calls.append(text)
 
     monkeypatch.setattr(cd, '_draw_text_line', _fake_draw_text_line)

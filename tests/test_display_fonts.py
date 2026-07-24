@@ -201,20 +201,20 @@ class TestFontBehaviorResolution:
         d._config = {
             'orientation': 'landscape',
             'rows': [{
-                'name': 'r', 'height': 100, 'font_behavior': 'clip_numeric',
+                'name': 'r', 'height': 100, 'font_behavior': 'scale_numeric',
                 'panels': [{'type': 'clock'}],
             }],
         }
         d.width, d.height, d.top, d.bottom = 480, 480, 0, 480
         d._init_layout()
-        assert d._config['rows'][0]['panels'][0]['font_behavior'] == 'clip_numeric'
+        assert d._config['rows'][0]['panels'][0]['font_behavior'] == 'scale_numeric'
 
     def test_panel_level_overrides_row_level(self) -> None:
         _reset_font_state()
         d._config = {
             'orientation': 'landscape',
             'rows': [{
-                'name': 'r', 'height': 100, 'font_behavior': 'clip_numeric',
+                'name': 'r', 'height': 100, 'font_behavior': 'scale_numeric',
                 'panels': [{'type': 'clock', 'font_behavior': 'scale'}],
             }],
         }
@@ -237,7 +237,7 @@ class TestFontBehaviorResolution:
 
 
 class TestNumericInkMetrics:
-    """clip_numeric: ink metrics from digits only, cached per font object."""
+    """scale_numeric: ink metrics from digits only, cached per font object."""
 
     def test_numeric_metrics_differ_from_default_for_font_with_descenders(self) -> None:
         _reset_font_state()
@@ -292,9 +292,23 @@ class TestFitFont:
         d._FIT_FONT_CACHE.clear()
         path = d._FONT_PATH
         f1 = d._fit_font(path, "72", 60, 40, axis='both')
-        assert (path, "72", 60, 40, 'both') in d._FIT_FONT_CACHE
+        assert (path, "72", 60, 40, 'both', False) in d._FIT_FONT_CACHE
         f2 = d._fit_font(path, "72", 60, 40, axis='both')
         assert f1 is f2
+
+    def test_fit_font_numeric_uses_numeric_ink_metrics(self) -> None:
+        """numeric=True must fit against digit-only ink height, not 'Ag|'."""
+        _reset_font_state()
+        d._FIT_FONT_CACHE.clear()
+        path = d._FONT_PATH
+        text = "72"
+        pw, ph = 200, 60
+        f_default = d._fit_font(path, text, pw, ph, axis='both', numeric=False)
+        f_numeric = d._fit_font(path, text, pw, ph, axis='both', numeric=True)
+        # No descenders to worry about -> numeric fit can pick a larger size
+        # for the same height budget.
+        assert f_numeric.size >= f_default.size
+        assert (path, text, pw, ph, 'both', True) in d._FIT_FONT_CACHE
 
 
 class TestDrawTextLineBehavior:
@@ -315,25 +329,157 @@ class TestDrawTextLineBehavior:
         f = d.ImageFont.truetype(d._FONT_PATH, 30)
         calls = []
 
-        def _fake_fit(path, text, avail_w, avail_h, axis):
-            calls.append((text, avail_w, avail_h, axis))
+        def _fake_fit(path, text, avail_w, avail_h, axis, numeric=False):
+            calls.append((text, avail_w, avail_h, axis, numeric))
             return f
         monkeypatch.setattr(d, '_fit_font', _fake_fit)
         d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "72", f, '#ffffff', behavior='scale')
         assert len(calls) == 1
         assert calls[0][3] == 'both'
+        assert calls[0][4] is False
+
+    def test_scale_numeric_behavior_calls_fit_font_with_numeric_flag(self, monkeypatch) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+
+        def _fake_fit(path, text, avail_w, avail_h, axis, numeric=False):
+            calls.append((text, avail_w, avail_h, axis, numeric))
+            return f
+        monkeypatch.setattr(d, '_fit_font', _fake_fit)
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "72", f, '#ffffff',
+                           behavior='scale_numeric')
+        assert len(calls) == 1
+        assert calls[0][3] == 'both'
+        assert calls[0][4] is True
 
     def test_stretch_y_behavior_uses_height_axis(self, monkeypatch) -> None:
         _reset_font_state()
         f = d.ImageFont.truetype(d._FONT_PATH, 30)
         calls = []
 
-        def _fake_fit(path, text, avail_w, avail_h, axis):
+        def _fake_fit(path, text, avail_w, avail_h, axis, numeric=False):
             calls.append(axis)
             return f
         monkeypatch.setattr(d, '_fit_font', _fake_fit)
         d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "72", f, '#ffffff', behavior='stretch_y')
         assert calls == ['height']
+
+    def test_stretch_x_without_img_falls_back_to_default(self, monkeypatch) -> None:
+        """No Image threaded through -> degrade to 'default' rather than crash."""
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+        monkeypatch.setattr(d, '_draw_text_stretch_x',
+                             lambda *a, **kw: calls.append('stretched'))
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "72", f, '#ffffff',
+                           behavior='stretch_x', img=None)
+        assert calls == []  # never called the stretch path
+
+    def test_stretch_x_with_img_calls_stretch_helper(self, monkeypatch) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+        monkeypatch.setattr(d, '_draw_text_stretch_x',
+                             lambda *a, **kw: calls.append(a))
+        fake_img = object()
+        d._draw_text_line(_NullDraw(), 5, 6, 100, 40, "72", f, '#ffffff',
+                           behavior='stretch_x', img=fake_img)
+        assert len(calls) == 1
+        assert calls[0][0] is fake_img
+
+
+class TestStretchXRendering:
+    """_draw_text_stretch_x() actually stretches ink to fill the panel width."""
+
+    def test_ink_spans_full_available_width(self) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 60)
+        img = d.Image.new('RGB', (480, 320), (0, 0, 0))
+        draw = d.ImageDraw.Draw(img)
+        px, py, pw, ph = 50, 50, 300, 100
+        d._draw_text_line(draw, px, py, pw, ph, "72", f, '#ffffff',
+                           behavior='stretch_x', img=img)
+
+        # Sample the drawn image: ink should span most of [px, px+pw).
+        pixels = img.load()
+        xs_with_ink = [
+            x for x in range(px, px + pw)
+            if any(pixels[x, y][0] > 10 for y in range(py, py + ph))
+        ]
+        assert xs_with_ink, "expected some ink to be drawn"
+        span = max(xs_with_ink) - min(xs_with_ink)
+        assert span > pw * 0.7  # stretched to fill most of the panel width
+
+    def test_fallback_to_default_when_img_none(self) -> None:
+        """Full _draw_text_line() call with img=None must not raise."""
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "72", f, '#ffffff',
+                           behavior='stretch_x', img=None)  # should not raise
+
+
+class TestPanelPadding:
+    """_dispatch_panel() insets (px, py, pw, ph) by 'padding:' before handing
+    off to the type-specific renderer; background fill uses the unpadded rect."""
+
+    def _spy_rect(self, monkeypatch, panel_type: str):
+        _reset_font_state()
+        calls = []
+        name = {
+            'text': '_render_text_panel', 'clock': '_render_clock_panel',
+        }[panel_type]
+        orig = getattr(d, name)
+
+        def spy(p, px, py, pw, ph, *rest):
+            calls.append((px, py, pw, ph))
+            return orig(p, px, py, pw, ph, *rest)
+        monkeypatch.setattr(d, name, spy)
+        return calls
+
+    def test_default_padding_is_1px(self, monkeypatch) -> None:
+        calls = self._spy_rect(monkeypatch, 'text')
+        panel = {'type': 'text', 'label': 'x'}
+        d._dispatch_panel(panel, 0, 0, 100, 50, {}, {}, 0, _NullDraw())
+        assert calls == [(1, 1, 98, 48)]
+
+    def test_explicit_padding_insets_all_sides(self, monkeypatch) -> None:
+        calls = self._spy_rect(monkeypatch, 'text')
+        panel = {'type': 'text', 'label': 'x', 'padding': 10}
+        d._dispatch_panel(panel, 0, 0, 100, 50, {}, {}, 0, _NullDraw())
+        assert calls == [(10, 10, 80, 30)]
+
+    def test_zero_padding_allowed(self, monkeypatch) -> None:
+        calls = self._spy_rect(monkeypatch, 'text')
+        panel = {'type': 'text', 'label': 'x', 'padding': 0}
+        d._dispatch_panel(panel, 0, 0, 100, 50, {}, {}, 0, _NullDraw())
+        assert calls == [(0, 0, 100, 50)]
+
+    def test_invalid_padding_falls_back_to_default_1px(self, monkeypatch) -> None:
+        calls = self._spy_rect(monkeypatch, 'text')
+        panel = {'type': 'text', 'label': 'x', 'padding': 'bogus'}
+        d._dispatch_panel(panel, 0, 0, 100, 50, {}, {}, 0, _NullDraw())
+        assert calls == [(1, 1, 98, 48)]
+
+    def test_padding_never_shrinks_below_1px(self, monkeypatch) -> None:
+        """A panel too small for the requested padding still gets a >=1px rect."""
+        calls = self._spy_rect(monkeypatch, 'text')
+        panel = {'type': 'text', 'label': 'x', 'padding': 50}
+        d._dispatch_panel(panel, 0, 0, 10, 10, {}, {}, 0, _NullDraw())
+        px, py, pw, ph = calls[0]
+        assert pw >= 1 and ph >= 1
+
+    def test_padding_passed_through_to_img_for_stretch_x(self, monkeypatch) -> None:
+        """target_img threaded through _dispatch_panel reaches the renderer."""
+        _reset_font_state()
+        calls = self._spy_rect(monkeypatch, 'clock')
+        panel = {'type': 'clock', 'padding': 5}
+        fake_img = object()
+        import datetime as _dt
+        d._dispatch_panel(panel, 0, 0, 100, 50,
+                           {'local': _dt.datetime(2028, 1, 1)}, {}, 0,
+                           _NullDraw(), fake_img)
+        assert calls == [(5, 5, 90, 40)]
 
 
 class _NullDraw:

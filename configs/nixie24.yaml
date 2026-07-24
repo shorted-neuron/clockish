@@ -70,9 +70,10 @@ rows:
         justify: center
         timezone: US/Mountain
         time_format: 24hs
-        font_behavior: scale
         color: darkorange   # classic warm nixie yellow-orange
-        font_size: giant    # ~68% of display height - fills the row
+        font_size: auto
+        font_behavior: scale_numeric
+        background: '#111111'
 
   - name: divider-1
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080

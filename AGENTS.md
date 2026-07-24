@@ -101,10 +101,10 @@ rows:
   - name: row-name
     height: 40  # pixels | float 0-1 | "15%"
     background: navy  # optional; default black
-    font_behavior: default  # optional row-level default: default|clip_numeric|scale|stretch_y
+    font_behavior: default  # optional row-level default: default|scale|scale_numeric|stretch_y|stretch_x
     panels:
       - type: clock | date | fact | text | divider | wifi_graphic | debug | blank | url-fact
-        # common: color, font_size, font, font_behavior, width, background, justify
+        # common: color, font_size, font, font_behavior, width, background, justify, padding
         # clock/date: timezone, time_format / date_format
         # fact: source (required), label
         # text: label
@@ -153,19 +153,36 @@ the panel dict, so renderers just read `p['font_behavior']`. Values (`KNOWN_FONT
 - `default` -- unchanged: fixed `font_size:`, ink metrics from `"Ag|"` reference glyphs (assumes
   worst-case ascender+descender). Numeric-only content (clock, cpu%, temp) can look off-center
   since digits have no descenders.
-- `clip_numeric` -- fixed `font_size:`, but ink metrics computed from `"0123456789"` instead;
-  cached once per font object in `_NUMERIC_INK_CACHE` (keyed by `id(font)`), never per-draw.
 - `scale` -- ignores `font_size:`'s resolved *size* (keeps its resolved *font file*, via
   `f.path`); every draw, `_fit_font()` binary-searches the largest point size where the text fits
   both the panel's width and height (aspect-preserving, since a single TrueType point size scales
-  uniformly). Cached by `(font_path, text, avail_w, avail_h, axis)` so unchanged content across
-  frames is free.
+  uniformly). Cached by `(font_path, text, avail_w, avail_h, axis, numeric)` so unchanged content
+  across frames is free.
+- `scale_numeric` -- same fit search as `scale`, but both `_fit_font()`'s ink measurement and the
+  final vertical-centring ink metrics come from `_numeric_ink_metrics()` (`"0123456789"`) instead
+  of the `"Ag|"` reference -- fixes off-center numeric-only content (clock, cpu%, temp) since
+  digits have no descenders. `_numeric_ink_metrics()` caches once per font object in
+  `_NUMERIC_INK_CACHE` (keyed by `id(font)`), never per-draw.
 - `stretch_y` -- same as `scale` but constrained by height only; width may overflow/clip
   depending on `justify`.
+- `stretch_x` -- fixed `font_size:` (height set once at load, like `default`); every draw,
+  non-uniformly stretches the rendered glyphs horizontally to exactly fill the panel width.
+  Unlike `scale`/`stretch_y` (uniform point-size change), Pillow has no API for anisotropic
+  font scaling, so this renders to an offscreen RGBA image (`_draw_text_stretch_x()`) and
+  resizes width-only (`Image.Resampling.BILINEAR`), then alpha-composites it onto the row's
+  `Image` -- the one behavior that needs the actual `Image` object, not just `ImageDraw`,
+  threaded through `_draw_text_line()` → each `_render_*_panel()` → `_dispatch_panel()` →
+  `_render_row()` (`img=`/`target_img=` params, default `None`). Falls back to `default` if
+  no `Image` is available (e.g. a caller that only has `ImageDraw`). `justify` is moot (always
+  fills edge-to-edge); use `padding:` to inset instead.
 
-Not yet implemented: `stretch_x` (true anisotropic horizontal-only stretch) -- needs the row's
-underlying `Image` object threaded through `_draw_text_line()`/the panel-renderer call chain
-(currently only `ImageDraw` is passed), deferred as a separate phase.
+### padding (universal panel attribute)
+
+`padding:` (integer px, all 4 sides, default `1`) insets a panel's `(px, py, pw, ph)` rect
+before dispatch to its type-specific renderer -- applied once in `_dispatch_panel()`, so it
+works uniformly on every panel type (text-drawing or not; background fill still covers the
+full, unpadded cell). Invalid values (negative, non-numeric) fall back to the default `1px`
+(warned by `config_validator.py`, never fatal).
 
 ### Value transforms
 
