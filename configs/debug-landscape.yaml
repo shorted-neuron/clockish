@@ -133,3 +133,4 @@ rows:
         label: v
         source: version
         font_size: auto
+        font_behavior: scale_numeric

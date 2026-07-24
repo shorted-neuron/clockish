@@ -73,7 +73,6 @@ rows:
         color: darkorange   # classic warm nixie yellow-orange
         font_size: auto
         font_behavior: scale_numeric
-        background: '#111111'
 
   - name: divider-1
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
