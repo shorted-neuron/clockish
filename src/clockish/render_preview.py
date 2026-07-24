@@ -27,6 +27,7 @@ import datetime
 import os
 import sys
 import time
+import traceback
 import types
 
 # ---------------------------------------------------------------------------
@@ -117,6 +118,7 @@ except ImportError:
 # Stub /proc files for system-info helpers
 # ---------------------------------------------------------------------------
 import builtins as _builtins
+
 _real_open = _builtins.open
 
 _PROC_STUBS: dict[str, str] = {
@@ -148,6 +150,7 @@ _ORIGINAL_PROC_STUBS = dict(_PROC_STUBS)
 
 import io as _io
 
+
 class _StubFile:
     """A file-like object backed by a static string."""
     def __init__(self, content: str):
@@ -171,6 +174,7 @@ _builtins.open = _patched_open
 # Stub subprocess.check_output for wgstatus / chronyc / timedatectl / iwgetid
 # ---------------------------------------------------------------------------
 import subprocess as _subprocess
+
 _real_check_output = _subprocess.check_output
 
 def _patched_check_output(cmd, *args, **kwargs):
@@ -192,6 +196,7 @@ _subprocess.check_output = _patched_check_output
 # returns safe defaults regardless of our own sys.argv.
 # ---------------------------------------------------------------------------
 import argparse as _argparse
+
 _real_parse_args = _argparse.ArgumentParser.parse_args
 
 def _safe_parse_args(self, args=None, namespace=None):
@@ -420,9 +425,10 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
                 real uptime; cpu%=42.7 fixed (hostname/IP/wifi SSID still
                 always mocked).
     """
+    import platform
+
     import yaml
     from PIL import Image, ImageDraw
-    import platform
 
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
@@ -568,7 +574,7 @@ def main() -> None:
             except Exception as exc:
                 label = "mock" if mock else "live"
                 print(f"  ERROR rendering {cfg_path} ({label}): {exc}", file=sys.stderr)
-                import traceback; traceback.print_exc()
+                traceback.print_exc()
 
 
 if __name__ == "__main__":

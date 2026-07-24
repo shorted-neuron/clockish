@@ -1,5 +1,5 @@
 ---
-# nixie.yaml  --  clockish config for a nixie-tube-style clock
+# nixie24.yaml  --  clockish config for a nixie-tube-style clock
 # ---------------------------------------------------------------------------
 # Requires the Nixie One font (SIL OFL 1.1 license).
 # Nixie One is a Google Font by Jovanny Lemonad  --  a faithful recreation of
@@ -73,7 +73,6 @@ rows:
         color: darkorange   # classic warm nixie yellow-orange
         font_size: auto
         font_behavior: scale_numeric
-        background: '#111111'
 
   - name: divider-1
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080

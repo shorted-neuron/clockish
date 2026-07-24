@@ -10,17 +10,15 @@ Navigate pages with Enter (next) or Q (quit).
 """
 
 import sys
-import os
-
 import termios
 import tty
-import time
 
 from PIL import Image, ImageDraw, ImageFont
-from spidev import SpiDev
-from pyili9486 import ILI9486, Origin, SKU
+from pyili9486 import ILI9486, SKU, Origin
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
-from clockish.colors import PALETTE, rgb_to_hex, best_label_color, luminance
+from spidev import SpiDev
+
+from clockish.colors import PALETTE, best_label_color, rgb_to_hex
 
 # ---------------------------------------------------------------------------
 # Hardware configuration
@@ -169,5 +167,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:
-        GPIO.cleanup()
+        # GPIO cleanup is handled by the rpi-lgpio facade (see
+        # drivers/ili9486.py) -- only the SPI bus needs an explicit close.
         spi.close()

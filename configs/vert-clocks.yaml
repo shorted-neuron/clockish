@@ -73,6 +73,7 @@ rows:
         time_format: 24hs       # HH:MM:SS
         color: lime
         font_size: auto
+        font_behavior: scale_numeric
 
   - name: utc-date
     height: 6.25%
@@ -102,10 +103,12 @@ rows:
         time_format: 12h         # h:MM AM/PM
         color: cornflower
         font_size: auto
+        font_behavior: scale_numeric
       - type: text
         # justify: center
         label: "DEN"
         color: steelblue
+        font_behavior: scale_numeric
 
   - name: den-date
     height: 6.25%
@@ -129,6 +132,7 @@ rows:
         color: orange
           # label: darkorange
         font_size: auto
+        font_behavior: scale_numeric
       - type: text
         # justify: center
         label: "ATL"
@@ -136,6 +140,7 @@ rows:
         font_size: auto
         background: black
         width: 30%
+        font_behavior: scale_numeric
 
   - name: ist-clock
     height: 12.50%
@@ -154,6 +159,7 @@ rows:
         font_size: auto
         background: black
         width: 30%
+        font_behavior: default
 
   - name: divider-2
     height: 1px
@@ -190,6 +196,7 @@ rows:
         label: ""
         color: grey
         font_size: auto
+        font_behavior: scale_numeric
       - type: wifi_graphic
         width: 10.00%
         # justify: center
@@ -229,4 +236,12 @@ rows:
     height: 9.58%
     panels:
       - type: debug
+        width: 70%
         color: tan
+      - type: fact
+        width: 30%
+        label: v
+        color: rust
+        source: version
+        font_size: auto
+        font_behavior: scale_numeric

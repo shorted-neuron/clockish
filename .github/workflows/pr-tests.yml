@@ -8,7 +8,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: Test & Lint (Python 3.11)
+    name: Test & Lint (Python ${{ matrix.python-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11: floor / Raspberry Pi OS "bookworm" (real deployment target)
+        # 3.12: common desktop/CI baseline (broad contributor-environment coverage)
+        # 3.13: Raspberry Pi OS "trixie" (real deployment target)
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       # -----------------------------------------------------------------------
@@ -17,10 +24,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       # -----------------------------------------------------------------------
       # Cache pip dependencies
@@ -29,9 +36,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          key: ${{ runner.os }}-py${{ matrix.python-version }}-pip-${{ hashFiles('**/pyproject.toml') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-py${{ matrix.python-version }}-pip-
 
       # -----------------------------------------------------------------------
       # Install dependencies
@@ -64,7 +71,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-html
+          name: coverage-report-html-py${{ matrix.python-version }}
           path: htmlcov/
           retention-days: 30
 
@@ -77,7 +84,9 @@ jobs:
           ruff check . --output-format=github || true
 
       # -----------------------------------------------------------------------
-      # MyPy type checking
+      # MyPy type checking  --  target version is pinned in pyproject.toml
+      # ([tool.mypy] python_version = "3.11", matching the floor/bookworm)
+      # regardless of which interpreter in the matrix actually runs mypy.
       # -----------------------------------------------------------------------
       - name: Run mypy type checker
         if: always()

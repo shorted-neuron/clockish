@@ -1,7 +1,5 @@
 """Tests for platform_utils."""
-import sys
 import pytest
-from clockish.platform_utils import is_windows, is_linux
 
 
 def test_platform_detection_does_not_crash():

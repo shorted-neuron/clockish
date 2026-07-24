@@ -28,6 +28,8 @@ Quick-reference
 - best_label_hex(bg_rgb)   -> '#RRGGBB'
 """
 
+import sys as _sys
+
 # ---------------------------------------------------------------------------
 # Palette  --  (name, RGB tuple), ordered by hue family
 # All values snapped to RGB565 grid: R & B multiples of 8, G multiples of 4.
@@ -162,7 +164,6 @@ C = _ColorNamespace()
 # Injected dynamically so the palette is the single source of truth.
 # Use:  from pyili9486.colors import RED, GREEN, WHITE
 # ---------------------------------------------------------------------------
-import sys as _sys
 
 _mod = _sys.modules[__name__]
 for _name, _rgb in PALETTE:

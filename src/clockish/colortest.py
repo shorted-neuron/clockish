@@ -7,15 +7,13 @@ asking how many distinct colors you could see.  Results are saved to
 colortest_results.txt so you can use them to build a better color palette.
 """
 
-import sys
 import os
 import time
-import math
 
 from PIL import Image, ImageDraw, ImageFont
-from spidev import SpiDev
-from pyili9486 import ILI9486, Origin, SKU
+from pyili9486 import ILI9486, SKU, Origin
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
+from spidev import SpiDev
 
 # ---------------------------------------------------------------------------
 # Hardware configuration  --  adjust to match your wiring
@@ -275,5 +273,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:
-        GPIO.cleanup()
+        # GPIO cleanup is handled by the rpi-lgpio facade (see
+        # drivers/ili9486.py) -- only the SPI bus needs an explicit close.
         spi.close()

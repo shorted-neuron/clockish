@@ -118,7 +118,7 @@ class TestUrlFactTransform:
         cd._remote_fact_cache.pop(id(panel), None)
 
         cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)  # first: fetches + caches raw
-        cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)  # second: cache hit, still transforms
+        cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)  # second: cache hit, transforms
 
         assert fetch_calls == [1]  # only fetched once (interval not expired)
         assert calls == ['72', '72']
@@ -133,6 +133,8 @@ class TestTextTransform:
 
     def test_camelcase_vs_titlecase_on_text_panel(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        cd._render_text_panel({'label': 'hello world', 'transform': ['camelcase']}, 0, 0, 100, 40, d=None)
-        cd._render_text_panel({'label': 'hello world', 'transform': ['titlecase']}, 0, 0, 100, 40, d=None)
+        panel_camel = {'label': 'hello world', 'transform': ['camelcase']}
+        panel_title = {'label': 'hello world', 'transform': ['titlecase']}
+        cd._render_text_panel(panel_camel, 0, 0, 100, 40, d=None)
+        cd._render_text_panel(panel_title, 0, 0, 100, 40, d=None)
         assert calls == ['helloWorld', 'HelloWorld']

@@ -18,15 +18,16 @@ Controls:
   q/Q      - quit
 """
 
-import sys
 import os
+import sys
 import termios
 import tty
 
 from PIL import Image, ImageDraw, ImageFont
-from spidev import SpiDev
-from pyili9486 import ILI9486, Origin, SKU
+from pyili9486 import ILI9486, SKU, Origin
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
+from spidev import SpiDev
+
 from clockish.colors import BY_NAME, PALETTE
 
 # ---------------------------------------------------------------------------
@@ -456,7 +457,8 @@ def main():
         per = _colors_per_page_px(color_size, fpath)
         page_start = color_offset % len(PALETTE)
         page_end   = (page_start + per - 1) % len(PALETTE)
-        print(f"Color mode  font={fname}  size={color_size}px  colors {page_start} - {page_end} of {len(PALETTE)}")
+        print(f"Color mode  font={fname}  size={color_size}px  "
+              f"colors {page_start} - {page_end} of {len(PALETTE)}")
         render_color_page(color_size, color_offset % len(PALETTE), fname, fpath)
 
     print()

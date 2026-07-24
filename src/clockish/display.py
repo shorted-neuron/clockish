@@ -16,8 +16,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
-import zoneinfo # before yaml
-from contextlib import contextmanager # before yaml
+import zoneinfo  # before yaml
+from contextlib import contextmanager  # before yaml
+
 import yaml
 
 # syslog: Unix/Linux only
@@ -27,11 +28,11 @@ try:
 except ImportError:
     _SYSLOG_AVAILABLE = False
 
-from PIL import Image, ImageDraw, ImageFont
 import PIL.ImageOps
+from PIL import Image, ImageDraw, ImageFont
 
 from clockish import __version__
-from clockish.colors import rgb_to_hex, BY_NAME
+from clockish.colors import BY_NAME, rgb_to_hex
 from clockish.drivers import load_driver
 from clockish.transforms import apply_transforms
 
@@ -46,7 +47,9 @@ def _find_default_config() -> str:
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'clockish.yaml'),
         # 2. configs/ directory relative to project root (clockish src-layout)
         # __file__ is src/clockish/display.py -> go up 2 levels to reach the project root.
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'configs', 'clockish.yaml'),
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '..', '..', 'configs', 'clockish.yaml',
+        ),
         # 3. User config directory
         os.path.expanduser('~/.config/clockish/clockish.yaml'),
         # 4. Home directory (simple deployment)
@@ -380,9 +383,12 @@ def get_uptime_str():
     days  = int(uptime_seconds // 86400)
     hours = int((uptime_seconds % 86400) // 3600)
     mins  = int((uptime_seconds % 3600) // 60)
-    if days > 0:    return f"up {days}d {hours}h {mins}m"
-    elif hours > 0: return f"up {hours}h {mins}m"
-    else:           return f"up {mins}m"
+    if days > 0:
+        return f"up {days}d {hours}h {mins}m"
+    elif hours > 0:
+        return f"up {hours}h {mins}m"
+    else:
+        return f"up {mins}m"
 
 def get_cpu_load():
     return os.getloadavg()[0]
@@ -463,7 +469,9 @@ def get_ntp_status():
         pass
     if not ntp_ok:
         try:
-            out = subprocess.check_output(["timedatectl", "show"], stderr=subprocess.DEVNULL).decode()
+            out = subprocess.check_output(
+                ["timedatectl", "show"], stderr=subprocess.DEVNULL,
+            ).decode()
             props = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
             ntp_ok = props.get("NTP", "no").lower() == "yes"
             synced = props.get("NTPSynchronized", "no").lower() == "yes"
@@ -562,7 +570,8 @@ def _get_fact(source: str) -> str:
         'hostname':     get_hostname,
         'uptime':       get_uptime_str,
         'version':      lambda: __version__,
-        'config_file':  lambda: os.path.basename(_args.config) if _args.config else os.path.basename(_DEFAULT_CONFIG),
+        'config_file':  lambda: os.path.basename(_args.config) if _args.config
+                                 else os.path.basename(_DEFAULT_CONFIG),
         'cpu':          lambda: f"{get_cpu_percent():.1f}%",
         'cpu_load':     lambda: f"{get_cpu_load():.2f}",
         'mem':          get_mem_usage,
@@ -1079,7 +1088,8 @@ def _init_layout() -> None:
                 'interval_secs': _interval_secs,
             }
             if DEBUG:
-                print(f"  url-fact panel {_idx}: interval={_interval_secs}s, stagger_offset={_stagger_offset:.1f}s")
+                print(f"  url-fact panel {_idx}: interval={_interval_secs}s, "
+                      f"stagger_offset={_stagger_offset:.1f}s")
 
 
 
@@ -1275,7 +1285,9 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     if cache_key not in _remote_fact_cache:
         # First fetch: happens immediately
         value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
-        _remote_fact_cache[cache_key] = {'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs}
+        _remote_fact_cache[cache_key] = {
+            'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs,
+        }
     else:
         cache_entry = _remote_fact_cache[cache_key]
         last_fetch = cache_entry['last_fetch_time']
@@ -1337,10 +1349,14 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
         try:
             dbm = float(signal_str.replace('dBm', '').strip())
             # -50 or better -> 4, -60 -> 3, -70 -> 2, weaker -> 1
-            if   dbm >= -50: level = 4
-            elif dbm >= -60: level = 3
-            elif dbm >= -70: level = 2
-            else:            level = 1
+            if dbm >= -50:
+                level = 4
+            elif dbm >= -60:
+                level = 3
+            elif dbm >= -70:
+                level = 2
+            else:
+                level = 1
         except (ValueError, AttributeError):
             try:
                 q = float(quality_str)
@@ -1376,7 +1392,6 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
     r_step    = arc_band // num_arcs if num_arcs else arc_band
 
     # Centre the graphic: fan occupies R_max wide (x2) and R_max tall
-    fan_w = R_max * 2
     fan_h = R_max   # top of outermost arc to dot centre
 
     # Horizontal centre of panel cell
@@ -1430,7 +1445,8 @@ def _render_debug_panel(p: dict, px: int, py: int, pw: int, ph: int,
     half    = len(steps) // 2 + len(steps) % 2
     lines = [
         f"prep={prep_ms:.0f}ms  disp={_last_display_ms:.0f}ms",
-        f"ntp={timings.get('ntp',0)*1000:.0f}  tz={timings.get('tz',0)*1000:.0f}  draw={timings.get('draw',0)*1000:.0f}",
+        f"ntp={timings.get('ntp', 0)*1000:.0f}  tz={timings.get('tz', 0)*1000:.0f}  "
+        f"draw={timings.get('draw', 0)*1000:.0f}",
         "  ".join(f"{k[:3]}={v*1000:.0f}" for k, v in steps[:half]),
         "  ".join(f"{k[:3]}={v*1000:.0f}" for k, v in steps[half:]),
     ]
@@ -1464,9 +1480,11 @@ def _dispatch_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
     pt = p.get('type', '')
     if pt == 'clock':
-        _render_clock_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')], target_draw, target_img)
+        _render_clock_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')],
+                             target_draw, target_img)
     elif pt == 'date':
-        _render_date_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')], target_draw, target_img)
+        _render_date_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')],
+                            target_draw, target_img)
     elif pt == 'fact':
         _render_fact_panel(p, px, py, pw, ph, target_draw, target_img)
     elif pt == 'url-fact':
@@ -1572,7 +1590,13 @@ def show_rows():
     timings = {}
 
     with timed_section("ntp", timings):
-        ntp_status = get_ntp_status() + " " + get_ntp_upstream_count()
+        # Deliberate cache-prewarm + cost-isolation, NOT dead code: both
+        # functions self-cache for 60s (see get_ntp_status()/
+        # get_ntp_upstream_count() above), so 59/60 calls here are free
+        # cache hits. On the ~1-in-60 frame where the cache is stale, the
+        # slow part (subprocess calls to timedatectl/chronyc) happens HERE,
+        # inside the "ntp" timing bucket so that it can be measured during debugging
+        get_ntp_status() + " " + get_ntp_upstream_count()
 
     # Snapshot all timezones referenced by all panels in all rows.
     with timed_section("tz", timings):

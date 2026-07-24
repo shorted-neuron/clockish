@@ -120,7 +120,9 @@ def scan_and_fix(dry_run=False):
             if is_markdown:
                 remaining = []
             else:
-                remaining = [(m.start(), repr(m.group())) for m in re.finditer(r'[^\x00-\x7F]', fixed)]
+                remaining = [
+                    (m.start(), repr(m.group())) for m in re.finditer(r'[^\x00-\x7F]', fixed)
+                ]
 
             if src != fixed or remaining:
                 changed = src != fixed
