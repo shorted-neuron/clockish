@@ -1,0 +1,169 @@
+---
+# font-behavior-demo.yaml  --  clockish config demonstrating every font_behavior
+# ---------------------------------------------------------------------------
+# Visual reference for the five font_behavior values (see AGENTS.md):
+#   default | scale | scale_numeric | stretch_y | stretch_x
+#
+# Each demo row pairs a terse label panel with one or two text/fact panels so
+# the difference is obvious side-by-side or row-to-row. Backgrounds and text
+# colors are deliberately varied/contrasting per row.
+# ---------------------------------------------------------------------------
+
+orientation: landscape
+preview_size: 800x280 # odd aspect ratio chosen to exaggerate the effect of font_behavior differences
+
+rows:
+  # -- default: fixed font_size, "Ag|" ink metrics. Short text stays put -----
+  - name: demo-default
+    height: 15%
+    panels:
+      - type: text
+        width: 18%
+        label: "default"
+        color: yellow
+        background: navy
+        font_size: tiny
+      - type: text
+        width: 82%
+        justify: left
+        label: "Font Behavior Demo, Arg!"
+        color: white
+        background: royalblue
+        # font_size: auto
+        font_behavior: default
+
+  # -- stretch_x: same short text, forced to fill the panel width -----------
+  - name: demo-stretch-x
+    height: 15%
+    panels:
+      - type: text
+        width: 18%
+        label: "stretch_x"
+        color: navy
+        background: yellow
+        font_size: tiny
+      - type: text
+        width: 82%
+        label: "Font Behavior Demo, Arg!"
+        color: white
+        background: firebrick
+        # font_size: auto
+        font_behavior: stretch_x
+
+  - name: divider-1
+    height: 2%
+    panels:
+      - type: divider
+        height: 1px
+        color: grey
+
+  # -- scale_numeric vs default: vertical centring of digit-only content -----
+  - name: demo-numeric-center
+    height: 15%
+    panels:
+      - type: text
+        width: 18%
+        label: "scale_numeric"
+        color: white
+        background: black
+        font_size: tiny
+      - type: fact
+        width: 41%
+        source: cpu
+        label: "Default "
+        color: red
+        background: dimgrey
+        font_size: auto
+        font_behavior: default
+      - type: fact
+        width: 41%
+        source: cpu
+        label: "w/o drops "  # illustrate that there is no ink drop space for j or g or y
+        color: lime
+        background: darkgreen
+        font_size: auto
+        font_behavior: scale_numeric
+
+  # -- scale vs default: dynamic upsize-to-fit vs fixed size -----------------
+  - name: demo-scale
+    height: 15%
+    panels:
+      - type: text
+        width: 20%
+        label: "scale"
+        color: navy
+        background: white
+        font_size: tiny
+      - type: text
+        width: 40%
+        label: "Scale Arg!"
+        color: cyan
+        background: indigo
+        font_size: normal
+        font_behavior: scale
+      - type: text
+        width: 40%
+        label: "Not Scale Arg!"
+        color: grey
+        background: indigo
+        font_size: small
+        font_behavior: default
+
+  - name: divider-2
+    height: 2%
+    panels:
+      - type: divider
+        height: 1px
+        color: grey
+
+  # -- stretch_y vs default: height-only scale vs fixed size -----------------
+  - name: demo-stretch-y
+    height: 15%
+    panels:
+      - type: text
+        width: 50%
+        label: "default Ay Mg Zj Wq"
+        color: orange
+        background: brown
+        font_size: normal
+        font_behavior: stretch_y
+      - type: text
+        width: 50%
+        label: "stretch_y AyMgZjWq"
+        color: tan
+        background: rust
+        font_size: normal
+        font_behavior: default
+
+  # -- quick-reference strip: same label text rendered in each behavior -----
+  - name: quickref
+    height: 20%
+    panels:
+      - type: text
+        width: 25%
+        label: "default"
+        color: white
+        background: black
+        font_size: small
+        font_behavior: default
+      - type: text
+        width: 25%
+        label: "scale"
+        color: gold
+        background: darkblue
+        font_size: small
+        font_behavior: scale
+      - type: text
+        width: 25%
+        label: "stretch_y"
+        color: white
+        background: forestgreen
+        font_size: tiny
+        font_behavior: stretch_y
+      - type: text
+        width: 25%
+        label: "stretch_x"
+        color: yellow
+        background: firebrick
+        font_size: auto
+        font_behavior: stretch_x
