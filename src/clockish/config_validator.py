@@ -125,7 +125,7 @@ BUILTIN_FONT_NAMES: frozenset[str] = frozenset({
 #: Mirrors clockish.display.KNOWN_FONT_BEHAVIORS -- duplicated (not imported)
 #: to keep this module free of display.py's hardware-driver imports.
 KNOWN_FONT_BEHAVIORS: frozenset[str] = frozenset({
-    'default', 'clip_numeric', 'scale', 'stretch_y',
+    'default', 'scale', 'scale_numeric', 'stretch_y', 'stretch_x',
 })
 
 #: Deprecated panel keys  ->  replacement hint.
@@ -138,39 +138,41 @@ _DEPRECATED_PANEL_KEYS: dict[str, str] = {
 
 #: All valid attribute keys per panel type.
 #: Keys that appear here but are present in the config do NOT trigger unknown-key warnings.
+#: 'padding' is universal (applied in _dispatch_panel() before type-specific
+#: rendering) so it's included on every panel type below.
 _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'clock': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'label', 'timezone', 'time_format', 'transform',
+        'background', 'label', 'timezone', 'time_format', 'transform', 'padding',
     }),
     'date': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'timezone', 'date_format', 'transform',
+        'background', 'timezone', 'date_format', 'transform', 'padding',
     }),
     'fact': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'label', 'source', 'transform',
+        'background', 'label', 'source', 'transform', 'padding',
     }),
     'text': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'label', 'transform',
+        'background', 'label', 'transform', 'padding',
     }),
     'divider': frozenset({
-        'type', 'color', 'height', 'width', 'background',
+        'type', 'color', 'height', 'width', 'background', 'padding',
     }),
     'wifi_graphic': frozenset({
-        'type', 'color', 'width', 'background',
+        'type', 'color', 'width', 'background', 'padding',
     }),
     'debug': frozenset({
-        'type', 'color', 'font', 'font_size', 'width', 'background',
+        'type', 'color', 'font', 'font_size', 'width', 'background', 'padding',
     }),
     'blank': frozenset({
-        'type', 'width', 'background',
+        'type', 'width', 'background', 'padding',
     }),
     'url-fact': frozenset({
         'type', 'url', 'pattern', 'json_path', 'interval', 'timeout', 'verify_ssl',
         'fallback', 'label', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'justify', 'transform',
+        'background', 'justify', 'transform', 'padding',
     }),
 }
 
@@ -527,6 +529,16 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                     ploc,
                     f"'font_behavior: {panel_behavior!r}' is not a valid value "
                     f"(expected one of: {', '.join(sorted(KNOWN_FONT_BEHAVIORS))})",
+                )
+
+            # 3c. Invalid 'padding' value (integer pixels, all 4 sides, >= 0; default 1)
+            padding = panel.get('padding')
+            if padding is not None and (
+                not isinstance(padding, (int, float)) or isinstance(padding, bool) or padding < 0
+            ):
+                warn(
+                    ploc,
+                    f"'padding: {padding!r}' must be a non-negative integer (pixels)",
                 )
 
             # 4. Unknown panel type

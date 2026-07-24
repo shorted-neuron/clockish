@@ -804,21 +804,31 @@ def _font_ink_top(f: ImageFont.FreeTypeFont) -> int:
 #
 #   default        current behaviour: fixed font_size:, ink metrics from the
 #                  "Ag|" reference glyphs (ascender+descender+full-height bar).
-#   clip_numeric   fixed font_size:, but ink metrics from "0123456789" instead
-#                  -- fixes vertical centring for numeric-only content (clock,
-#                  cpu%, temp, ...) which has no descenders like "Ag|" assumes.
 #   scale          ignore font_size:'s resolved size (keep its resolved font
 #                  file); every draw, pick the largest point size where the
 #                  text fits BOTH the panel's width and height. Aspect-
 #                  preserving (a single TrueType point size scales uniformly).
+#   scale_numeric  like 'scale', but ink metrics (used for BOTH the fit search
+#                  and vertical centring) come from "0123456789" instead of
+#                  the "Ag|" reference -- fixes numeric-only content (clock,
+#                  cpu%, temp, ...) which has no descenders like "Ag|" assumes.
 #   stretch_y      like 'scale', but constrained by height only -- width may
 #                  overflow/clip depending on justify.
+#   stretch_x      fixed font_size: (height set once at load, like 'default'),
+#                  but every draw, non-uniformly stretches the rendered glyphs
+#                  horizontally to exactly fill the panel's width. True
+#                  anisotropic stretch -- unlike scale/stretch_y (a single
+#                  point size, always uniform), this renders to an offscreen
+#                  image and resizes width-only, so it needs the row's Image
+#                  object (not just ImageDraw); falls back to 'default' if
+#                  that isn't available. 'justify' is moot (always fills the
+#                  full width edge-to-edge); use 'padding:' to inset instead.
 #
 # Resolved once per panel in _init_layout() (row default, panel override) and
 # stored back onto the panel dict as 'font_behavior'; renderers just read it.
 # ---------------------------------------------------------------------------
 KNOWN_FONT_BEHAVIORS: frozenset[str] = frozenset({
-    'default', 'clip_numeric', 'scale', 'stretch_y',
+    'default', 'scale', 'scale_numeric', 'stretch_y', 'stretch_x',
 })
 
 #: id(font) -> (ink_top, ink_h) computed from digits only. Calculated once per
@@ -850,21 +860,26 @@ _FIT_FONT_CACHE: dict[tuple, ImageFont.FreeTypeFont] = {}
 
 
 def _fit_font(path: str, text: str, avail_w: int, avail_h: int,
-               axis: str) -> ImageFont.FreeTypeFont:
+               axis: str, numeric: bool = False) -> ImageFont.FreeTypeFont:
     """Binary-search the largest point size of *path* where *text* fits.
 
     axis='height': constrain by ink height <= avail_h only (width may overflow).
     axis='both':   constrain by ink height <= avail_h AND text width <= avail_w.
+    numeric=True:  measure ink height from "0123456789" (_numeric_ink_metrics)
+                   instead of the "Ag|" reference -- used by 'scale_numeric'.
     """
-    key = (path, text, avail_w, avail_h, axis)
+    key = (path, text, avail_w, avail_h, axis, numeric)
     cached = _FIT_FONT_CACHE.get(key)
     if cached is not None:
         return cached
 
     def _fits(size: int) -> bool:
         f = ImageFont.truetype(path, size)
-        ink_top = _font_ink_top(f)
-        ink_h = _font_height(f) - ink_top
+        if numeric:
+            ink_top, ink_h = _numeric_ink_metrics(f)
+        else:
+            ink_top = _font_ink_top(f)
+            ink_h = _font_height(f) - ink_top
         if ink_h > avail_h:
             return False
         if axis == 'both' and f.getbbox(text)[2] > avail_w:
@@ -1075,10 +1090,35 @@ def _init_layout() -> None:
 #   pw, ph  = width and height of that rectangle
 # ---------------------------------------------------------------------------
 
+def _draw_text_stretch_x(img: Image.Image, px: int, py: int, pw: int, ph: int,
+                          text: str, f: ImageFont.FreeTypeFont, color: str,
+                          x_offset: int) -> None:
+    """Render *text* at its natural (unstretched) size, then non-uniformly
+    resize width-only to exactly fill [px+x_offset, px+pw). Height is fixed
+    (same ink metrics as 'default'); this is the one font_behavior that needs
+    the row's actual Image (not just ImageDraw) since Pillow has no API for
+    anisotropic font scaling -- only a full offscreen render + resize achieves
+    a horizontal-only stretch. 'justify' is moot (always fills the full
+    width); use 'padding:' on the panel to inset instead.
+    """
+    ink_top = _font_ink_top(f)
+    ink_h = max(1, _font_height(f) - ink_top)
+    nat_w = max(1, int(f.getbbox(text)[2]))
+    avail_w = max(1, pw - x_offset)
+
+    tmp = Image.new('RGBA', (nat_w, ink_h), (0, 0, 0, 0))
+    ImageDraw.Draw(tmp).text((0, -ink_top), text, font=f, fill=color)
+    stretched = tmp.resize((avail_w, ink_h), Image.Resampling.BILINEAR)
+
+    paste_y = py + max(0, (ph - ink_h) // 2)
+    img.paste(stretched, (px + x_offset, paste_y), mask=stretched)
+
+
 def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
                     text: str, f: ImageFont.FreeTypeFont, color: str,
                     x_offset: int = 0, justify: str = 'center',
-                    behavior: str = 'default') -> None:
+                    behavior: str = 'default',
+                    img: 'Image.Image | None' = None) -> None:
     """Draw a single line of text within the panel rect.
 
     Vertical placement: always centred within [py, py+ph).
@@ -1088,16 +1128,29 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
       'right'   --  ink ends at px+pw
 
     `behavior` (see KNOWN_FONT_BEHAVIORS docs above _fit_font()):
-      'default'/'clip_numeric'  --  use *f* as given (fixed size from font_size:).
+      'default'                 --  use *f* as given (fixed size from font_size:).
       'scale'/'stretch_y'       --  re-fit *f* to (pw-x_offset, ph) every call
-                                     via _fit_font(), using f.path as the typeface.
+                                     via _fit_font(), using f.path as the typeface,
+                                     with "Ag|"-reference ink metrics.
+      'scale_numeric'           --  like 'scale', but both the fit search and
+                                     the vertical-centring ink metrics come
+                                     from digits only (0-9), not "Ag|".
+      'stretch_x'               --  fixed size from font_size:; anisotropic
+                                     horizontal-only resize via `img` (falls
+                                     back to 'default' if `img` is None).
     """
-    if behavior in ('scale', 'stretch_y') and getattr(f, 'path', None):
+    if behavior == 'stretch_x':
+        if img is not None:
+            _draw_text_stretch_x(img, px, py, pw, ph, text, f, color, x_offset)
+            return
+        behavior = 'default'  # no Image available -- degrade gracefully
+
+    if behavior in ('scale', 'stretch_y', 'scale_numeric') and getattr(f, 'path', None):
         axis = 'height' if behavior == 'stretch_y' else 'both'
         avail_w = max(1, pw - x_offset)
-        f = _fit_font(str(f.path), text, avail_w, ph, axis)
+        f = _fit_font(str(f.path), text, avail_w, ph, axis, numeric=(behavior == 'scale_numeric'))
 
-    if behavior == 'clip_numeric':
+    if behavior == 'scale_numeric':
         ink_top, ink_h = _numeric_ink_metrics(f)
     else:
         ink_top = _font_ink_top(f)
@@ -1118,7 +1171,8 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
 
 
 def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
-                         now: datetime.datetime, d: ImageDraw.ImageDraw) -> None:
+                         now: datetime.datetime, d: ImageDraw.ImageDraw,
+                         img: 'Image.Image | None' = None) -> None:
     color       = p.get('color', _C_WHITE)
     time_f      = _get_font(p.get('font_size', 'normal'))
     _time_format = p.get('time_format')
@@ -1139,15 +1193,18 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
     justify = p.get('justify', 'center')
     behavior = p.get('font_behavior', 'default')
-    _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify, behavior=behavior)
+    _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify,
+                     behavior=behavior, img=img)
 
     if label_str:
         time_w = int(time_f.getbbox(time_str)[2])
-        _draw_text_line(d, px + time_w + 6, py, pw, ph, label_str, time_f, color, justify='left', behavior=behavior)
+        _draw_text_line(d, px + time_w + 6, py, pw, ph, label_str, time_f, color,
+                         justify='left', behavior=behavior, img=img)
 
 
 def _render_date_panel(p: dict, px: int, py: int, pw: int, ph: int,
-                        now: datetime.datetime, d: ImageDraw.ImageDraw) -> None:
+                        now: datetime.datetime, d: ImageDraw.ImageDraw,
+                        img: 'Image.Image | None' = None) -> None:
     color    = p.get('color', _C_WHITE)
     date_f   = _get_font(p.get('font_size', 'normal'))
     date_str = now.strftime(p.get('date_format', '%a %b %-d, %Y'))
@@ -1162,11 +1219,12 @@ def _render_date_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
     _draw_text_line(d, px, py, pw, ph, date_str, date_f, color,
                     x_offset=4, justify=p.get('justify', 'center'),
-                    behavior=p.get('font_behavior', 'default'))
+                    behavior=p.get('font_behavior', 'default'), img=img)
 
 
 def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
-                        d: ImageDraw.ImageDraw) -> None:
+                        d: ImageDraw.ImageDraw,
+                        img: 'Image.Image | None' = None) -> None:
     f      = _get_font(p.get('font_size', 'normal'))
     color  = p.get('color', _C_WHITE)
     source = p['source']
@@ -1181,11 +1239,12 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
         text = p['label'] + value
 
     _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'),
-                    behavior=p.get('font_behavior', 'default'))
+                    behavior=p.get('font_behavior', 'default'), img=img)
 
 
 def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
-                            d: ImageDraw.ImageDraw) -> None:
+                            d: ImageDraw.ImageDraw,
+                            img: 'Image.Image | None' = None) -> None:
     """Render a url-fact panel: fetch from URL, extract, cache, display."""
     global _refresh_remote_cache_flag, _remote_fact_cache
 
@@ -1240,11 +1299,12 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
         text = value
 
     _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'),
-                    behavior=p.get('font_behavior', 'default'))
+                    behavior=p.get('font_behavior', 'default'), img=img)
 
 
 def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
-                        d: ImageDraw.ImageDraw) -> None:
+                        d: ImageDraw.ImageDraw,
+                        img: 'Image.Image | None' = None) -> None:
     """Static text panel  --  renders p['label'], optionally transformed."""
     label = apply_transforms(p.get('label', ''), p.get('transform'), debug=DEBUG)
     _draw_text_line(d, px, py, pw, ph,
@@ -1252,7 +1312,7 @@ def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
                     _get_font(p.get('font_size', 'normal')),
                     p.get('color', _C_WHITE),
                     justify=p.get('justify', 'center'),
-                    behavior=p.get('font_behavior', 'default'))
+                    behavior=p.get('font_behavior', 'default'), img=img)
 
 
 
@@ -1382,23 +1442,37 @@ def _render_debug_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
 def _dispatch_panel(p: dict, px: int, py: int, pw: int, ph: int,
                     tz_cache: dict, timings: dict, t0: float,
-                    target_draw: ImageDraw.ImageDraw) -> None:
-    """Dispatch to the correct panel renderer based on panel type."""
+                    target_draw: ImageDraw.ImageDraw,
+                    target_img: 'Image.Image | None' = None) -> None:
+    """Dispatch to the correct panel renderer based on panel type.
+
+    'padding:' (integer px, all 4 sides, default 1) insets the rect passed to
+    the specific renderer below -- background fill above still covers the
+    full, unpadded panel cell.
+    """
     # Fill panel background if explicitly set (overrides row background).
     if 'background' in p:
         target_draw.rectangle((px, py, px + pw - 1, py + ph - 1),
                                fill=p['background'])
+
+    pad = p.get('padding', 1)
+    if not isinstance(pad, (int, float)) or isinstance(pad, bool) or pad < 0:
+        pad = 1
+    pad = int(pad)
+    px, py = px + pad, py + pad
+    pw, ph = max(1, pw - 2 * pad), max(1, ph - 2 * pad)
+
     pt = p.get('type', '')
     if pt == 'clock':
-        _render_clock_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')], target_draw)
+        _render_clock_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')], target_draw, target_img)
     elif pt == 'date':
-        _render_date_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')], target_draw)
+        _render_date_panel(p, px, py, pw, ph, tz_cache[p.get('timezone', 'local')], target_draw, target_img)
     elif pt == 'fact':
-        _render_fact_panel(p, px, py, pw, ph, target_draw)
+        _render_fact_panel(p, px, py, pw, ph, target_draw, target_img)
     elif pt == 'url-fact':
-        _render_url_fact_panel(p, px, py, pw, ph, target_draw)
+        _render_url_fact_panel(p, px, py, pw, ph, target_draw, target_img)
     elif pt == 'text':
-        _render_text_panel(p, px, py, pw, ph, target_draw)
+        _render_text_panel(p, px, py, pw, ph, target_draw, target_img)
     elif pt == 'divider':
         _render_divider_panel(p, px, py, pw, ph, target_draw)
     elif pt == 'wifi_graphic':
@@ -1481,7 +1555,7 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
     for p, pw in zip(panels, widths):
         if DEBUG_LAYOUT:
             print(f"  panel type={p.get('type','?')} px={px} pw={pw}")
-        _dispatch_panel(p, px, 0, pw, rh, tz_cache, timings, t0, row_draw)
+        _dispatch_panel(p, px, 0, pw, rh, tz_cache, timings, t0, row_draw, row_img)
         px += pw
 
     image.paste(row_img, (0, ry))

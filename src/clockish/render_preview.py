@@ -287,7 +287,7 @@ _ppd._args               = types.SimpleNamespace(config=None)
 #                narrower than "10:08" -- the bug this constant now avoids.)
 #   Wednesday, December 20 2028 -- longest weekday name + longest month name,
 #                and "Wednesday"'s 'y' exercises descender-ink clipping/
-#                centring (the reason clip_numeric font_behavior exists).
+#                centring (the reason scale_numeric font_behavior exists).
 _PREVIEW_NOW = datetime.datetime(2028, 12, 20, 22, 8, 8)
 
 #: Mock-mode uptime -- deliberately huge/wide to exercise the same
@@ -499,7 +499,7 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
         widths = r.get('_widths', [])
         px = 0
         for p, pw in zip(panels, widths):
-            _ppd._dispatch_panel(p, px, 0, pw, rh, tz_cache, timings, t0, row_drw)
+            _ppd._dispatch_panel(p, px, 0, pw, rh, tz_cache, timings, t0, row_drw, row_img)
             px += pw
 
         img.paste(row_img, (0, ry))

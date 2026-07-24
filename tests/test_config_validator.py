@@ -963,7 +963,7 @@ class TestFontBehavior:
         types (clock/date/fact/text/url-fact), not an 'unknown key' warning."""
         cfg = _minimal_config(rows=[{
             'name': 'r', 'height': 40,
-            'panels': [{'type': 'clock', 'font_behavior': 'clip_numeric'}],
+            'panels': [{'type': 'clock', 'font_behavior': 'scale_numeric'}],
         }])
         result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
@@ -977,3 +977,61 @@ class TestFontBehavior:
         result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
         assert not any('unknown row-level key' in m and 'font_behavior' in m for m in msgs)
+
+
+# ---------------------------------------------------------------------------
+# padding: universal per-panel inset (integer px, all 4 sides, default 1)
+# ---------------------------------------------------------------------------
+
+class TestPadding:
+
+    @pytest.mark.parametrize('panel_type', sorted(KNOWN_PANEL_TYPES))
+    def test_padding_valid_on_every_panel_type(self, panel_type: str) -> None:
+        """'padding' is universal (applied in _dispatch_panel()), so it must
+        not trigger unknown-key warnings on any panel type."""
+        panel_cfg = {'type': panel_type, 'padding': 3}
+        if panel_type == 'fact':
+            panel_cfg['source'] = 'hostname'
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [panel_cfg],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert not any('unknown' in m.lower() and 'padding' in m for m in msgs), \
+            f"padding flagged as unknown on '{panel_type}': {msgs}"
+
+    def test_zero_padding_valid(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'padding': 0}],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok
+
+    def test_negative_padding_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'padding': -1}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('padding' in m.lower() for m in msgs)
+
+    def test_non_numeric_padding_warns(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x', 'padding': 'bogus'}],
+        }])
+        result = validate_config_dict(cfg)
+        msgs = [i.message for i in result.warnings]
+        assert any('padding' in m.lower() for m in msgs)
+
+    def test_unspecified_padding_no_warning(self) -> None:
+        """Unspecified 'padding' (defaults to 1px at render time) must not warn."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'text', 'label': 'x'}],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.ok

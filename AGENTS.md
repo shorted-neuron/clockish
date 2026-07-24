@@ -61,6 +61,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 ### Entry points
 - `clockish` CLI command → `src/clockish/display.py:main()`
 - `clockish-preview` → `render_preview.py` (no hardware needed; stubs GPIO/SPI/etc.)
+- `clockish-time-samples` → `render_time_samples.py` (one config, many synthetic clock/date moments; see below)
 - `clockish-validate` → `config_validator.py` (YAML validation + schema check)
 
 ### Core flow
@@ -101,10 +102,10 @@ rows:
   - name: row-name
     height: 40  # pixels | float 0-1 | "15%"
     background: navy  # optional; default black
-    font_behavior: default  # optional row-level default: default|clip_numeric|scale|stretch_y
+    font_behavior: default  # optional row-level default: default|scale|scale_numeric|stretch_y|stretch_x
     panels:
       - type: clock | date | fact | text | divider | wifi_graphic | debug | blank | url-fact
-        # common: color, font_size, font, font_behavior, width, background, justify
+        # common: color, font_size, font, font_behavior, width, background, justify, padding
         # clock/date: timezone, time_format / date_format
         # fact: source (required), label
         # text: label
@@ -153,19 +154,36 @@ the panel dict, so renderers just read `p['font_behavior']`. Values (`KNOWN_FONT
 - `default` -- unchanged: fixed `font_size:`, ink metrics from `"Ag|"` reference glyphs (assumes
   worst-case ascender+descender). Numeric-only content (clock, cpu%, temp) can look off-center
   since digits have no descenders.
-- `clip_numeric` -- fixed `font_size:`, but ink metrics computed from `"0123456789"` instead;
-  cached once per font object in `_NUMERIC_INK_CACHE` (keyed by `id(font)`), never per-draw.
 - `scale` -- ignores `font_size:`'s resolved *size* (keeps its resolved *font file*, via
   `f.path`); every draw, `_fit_font()` binary-searches the largest point size where the text fits
   both the panel's width and height (aspect-preserving, since a single TrueType point size scales
-  uniformly). Cached by `(font_path, text, avail_w, avail_h, axis)` so unchanged content across
-  frames is free.
+  uniformly). Cached by `(font_path, text, avail_w, avail_h, axis, numeric)` so unchanged content
+  across frames is free.
+- `scale_numeric` -- same fit search as `scale`, but both `_fit_font()`'s ink measurement and the
+  final vertical-centring ink metrics come from `_numeric_ink_metrics()` (`"0123456789"`) instead
+  of the `"Ag|"` reference -- fixes off-center numeric-only content (clock, cpu%, temp) since
+  digits have no descenders. `_numeric_ink_metrics()` caches once per font object in
+  `_NUMERIC_INK_CACHE` (keyed by `id(font)`), never per-draw.
 - `stretch_y` -- same as `scale` but constrained by height only; width may overflow/clip
   depending on `justify`.
+- `stretch_x` -- fixed `font_size:` (height set once at load, like `default`); every draw,
+  non-uniformly stretches the rendered glyphs horizontally to exactly fill the panel width.
+  Unlike `scale`/`stretch_y` (uniform point-size change), Pillow has no API for anisotropic
+  font scaling, so this renders to an offscreen RGBA image (`_draw_text_stretch_x()`) and
+  resizes width-only (`Image.Resampling.BILINEAR`), then alpha-composites it onto the row's
+  `Image` -- the one behavior that needs the actual `Image` object, not just `ImageDraw`,
+  threaded through `_draw_text_line()` → each `_render_*_panel()` → `_dispatch_panel()` →
+  `_render_row()` (`img=`/`target_img=` params, default `None`). Falls back to `default` if
+  no `Image` is available (e.g. a caller that only has `ImageDraw`). `justify` is moot (always
+  fills edge-to-edge); use `padding:` to inset instead.
 
-Not yet implemented: `stretch_x` (true anisotropic horizontal-only stretch) -- needs the row's
-underlying `Image` object threaded through `_draw_text_line()`/the panel-renderer call chain
-(currently only `ImageDraw` is passed), deferred as a separate phase.
+### padding (universal panel attribute)
+
+`padding:` (integer px, all 4 sides, default `1`) insets a panel's `(px, py, pw, ph)` rect
+before dispatch to its type-specific renderer -- applied once in `_dispatch_panel()`, so it
+works uniformly on every panel type (text-drawing or not; background fill still covers the
+full, unpadded cell). Invalid values (negative, non-numeric) fall back to the default `1px`
+(warned by `config_validator.py`, never fatal).
 
 ### Value transforms
 
@@ -267,6 +285,33 @@ pre-commit hook (`pre-commit run --hook-stage manual clockish-preview`)
 regenerates both -- not run automatically on every commit (slow, and the
 live set changes every time regardless of code changes).
 
+### Time-sample rendering (exploratory layout checks)
+
+`clockish-time-samples <config.yaml>` (`render_time_samples.py`) renders ONE
+config across a curated set of synthetic clock/date moments -- for eyeballing
+how a layout handles the full range of digit widths, 12h/24h hour formats,
+and weekday/month name lengths, not just the single worst-case moment
+`clockish-preview`'s mock mode uses. No default config -- pass one explicitly
+(e.g. run it once against a 12h config like `nixie.yaml` and once against a
+24h config like `nixie24.yaml` to compare both side by side).
+
+Reuses `render_preview.render_config()` unchanged (same hardware stubs, same
+`mock=True` code path) -- this script only overrides `render_preview`'s
+module-level `_PREVIEW_NOW` before each frame instead of leaving it fixed.
+
+- `_SAMPLE_TIMES`: 12 curated `(hour24, minute)` pairs spanning narrow 12h
+  hours (`1:17`), wide 24h/12h hours (`20:00`, `23:59`), midnight/noon edge
+  cases, and ordinary middle-of-the-day times. `_assert_digit_coverage()`
+  (run every call) guarantees every digit 0-9 appears in at least one
+  sample's 24h hour, no-pad 12h hour, or zero-padded minute -- raises if the
+  list is ever edited down to a set that loses coverage.
+- `_SAMPLE_DATES`: 8 `(year, month, day)` tuples cycled round-robin across
+  the time samples (not a single fixed date) so date-format widths
+  (short/long weekday & month names) get exercised too.
+
+Output: `docs/previews/time-samples/{config-name}/{HH}-{MM}.png` --
+gitignored (ad-hoc exploratory artifact, like `docs/previews/mock/`).
+
 ### Workflows
 
 **Local dev** (Windows):
@@ -274,6 +319,7 @@ live set changes every time regardless of code changes).
 pip install -e ".[dev]"
 clockish-validate configs/clockish.yaml
 clockish-preview configs/clockish.yaml  # outputs docs/previews/*.png + docs/previews/mock/*.png
+clockish-time-samples configs/nixie.yaml  # outputs docs/previews/time-samples/nixie/*.png
 pytest
 ruff check .
 mypy src/clockish
@@ -367,4 +413,5 @@ Ruff auto-flags unsorted imports. Reorganize them to fix `unsorted-imports` warn
 | Debug render | `--debug` flag      | prints per-frame ms; `--debug-layout` one-frame exit |
 | Fix config   | `clockish-validate` | run before deploy; start supports non-fatal errors   |
 | Test preview | `clockish-preview`  | outputs PNG offline; cross-platform                  |
+| Time-sample layout check | `clockish-time-samples` | outputs PNG offline; one config, many clock/date moments |
 | Add transform| `transforms.py`     | `TRANSFORM_REGISTRY['myop'] = _t_myop`               |

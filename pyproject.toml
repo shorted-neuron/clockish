@@ -89,6 +89,7 @@ clockish-test    = "clockish.colortest:main"
 clockish-fonts   = "clockish.fontdemo:main"
 clockish-corners = "clockish.cornertest:main"
 clockish-validate = "clockish.config_validator:main"
+clockish-time-samples = "clockish.render_time_samples:main"
 
 # -- Where to find packages ----------------------------------------------------
 [tool.hatch.build.targets.wheel]
