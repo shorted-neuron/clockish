@@ -66,3 +66,7 @@ secrets.json
 # dev/review artifact only -- docs/previews/*.png (the 'live' renders) stay
 # tracked and get overwritten/committed normally.
 docs/previews/mock/
+
+# clockish-time-samples output -- ad-hoc exploratory renders of a single
+# config across many synthetic clock/date moments; local dev artifact only.
+docs/previews/time-samples/
