@@ -14,8 +14,9 @@ Coverage:
 """
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from clockish.config_validator import (
     BUILTIN_FONT_NAMES,

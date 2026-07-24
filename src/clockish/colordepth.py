@@ -13,16 +13,15 @@ Right half increments from reference upward.
 Results are saved to colordepth_results.txt.
 """
 
-import sys
 import os
-import time
+import sys
 import termios
 import tty
 
 from PIL import Image, ImageDraw, ImageFont
-from spidev import SpiDev
-from pyili9486 import ILI9486, Origin, SKU
+from pyili9486 import ILI9486, SKU, Origin
 from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
+from spidev import SpiDev
 
 # ---------------------------------------------------------------------------
 # Hardware configuration
@@ -165,7 +164,8 @@ def run_test(label, base_rgb, channel):
 
         show_split(base_rgb, right_rgb, label, delta, i, len(all_deltas))
 
-        print(f"  delta={delta:3d}   L={rgb_to_hex(base_rgb)}  R={rgb_to_hex(right_rgb)}", end="  ", flush=True)
+        print(f"  delta={delta:3d}   L={rgb_to_hex(base_rgb)}  R={rgb_to_hex(right_rgb)}",
+              end="  ", flush=True)
 
         key = get_keypress()
         print()  # newline after keypress
@@ -190,7 +190,11 @@ def run_test(label, base_rgb, channel):
         "base_rgb":        base_rgb,
         "channel":         channel,
         "threshold_delta": threshold_delta,
-        "last_tested":     last_delta if threshold_delta is None else all_deltas[all_deltas.index(threshold_delta) - 1] if threshold_delta != all_deltas[0] else 0,
+        "last_tested":     (
+            last_delta if threshold_delta is None
+            else all_deltas[all_deltas.index(threshold_delta) - 1]
+            if threshold_delta != all_deltas[0] else 0
+        ),
     }
     results.append(result)
     return result
@@ -204,7 +208,10 @@ def save_results():
         f.write(f"{'Test':<30} {'Base':<10} {'Min visible delta'}\n")
         f.write("-" * 56 + "\n")
         for r in results:
-            delta_str = str(r["threshold_delta"]) if r["threshold_delta"] is not None else f">={r['last_tested']} (not found)"
+            if r["threshold_delta"] is not None:
+                delta_str = str(r["threshold_delta"])
+            else:
+                delta_str = f">={r['last_tested']} (not found)"
             f.write(f"{r['label']:<30} {r['base_hex']:<10} {delta_str}\n")
 
         f.write("\n\nInterpretation\n")
@@ -259,7 +266,8 @@ def main():
     # Clear display
     draw.rectangle((0, 0, WIDTH - 1, HEIGHT - 1), fill=(0, 0, 0))
     draw.text((10, HEIGHT // 2 - 20), "Test complete!", font=font, fill=(255, 255, 255))
-    draw.text((10, HEIGHT // 2 + 8),  "See terminal for results.", font=smallfont, fill=(160, 160, 160))
+    draw.text((10, HEIGHT // 2 + 8),  "See terminal for results.",
+              font=smallfont, fill=(160, 160, 160))
     lcd.display(image, rotation)
     print(f"\nDone. Results in: {path}")
 
@@ -270,5 +278,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:
-        GPIO.cleanup()
+        # GPIO cleanup is handled by the rpi-lgpio facade (see
+        # drivers/ili9486.py) -- only the SPI bus needs an explicit close.
         spi.close()

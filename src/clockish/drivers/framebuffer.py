@@ -271,12 +271,13 @@ class FramebufferDriver(DisplayDriver):
         # tty is open; now configure it.  If anything here fails, close
         # the handle cleanly and carry on without cursor suppression.
         try:
-            tty.write(b'\033[?25l')                      # ANSI hide cursor (belt-and-suspenders)
+            tty.write(b'\033[?25l')                     # ANSI hide cursor (belt-and-suspenders)
             fcntl.ioctl(tty, _KDSETMODE, _KD_GRAPHICS)  # fbcon hands off the framebuffer
             self._tty = tty
         except OSError as exc:
             print(
-                f"WARNING: KDSETMODE KD_GRAPHICS failed ({exc})  --  cursor suppression unavailable.",
+                f"WARNING: KDSETMODE KD_GRAPHICS failed ({exc})  --  "
+                "cursor suppression unavailable.",
                 file=sys.stderr,
             )
             try:

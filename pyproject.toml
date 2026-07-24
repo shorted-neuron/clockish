@@ -113,6 +113,13 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]   # pycodestyle, pyflakes, isort
 
+[tool.ruff.lint.per-file-ignores]
+# render_preview.py installs hardware stubs (RPi.GPIO, spidev, pyili9486, ...)
+# BEFORE importing clockish -- each "late" import in this file is deliberately
+# placed right after the stub block it depends on (see the module docstring).
+# Reordering to satisfy E402 would defeat the stubbing.
+"src/clockish/render_preview.py" = ["E402"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_unused_configs = true
