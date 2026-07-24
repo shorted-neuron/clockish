@@ -162,8 +162,11 @@ the panel dict, so renderers just read `p['font_behavior']`. Values (`KNOWN_FONT
 - `scale_numeric` -- same fit search as `scale`, but both `_fit_font()`'s ink measurement and the
   final vertical-centring ink metrics come from `_numeric_ink_metrics()` (`"0123456789"`) instead
   of the `"Ag|"` reference -- fixes off-center numeric-only content (clock, cpu%, temp) since
-  digits have no descenders. `_numeric_ink_metrics()` caches once per font object in
-  `_NUMERIC_INK_CACHE` (keyed by `id(font)`), never per-draw.
+  digits have no descenders. `_numeric_ink_metrics()` caches once per `(font_path, font_size)` in
+  `_NUMERIC_INK_CACHE` -- **not** `id(font)` (bug history: a previous `id(font)`-keyed version
+  could alias two *different* fonts once Python reused a GC'd throwaway font object's memory
+  address, causing non-deterministic mis-sizing/clipping that varied between otherwise-identical
+  runs; `(path, size)` is a pure function of the inputs and can't alias).
 - `stretch_y` -- same as `scale` but constrained by height only; width may overflow/clip
   depending on `justify`.
 - `stretch_x` -- fixed `font_size:` (height set once at load, like `default`); every draw,
@@ -177,7 +180,43 @@ the panel dict, so renderers just read `p['font_behavior']`. Values (`KNOWN_FONT
   no `Image` is available (e.g. a caller that only has `ImageDraw`). `justify` is moot (always
   fills edge-to-edge); use `padding:` to inset instead.
 
-### padding (universal panel attribute)
+#### Reference-text sizing (why `scale`/`scale_numeric`/`stretch_y` don't jitter)
+
+`_fit_font()`'s binary search measures whatever string it's told to. Measuring the panel's
+*actual per-frame text* means the fitted point size can legitimately change frame-to-frame just
+because the text's character count or glyph advance widths changed -- e.g. a no-pad 12h hour
+going from `"1:17"` (4 chars) to `"12:09"` (5 chars) -- visible as the clock digits visibly
+growing/shrinking every time the hour crosses a 1-digit/2-digit boundary, or (combined with the
+old `id(font)` cache bug above) outright clipping on some renders and not others.
+
+`_draw_text_line()` accepts a `measure_text:` param, used INSTEAD OF the real `text` for the fit
+search only (the real `text` is still what's drawn/positioned). Callers compute a synthetic
+worst-case reference so the fitted size is CONSTANT for the life of the process (same
+`_FIT_FONT_CACHE` key every frame -> same cached font object, not just the same point size):
+
+- **clock panels**: `_clock_reference_text(fmt, font_path, transform)` parses the resolved
+  `time_format` strftime string via `_expand_strftime_worst_case()`, substituting each digit
+  directive (`%H`/`%M`/`%S`/`%I`/`%-I`/`%d`/`%m`/`%y`/`%Y`) with *this font's own widest digit*
+  (`_widest_char()`, measured once via `getbbox()` at a fixed probe size -- TrueType advance
+  widths scale linearly with point size, so relative glyph width ordering is size-independent)
+  repeated to that directive's max digit count (always the worst case, regardless of pad --
+  e.g. `%-I` uses 2 digits even though real values are sometimes 1), and `%p` with whichever of
+  `"AM"`/`"PM"` is wider (`_widest_string()`). The synthetic string is then run through the exact
+  same `.upper()` + `apply_transforms()` pipeline the real value gets, so `transform: [lower]`
+  correctly re-widens the reference for a lowercase `p` descender. Returns `None` (falls back to
+  measuring the live text, old behavior) if the format contains a directive it can't model this
+  way (weekday/month names -- `%a`/`%A`/`%b`/`%B`; their width varies far more than digit
+  substitution can account for). **`date` panels are not covered** -- same reason, out of scope
+  for now; they still measure their live text.
+- **fact / url-fact panels**: no format string to parse, so `_generic_numeric_reference()` just
+  repeats this font's widest character among `"0123456789.-%"` to the *current* text's length.
+  Stable against digit-glyph-width variance, but still shifts if the value's character count
+  itself changes (e.g. `"9.9%"` -> `"100.0%"`) -- an inherent limit of not having a format string
+  to derive a true worst-case length from.
+- **text panels**: not covered (arbitrary label content, not numeric) -- always measure the live
+  text, same as before.
+
+
 
 `padding:` (integer px, all 4 sides, default `1`) insets a panel's `(px, py, pw, ph)` rect
 before dispatch to its type-specific renderer -- applied once in `_dispatch_panel()`, so it

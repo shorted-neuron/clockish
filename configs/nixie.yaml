@@ -75,14 +75,14 @@ rows:
         font_behavior: scale_numeric
 
   - name: divider-1
-    height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
+    height: "3%"
     panels:
       - type: divider
         height: 1px
         color: rust
 
   - name: date
-    height: "15%"           #  48px @ 320   72px @ 480  162px @ 1080
+    height: "25%"
     panels:
       - type: date
         justify: center

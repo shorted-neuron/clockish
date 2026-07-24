@@ -840,25 +840,38 @@ KNOWN_FONT_BEHAVIORS: frozenset[str] = frozenset({
     'default', 'scale', 'scale_numeric', 'stretch_y', 'stretch_x',
 })
 
-#: id(font) -> (ink_top, ink_h) computed from digits only. Calculated once per
-#: font object on first use (never per-draw); font objects are already cached
-#: for the lifetime of the process in _FONTS, so this dict stays small.
-_NUMERIC_INK_CACHE: dict[int, tuple[int, int]] = {}
+#: (font_path, size) -> (ink_top, ink_h) computed from digits only.
+#:
+#: BUG HISTORY: this used to be keyed by id(f). _fit_font()'s binary search
+#: creates a fresh, throwaway ImageFont.truetype() object per probed size
+#: inside its _fits() closure -- nothing keeps that object alive once _fits()
+#: returns, so CPython is free to reuse its memory address (id()) for a
+#: LATER, UNRELATED font object. That made this cache return stale metrics
+#: from a completely different (path, size) that happened to reuse the same
+#: id() -- non-deterministic (depends on GC/allocator timing), and could
+#: make _fits() wrongly report "fits" for a size that actually overflows the
+#: panel -- exactly the "same time renders clipped sometimes, fine other
+#: times" symptom. (font_path, size) is a pure function of the inputs, so it
+#: can never alias two different fonts.
+_NUMERIC_INK_CACHE: dict[tuple[str | None, int | None], tuple[int, int]] = {}
 
 
 def _numeric_ink_metrics(f: ImageFont.FreeTypeFont) -> tuple[int, int]:
     """Ink top/height for this font using digits only (no descenders)."""
-    key = id(f)
-    cached = _NUMERIC_INK_CACHE.get(key)
-    if cached is not None:
-        return cached
+    key = (getattr(f, 'path', None), getattr(f, 'size', None))
+    cacheable = key[0] is not None
+    if cacheable:
+        cached = _NUMERIC_INK_CACHE.get(key)
+        if cached is not None:
+            return cached
     try:
         bbox = f.getbbox("0123456789")
         ink_top = int(bbox[1])
         ink_h = int(bbox[3] - bbox[1])
     except Exception:
         ink_top, ink_h = _font_ink_top(f), _font_height(f)
-    _NUMERIC_INK_CACHE[key] = (ink_top, ink_h)
+    if cacheable:
+        _NUMERIC_INK_CACHE[key] = (ink_top, ink_h)
     return ink_top, ink_h
 
 
@@ -907,6 +920,135 @@ def _fit_font(path: str, text: str, avail_w: int, avail_h: int,
     fitted = ImageFont.truetype(path, best_size)
     _FIT_FONT_CACHE[key] = fitted
     return fitted
+
+
+# ---------------------------------------------------------------------------
+# Reference-text derivation for 'scale' / 'scale_numeric' / 'stretch_y'.
+#
+# _fit_font() above measures whatever *text* string it's given. Passing the
+# panel's ACTUAL per-frame text means the fitted point size can legitimately
+# change frame-to-frame purely because the text's character count or
+# per-glyph advance widths changed -- e.g. a no-pad 12h hour going from
+# "1:17" (4 chars) to "12:09" (5 chars). That's visible as the clock digits
+# growing/shrinking every time the hour crosses a 1-digit/2-digit boundary,
+# even though nothing is actually broken.
+#
+# Renderers may instead pass measure_text= (see _draw_text_line()) -- a
+# synthetic worst-case string built from the font's OWN glyph widths, never
+# the literal displayed text. Because it's the same string every frame, the
+# fitted size is constant for the life of the process (same _FIT_FONT_CACHE
+# key -> same object every call) and, being worst-case, never clips.
+# ---------------------------------------------------------------------------
+
+_WIDEST_CHAR_CACHE: dict[tuple[str, str], str] = {}
+
+
+def _widest_char(font_path: str, charset: str) -> str:
+    """Character in *charset* with the largest advance width in *font_path*.
+
+    Measured once at a fixed probe size -- TrueType advance widths scale
+    linearly with point size, so which glyph is widest doesn't depend on
+    which size we probe at.
+    """
+    key = (font_path, charset)
+    cached = _WIDEST_CHAR_CACHE.get(key)
+    if cached is not None:
+        return cached
+    probe = ImageFont.truetype(font_path, 200)
+    widest = max(charset, key=lambda c: probe.getbbox(c)[2])
+    _WIDEST_CHAR_CACHE[key] = widest
+    return widest
+
+
+_WIDEST_STRING_CACHE: dict[tuple[str, tuple[str, ...]], str] = {}
+
+
+def _widest_string(font_path: str, options: tuple[str, ...]) -> str:
+    """Whichever of *options* (whole strings, e.g. 'AM'/'PM') renders widest."""
+    key = (font_path, options)
+    cached = _WIDEST_STRING_CACHE.get(key)
+    if cached is not None:
+        return cached
+    probe = ImageFont.truetype(font_path, 200)
+    widest = max(options, key=lambda s: probe.getbbox(s)[2])
+    _WIDEST_STRING_CACHE[key] = widest
+    return widest
+
+
+#: strftime directive -> max digit count across its whole valid range.
+#: Worst-case WIDTH always comes from max digit COUNT: every digit glyph has
+#: non-negative width, so once we substitute the font's own widest digit for
+#: each position, any real value's digits sum to <= that substitution.
+_STRFTIME_MAX_DIGITS: dict[str, int] = {
+    'H': 2, 'I': 2, 'M': 2, 'S': 2, 'd': 2, 'm': 2, 'y': 2, 'Y': 4,
+}
+
+_STRFTIME_TOKEN_RE = re.compile(r'%-?.')
+
+
+def _expand_strftime_worst_case(fmt: str, font_path: str) -> str | None:
+    """Expand every strftime directive in *fmt* to its worst-case-width
+    literal substitution (this font's own widest digit / widest of AM|PM),
+    keeping literal characters (':', ' ', ...) untouched.
+
+    Returns None if *fmt* contains a directive this can't size for (weekday/
+    month names -- their width varies far more than digit substitution can
+    model) -- caller should fall back to measuring the actual live text.
+    """
+    parts: list[str] = []
+    pos = 0
+    for m in _STRFTIME_TOKEN_RE.finditer(fmt):
+        parts.append(fmt[pos:m.start()])
+        tok = m.group()
+        pos = m.end()
+        directive = tok[-1]
+        if directive == '%':
+            parts.append('%')
+            continue
+        if directive == 'p':
+            parts.append(_widest_string(font_path, ('AM', 'PM')))
+            continue
+        max_digits = _STRFTIME_MAX_DIGITS.get(directive)
+        if max_digits is None:
+            return None  # unsupported directive (weekday/month name, etc.)
+        parts.append(_widest_char(font_path, '0123456789') * max_digits)
+    parts.append(fmt[pos:])
+    return ''.join(parts)
+
+
+_CLOCK_REFERENCE_CACHE: dict[tuple[str, str, str], str | None] = {}
+
+
+def _clock_reference_text(fmt: str, font_path: str, transform: list | None) -> str | None:
+    """Worst-case-width text to size a clock panel's font against.
+
+    Mirrors the exact .upper() + transform pipeline _render_clock_panel()
+    applies to the real value, so e.g. transform: [lower] correctly re-widens
+    the reference to account for a lowercase 'pm' descender. Returns None if
+    _expand_strftime_worst_case() can't handle *fmt* (caller falls back to
+    measuring the actual live text).
+    """
+    key = (fmt, font_path, repr(transform))
+    if key in _CLOCK_REFERENCE_CACHE:
+        return _CLOCK_REFERENCE_CACHE[key]
+    raw = _expand_strftime_worst_case(fmt, font_path)
+    ref = apply_transforms(raw.upper(), transform, debug=False) if raw is not None else None
+    _CLOCK_REFERENCE_CACHE[key] = ref
+    return ref
+
+
+def _generic_numeric_reference(font_path: str, length: int) -> str:
+    """Fallback reference for fact/url-fact panels -- no format string to
+    parse, so use this font's widest character among a generic numeric
+    superset, repeated to the CURRENT text's length.
+
+    Stable against digit-glyph-width variance (e.g. '1' vs '0'); still
+    shifts if the value's character count itself changes (e.g. '9.9%' ->
+    '100.0%') -- that's an inherent limit of not knowing the source's real
+    worst case, unlike clock panels where the format string tells us exactly.
+    """
+    widest = _widest_char(font_path, '0123456789.-%')
+    return widest * max(1, length)
 
 
 # ---------------------------------------------------------------------------
@@ -1128,7 +1270,8 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
                     text: str, f: ImageFont.FreeTypeFont, color: str,
                     x_offset: int = 0, justify: str = 'center',
                     behavior: str = 'default',
-                    img: 'Image.Image | None' = None) -> None:
+                    img: 'Image.Image | None' = None,
+                    measure_text: str | None = None) -> None:
     """Draw a single line of text within the panel rect.
 
     Vertical placement: always centred within [py, py+ph).
@@ -1148,6 +1291,14 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
       'stretch_x'               --  fixed size from font_size:; anisotropic
                                      horizontal-only resize via `img` (falls
                                      back to 'default' if `img` is None).
+
+    `measure_text`, if given, is used INSTEAD OF *text* for the fit search
+    ('scale'/'scale_numeric'/'stretch_y' only) -- lets callers size against a
+    stable worst-case reference (see _clock_reference_text() /
+    _generic_numeric_reference() above _fit_font()) instead of the literal
+    per-frame value, so the fitted point size doesn't jitter frame-to-frame
+    just because e.g. an hour crossed a 1-digit/2-digit boundary. *text*
+    itself is still what's actually drawn and positioned.
     """
     if behavior == 'stretch_x':
         if img is not None:
@@ -1158,7 +1309,9 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
     if behavior in ('scale', 'stretch_y', 'scale_numeric') and getattr(f, 'path', None):
         axis = 'height' if behavior == 'stretch_y' else 'both'
         avail_w = max(1, pw - x_offset)
-        f = _fit_font(str(f.path), text, avail_w, ph, axis, numeric=(behavior == 'scale_numeric'))
+        f = _fit_font(str(f.path), measure_text or text, avail_w, ph, axis,
+                       numeric=(behavior == 'scale_numeric'))
+
 
     if behavior == 'scale_numeric':
         ink_top, ink_h = _numeric_ink_metrics(f)
@@ -1203,8 +1356,11 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
     justify = p.get('justify', 'center')
     behavior = p.get('font_behavior', 'default')
+    measure_text = None
+    if behavior in ('scale', 'scale_numeric', 'stretch_y') and getattr(time_f, 'path', None):
+        measure_text = _clock_reference_text(fmt, str(time_f.path), p.get('transform'))
     _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify,
-                     behavior=behavior, img=img)
+                     behavior=behavior, img=img, measure_text=measure_text)
 
     if label_str:
         time_w = int(time_f.getbbox(time_str)[2])
@@ -1248,8 +1404,12 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     else:
         text = p['label'] + value
 
+    behavior = p.get('font_behavior', 'default')
+    measure_text = None
+    if behavior in ('scale', 'scale_numeric', 'stretch_y') and getattr(f, 'path', None):
+        measure_text = _generic_numeric_reference(str(f.path), len(text))
     _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'),
-                    behavior=p.get('font_behavior', 'default'), img=img)
+                    behavior=behavior, img=img, measure_text=measure_text)
 
 
 def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
@@ -1310,8 +1470,12 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     else:
         text = value
 
+    behavior = p.get('font_behavior', 'default')
+    measure_text = None
+    if behavior in ('scale', 'scale_numeric', 'stretch_y') and getattr(f, 'path', None):
+        measure_text = _generic_numeric_reference(str(f.path), len(text))
     _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'),
-                    behavior=p.get('font_behavior', 'default'), img=img)
+                    behavior=behavior, img=img, measure_text=measure_text)
 
 
 def _render_text_panel(p: dict, px: int, py: int, pw: int, ph: int,
