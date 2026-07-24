@@ -78,11 +78,14 @@ clockish/
 
 ## Testing & CI/CD
 
-All pull requests are automatically tested with GitHub Actions, which runs:
+All pull requests are automatically tested with GitHub Actions across a Python
+version matrix (**3.11, 3.12, 3.13** -- see `AGENTS.md`'s "Supported Python
+versions" for why), which runs:
 - **pre-commit hooks**: file hygiene, YAML linting, config validation
 - **pytest**: unit tests with coverage reporting
 - **ruff**: code linting and style checks
-- **mypy**: type checking
+- **mypy**: type checking (target pinned to 3.11, the floor, regardless of
+  which interpreter in the matrix runs it)
 
 Coverage reports are attached to each workflow run as artifacts. You can also run these locally,
 either all at once with the bundled script:

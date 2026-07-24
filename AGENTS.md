@@ -342,6 +342,46 @@ bash install.sh  # venv, system deps, run-clockish.sh, edit-clockish-config.sh
 
 **Pre-commit** (GitHub Actions):
 - yamllint + ruff + mypy + pytest + coverage
+- CI runs the full suite across a matrix: **Python 3.11, 3.12, 3.13** (see
+  "Supported Python versions" below).
+
+### Supported Python versions
+
+`requires-python = ">=3.11"` (open floor, no ceiling). Two real deployment
+targets drive this:
+
+- **3.11** -- Raspberry Pi OS "bookworm" (Debian 12), the floor.
+- **3.13** -- Raspberry Pi OS "trixie" (Debian 13), current as of this writing.
+
+**3.12** is also matrixed in CI for broader contributor-environment coverage
+(e.g. it's Ubuntu 24.04's default `python3`) even though it isn't itself a
+deployment target.
+
+Local dev does **not** need to match 3.11 exactly -- develop against whatever
+interpreter is convenient (e.g. a stock 3.12 venv); the CI matrix above is the
+actual gate for 3.11/3.13 compatibility, so a single local version doesn't
+need to carry that burden. This only works cleanly because of two things
+that keep the versions from silently diverging:
+
+- `[tool.mypy] python_version = "3.11"` in `pyproject.toml` pins mypy's
+  *type-checking target* to the floor regardless of which interpreter
+  actually runs mypy -- so a 3.12 (or any) local venv still gets the same
+  3.11-accurate type check as CI's 3.11 job.
+- `numpy` is capped (`numpy<2.5`, dev extras only) because numpy 2.5.0 ships
+  typing stubs using PEP 695 `type X = ...` syntax unconditionally, which
+  mypy refuses to parse under `--python-version 3.11` on ANY interpreter --
+  a mypy/numpy-stub compatibility gap, not a runtime issue. Without this cap,
+  a local venv on a newer interpreter can silently resolve a newer numpy than
+  CI does and hit a spurious mypy failure that has nothing to do with real
+  code changes. End users installing plain `clockish` (no `[dev]` extra) are
+  not constrained by this cap.
+
+If `mypy src/clockish` (or `scripts/pre-pr-check.sh`) ever fails locally in a
+way that doesn't reproduce in CI, suspect a dependency-resolution difference
+between the local venv's interpreter and CI's, not a real 3.11 incompatibility
+-- check `pip list` for anything with a version-gated stub/syntax requirement
+newer than 3.11, the same way the numpy issue above was diagnosed.
+
 
 ### Deprecations & patterns
 
