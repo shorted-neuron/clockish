@@ -30,6 +30,7 @@
 # display HEIGHT so this layout scales automatically to any landscape display.
 # ---------------------------------------------------------------------------
 orientation: landscape
+preview_size: 800x480
 
 # ---------------------------------------------------------------------------
 # default_font  --  TTF file used for all built-in scale font names.
@@ -64,7 +65,7 @@ default_font: NixieOne-Regular.ttf
 
 rows:
   - name: clock
-    height: "69%"           # 221px @ 320  331px @ 480  745px @ 1080
+    height: "55%"
     panels:
       - type: clock
         justify: center
@@ -75,21 +76,22 @@ rows:
         font_behavior: scale_numeric
 
   - name: divider-1
-    height: "3%"
+    height: "5%"
     panels:
       - type: divider
         height: 1px
         color: rust
 
   - name: date
-    height: "25%"
+    height: "22%"
     panels:
       - type: date
         justify: center
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         color: darkorange
-        font_size: normal       # ~12% of display height - fits the date row
+        #font_size: 11%
+        font_behavior: scale
 
   - name: divider-2
     height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
@@ -102,13 +104,12 @@ rows:
     height: "10%"           #  32px @ 320   48px @ 480  108px @ 1080
     panels:
       - type: wifi_graphic
-        width: 9.17%
+        width: 10%
         color: orange
       - type: fact
-        width: 15%
         source: wifi_status
         color: darkorange
-        font_size: auto
+        font_size: tiny
       - type: fact
         source: hostname
         color: orange
@@ -123,7 +124,9 @@ rows:
         source: cpu
         color: rust
         font_size: auto
+        font_behavior: scale_numeric
       - type: fact
         source: ntp_all
         color: rust
         font_size: auto
+        font_behavior: scale
