@@ -1103,7 +1103,7 @@ def _draw_text_stretch_x(img: Image.Image, px: int, py: int, pw: int, ph: int,
     """
     ink_top = _font_ink_top(f)
     ink_h = max(1, _font_height(f) - ink_top)
-    nat_w = max(1, f.getbbox(text)[2])
+    nat_w = max(1, int(f.getbbox(text)[2]))
     avail_w = max(1, pw - x_offset)
 
     tmp = Image.new('RGBA', (nat_w, ink_h), (0, 0, 0, 0))
