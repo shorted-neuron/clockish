@@ -121,24 +121,23 @@ rows:
 
   - name: wifi-status
     height: 9.17%
-    background: darkred
     panels:
       - type: wifi_graphic
         width: 13.75%
         # justify: center
         color: lime
-        background: black
       - type: fact
         # justify: center
         source: wifi_status
-        color: lime
+        color: silver
         font_size: auto
+        font_behavior: scale
       - type: fact
         # justify: center
         source: wifi_ssid
-        label: "default"
         color: darklime
         font_size: auto
+        font_behavior: scale
 
 # - name: wifi-signal
 #   height: 26px
@@ -187,6 +186,7 @@ rows:
 
   - name: cpu
     height: 5.42%
+    background: darkblue
     panels:
       - type: fact
         # justify: center

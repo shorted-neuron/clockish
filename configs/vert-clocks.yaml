@@ -236,12 +236,10 @@ rows:
     height: 9.58%
     panels:
       - type: debug
-        width: 70%
+        width: 60%
         color: tan
       - type: fact
-        width: 30%
         label: v
         color: rust
         source: version
-        font_size: auto
-        font_behavior: scale_numeric
+        font_size: 30px

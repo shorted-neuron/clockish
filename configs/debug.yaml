@@ -102,11 +102,13 @@ rows:
         source: hostname
         color: lime
         font_size: auto
+        font_behavior: stretch_x
       - type: fact
         source: ip
         label: "ip "
         color: grey
         font_size: auto
+        font_behavior: stretch_x
 
   - name: cpu-mem
     height: 5.42%
@@ -146,3 +148,5 @@ rows:
       - type: fact
         label: v
         source: version
+        font_size: small
+        font_behavior: stretch_x

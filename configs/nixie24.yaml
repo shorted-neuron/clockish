@@ -30,7 +30,7 @@
 # display HEIGHT so this layout scales automatically to any landscape display.
 # ---------------------------------------------------------------------------
 orientation: landscape
-preview_size: 800x480
+#preview_size: 800x480
 
 # ---------------------------------------------------------------------------
 # default_font  --  TTF file used for all built-in scale font names.

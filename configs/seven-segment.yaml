@@ -38,7 +38,7 @@ fonts:
 
 rows:
   - name: clock
-    height: "47%"
+    height: "50%"
     panels:
       - type: clock
         justify: center
@@ -48,6 +48,7 @@ rows:
         color: ff0000
         font: dseg7
         font_size: auto
+        font_behavior: scale_numeric
 
   - name: divider-1
     height: "1%"
@@ -87,20 +88,16 @@ rows:
         width: 9.17%
         color: burntsienna
       - type: fact
-        width: 20%
+        # justify: center
+        width: 25%
         source: wifi_status
         color: burntsienna
         font_size: small
       - type: fact
-        width: 20%
+        # justify: center
+        width: 40%
         source: wifi_ssid
-        # label: "SSID "
-        color: rust
-        font_size: small
-      - type: fact
-        width: 25%
-        source: wifi_signal
-        label: "sig "
+        label: "SSID "
         color: rust
         font_size: small
       - type: fact

@@ -14,21 +14,17 @@ rows:
     panels:
       - type: clock
         width: 40%
+        justify: right
         timezone: UTC
         time_format: 24h
         color: lime
         font_size: auto
       - type: date
         width: 25%
+        justify: left
         timezone: UTC
         date_format: ":%S UTC"
         color: lime
-        font_size: auto
-      - type: date
-        width: 35%
-        timezone: UTC
-        date_format: "%a %b %-d, %Y"
-        color: darklime
         font_size: auto
 
   - name: divider-1
@@ -43,19 +39,19 @@ rows:
     height: 20.00%
     panels:
       - type: clock
-        width: 60%
+        width: 65%
         justify: left
         timezone: America/Denver
         label: "DEN"
         time_format: 12h
         color: ff0000
         font_size: auto
-
       - type: date
         timezone: America/Denver
         date_format: " %a, %B %-d"
         color: slate
         font_size: auto
+        font_behavior: scale
 
   - name: ist-clock
     height: 11.25%
