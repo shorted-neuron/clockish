@@ -9,15 +9,15 @@ orientation: landscape
 
 rows:
   - name: utc-clock
-    height: 22.50%
+    height: 22%
     panels:
       - type: clock
-        justify: left
+        justify: center
         timezone: UTC
-        label: " UTC"
         time_format: 24hs
         color: lime
         font_size: auto
+        font_behavior: scale_numeric
 
   - name: divider-1
     height: 5px
@@ -58,7 +58,7 @@ rows:
         color: black
       - type: clock
         # justify: center
-        width: 35%
+        width: 31%
         background: darkred
         timezone: US/Eastern
         time_format: 24h
@@ -89,17 +89,17 @@ rows:
         color: black
       - type: text
         # justify: center
-        width: 35%
+        width: 31%
         label: "US/Eastern"
         background: darkred
         color: orange
-        font_size: auto
+        font_size: small
       - type: divider
         width: 2%
         color: black
       - type: text
         # justify: center
-        label: "  India"
+        label: "India"
         font_size: auto
         color: brown
 
@@ -118,44 +118,53 @@ rows:
         color: white
       - type: fact
         # justify: center
-        width: 18%
+        width: 25%
         source: wifi_status
         color: ff8888
         font_size: auto
       - type: fact
         # justify: center
-        width: 20%
+        width: 40%
         source: wifi_ssid
         label: "SSID "
-        color: brightblue
-        font_size: auto
+        color: skyblue
+        font_size: small
       - type: fact
         # justify: center
-        width: 35%
+        width: 25%
         source: wifi_signal
-        label: " signal: "
         color: pink
-        font_size: auto
-      - type: fact
-        # justify: center
-        width: 18%
-        source: wifi_quality
-        label: "qual:"
-        color: purple
-        font_size: auto
+        font_size: small
+#      - type: fact
+#        # justify: center
+#        width: 15%
+#        source: wifi_quality
+#        label: "qual:"
+#        color: purple
+#        font_size: auto
+#        font_behavior: stretch_x
 
   - name: host-ip
-    height: 14.38%
+    height: 10%
     panels:
       - type: fact
-        justify: left
+        width: 40%
+        justify: center
         source: hostname
         color: green
         font_size: auto
       - type: fact
+        source: uptime
+        color: silver
+        padding: 0
+        font_behavior: stretch_y
+  - name: host-ip
+    height: 10%
+    panels:
+      - type: fact
+        width: 40%
         justify: center
         source: ip
         color: green
         font_size: auto
       - type: debug
-        color: silver

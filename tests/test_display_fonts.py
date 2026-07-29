@@ -24,6 +24,9 @@ contents, tracks whether the bootstrap has run.
 """
 from __future__ import annotations
 
+import datetime
+import unittest.mock as mock
+
 from PIL import ImageFont
 
 import clockish.display as d
@@ -257,9 +260,23 @@ class TestNumericInkMetrics:
         d._NUMERIC_INK_CACHE.clear()
         f = d.ImageFont.truetype(d._FONT_PATH, 40)
         first = d._numeric_ink_metrics(f)
-        assert id(f) in d._NUMERIC_INK_CACHE
+        assert (f.path, f.size) in d._NUMERIC_INK_CACHE
         second = d._numeric_ink_metrics(f)
         assert first == second
+
+    def test_numeric_metrics_keyed_by_path_and_size_not_object_identity(self) -> None:
+        """Regression: two DIFFERENT font objects for the same (path, size)
+        must hit the same cache entry -- guards against the id(f) aliasing
+        bug (throwaway font objects in _fit_font()'s binary search could
+        previously collide with an unrelated cached entry after GC reused
+        their memory address)."""
+        _reset_font_state()
+        d._NUMERIC_INK_CACHE.clear()
+        f1 = d.ImageFont.truetype(d._FONT_PATH, 40)
+        f2 = d.ImageFont.truetype(d._FONT_PATH, 40)
+        assert f1 is not f2
+        assert d._numeric_ink_metrics(f1) == d._numeric_ink_metrics(f2)
+        assert len(d._NUMERIC_INK_CACHE) == 1
 
 
 class TestFitFont:
@@ -274,7 +291,9 @@ class TestFitFont:
         ink_top = d._font_ink_top(f)
         ink_h = d._font_height(f) - ink_top
         assert ink_h <= ph
-        assert f.getbbox(text)[2] <= pw
+        # Bound is on the TIGHT ink width (_ink_extent()), not the advance
+        # width (f.getbbox(text)[2]) -- see bug history above _ink_extent().
+        assert d._ink_extent(f, text)[1] <= pw
 
     def test_fit_height_axis_ignores_width(self) -> None:
         _reset_font_state()
@@ -480,6 +499,142 @@ class TestPanelPadding:
                            {'local': _dt.datetime(2028, 1, 1)}, {}, 0,
                            _NullDraw(), fake_img)
         assert calls == [(5, 5, 90, 40)]
+
+
+class TestClockReferenceText:
+    """Auto-derived worst-case reference text for scale/scale_numeric/
+    stretch_y on clock panels -- see _expand_strftime_worst_case() /
+    _clock_reference_text() above _fit_font()."""
+
+    def test_digit_directives_expand_to_widest_digit_repeated(self) -> None:
+        _reset_font_state()
+        ref = d._expand_strftime_worst_case('%H:%M', d._FONT_PATH)
+        widest = d._widest_char(d._FONT_PATH, '0123456789')
+        assert ref == widest * 2 + ':' + widest * 2
+
+    def test_year_directive_uses_four_digits(self) -> None:
+        _reset_font_state()
+        ref = d._expand_strftime_worst_case('%Y', d._FONT_PATH)
+        widest = d._widest_char(d._FONT_PATH, '0123456789')
+        assert ref == widest * 4
+
+    def test_nopad_hour_still_uses_worst_case_two_digits(self) -> None:
+        """'%-I' can render 1 or 2 digits -- the reference must always use
+        the worst case (2) so sizing never shrinks/grows across frames."""
+        _reset_font_state()
+        ref = d._expand_strftime_worst_case('%-I:%M', d._FONT_PATH)
+        widest = d._widest_char(d._FONT_PATH, '0123456789')
+        assert ref == widest * 2 + ':' + widest * 2
+
+    def test_am_pm_directive_uses_wider_option(self) -> None:
+        _reset_font_state()
+        ref = d._expand_strftime_worst_case('%-I:%M %p', d._FONT_PATH)
+        assert ref.endswith(d._widest_string(d._FONT_PATH, ('AM', 'PM')))
+
+    def test_unsupported_directive_returns_none(self) -> None:
+        """Weekday/month names vary too much for digit-substitution -- must
+        signal 'can't derive' rather than guess wrong."""
+        _reset_font_state()
+        assert d._expand_strftime_worst_case('%A %H:%M', d._FONT_PATH) is None
+
+    def test_reference_pipeline_applies_upper_and_transform(self) -> None:
+        """Reference must go through the SAME .upper() + transform: pipeline
+        as the real rendered value, so e.g. transform: [lower] re-widens the
+        reference for a lowercase 'p' descender."""
+        _reset_font_state()
+        ref = d._clock_reference_text('%-I:%M %p', d._FONT_PATH, ['lower'])
+        assert ref is not None
+        assert ref == ref.lower()
+        assert 'pm' in ref or 'am' in ref
+
+    def test_reference_cached(self) -> None:
+        _reset_font_state()
+        d._CLOCK_REFERENCE_CACHE.clear()
+        key = ('%H:%M', d._FONT_PATH, repr(None))
+        d._clock_reference_text('%H:%M', d._FONT_PATH, None)
+        assert key in d._CLOCK_REFERENCE_CACHE
+
+    def test_scale_numeric_size_stable_across_hour_digit_count(self) -> None:
+        """Regression for the original bug report: a 12h no-pad-hour clock
+        must render THE SAME point size for a 1-digit hour ('1:17') and a
+        2-digit hour ('12:09') when font_behavior is scale_numeric -- no
+        frame-to-frame jitter just because the live text got shorter/longer."""
+        _reset_font_state()
+        d._FIT_FONT_CACHE.clear()
+        panel = {
+            'time_format': '%-I:%M', 'font_behavior': 'scale_numeric',
+        }
+        drawn_fonts: list = []
+
+        def _fake_draw(dr, px, py, pw, ph, text, f, color, x_offset=0,
+                        justify='center', behavior='default', img=None,
+                        measure_text=None):
+            axis = 'height' if behavior == 'stretch_y' else 'both'
+            avail_w = max(1, pw - x_offset)
+            fitted = d._fit_font(str(f.path), measure_text or text, avail_w, ph,
+                                  axis, numeric=(behavior == 'scale_numeric'))
+            drawn_fonts.append(fitted.size)
+
+        real_draw = d._draw_text_line
+        d._draw_text_line = _fake_draw
+        try:
+            f = d.ImageFont.truetype(d._FONT_PATH, 40)
+            with mock.patch.object(d, '_get_font', return_value=f):
+                d._render_clock_panel(panel, 0, 0, 200, 60,
+                                       datetime.datetime(2024, 1, 1, 1, 17), d=None)
+                d._render_clock_panel(panel, 0, 0, 200, 60,
+                                       datetime.datetime(2024, 1, 1, 12, 9), d=None)
+        finally:
+            d._draw_text_line = real_draw
+
+        assert len(drawn_fonts) == 2
+        assert drawn_fonts[0] == drawn_fonts[1]
+
+
+class TestGenericNumericReference:
+    """Fallback reference for fact/url-fact panels (no format string to parse)."""
+
+    def test_repeats_widest_char_to_current_length(self) -> None:
+        _reset_font_state()
+        ref = d._generic_numeric_reference(d._FONT_PATH, 5)
+        widest = d._widest_char(d._FONT_PATH, '0123456789.-%')
+        assert ref == widest * 5
+
+    def test_minimum_length_one(self) -> None:
+        _reset_font_state()
+        assert d._generic_numeric_reference(d._FONT_PATH, 0) == \
+            d._widest_char(d._FONT_PATH, '0123456789.-%')
+
+
+class TestMeasureTextWiring:
+    """_draw_text_line() must use measure_text (not text) for the fit search
+    when provided."""
+
+    def test_measure_text_used_instead_of_text_for_fit(self, monkeypatch) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+
+        def _fake_fit(path, text, avail_w, avail_h, axis, numeric=False):
+            calls.append(text)
+            return f
+        monkeypatch.setattr(d, '_fit_font', _fake_fit)
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "1:17", f, '#ffffff',
+                           behavior='scale_numeric', measure_text="88:88")
+        assert calls == ["88:88"]
+
+    def test_falls_back_to_text_when_measure_text_none(self, monkeypatch) -> None:
+        _reset_font_state()
+        f = d.ImageFont.truetype(d._FONT_PATH, 30)
+        calls = []
+
+        def _fake_fit(path, text, avail_w, avail_h, axis, numeric=False):
+            calls.append(text)
+            return f
+        monkeypatch.setattr(d, '_fit_font', _fake_fit)
+        d._draw_text_line(_NullDraw(), 0, 0, 100, 40, "1:17", f, '#ffffff',
+                           behavior='scale_numeric', measure_text=None)
+        assert calls == ["1:17"]
 
 
 class _NullDraw:

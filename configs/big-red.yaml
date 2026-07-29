@@ -9,14 +9,15 @@ orientation: landscape
 
 rows:
   - name: clock
-    height: 45%
+    height: 50%
     panels:
       - type: clock
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
         color: red
-        font_size: huge
+        # font_size: auto
+        font_behavior: scale_numeric
 
       - type: clock
         justify: center
@@ -24,7 +25,8 @@ rows:
         timezone: US/Mountain
         time_format: "%p"
         color: darkred
-        font_size: med
+        # font_size: auto
+        font_behavior: scale
 
   - name: divider-1
     height: 2%
@@ -41,7 +43,7 @@ rows:
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         color: darkred
-        font_size: normal
+        # font_size: auto
 
   - name: divider-1
     height: 2%
@@ -85,7 +87,7 @@ rows:
         font_size: small
 
   - name: host-ip
-    height: 20%
+    height: 16%
     panels:
       - type: fact
         width: 24%

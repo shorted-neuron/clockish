@@ -94,12 +94,13 @@ rows:
         source: wifi_status
         color: lime
         font_size: auto
+        font_behavior: scale
       - type: fact
         # justify: center
         source: wifi_ssid
-        label: "default"
         color: darklime
         font_size: auto
+        font_behavior: scale
 
   - name: wifi-signal
     height: 5.42%
