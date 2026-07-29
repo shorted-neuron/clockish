@@ -1,0 +1,108 @@
+---
+# square.yaml  --  clockish config
+# ---------------------------------------------------------------------------
+# Layout for a 240x240 ST7789 display (e.g. Mini-PiTFT 1.3" / Adafruit 240x240).
+#
+# Display settings: Use configs/display/st7789-240x240.yaml
+#   Copy it to ~/.config/clockish/display.yaml on your Pi, or pass it via:
+#     clockish --display configs/display/st7789-240x240.yaml configs/square.yaml
+# ---------------------------------------------------------------------------
+
+orientation: square
+
+# clockish-preview has no way to know the real ST7789 dimensions without a
+# display profile on disk; this hint keeps the PNG preview honest.
+preview_size: "240x240"
+
+rows:
+  - name: app-header
+    height: 20px
+    background: navy
+    panels:
+      - type: text
+        # justify: center
+        label: "clockish"
+        color: silver
+        font_size: auto
+      - type: fact
+        # justify: center
+        source: version
+        label: "default"
+        color: grey
+        font_size: auto
+
+  - name: local-clock
+    height: 48px
+    panels:
+      - type: clock
+        # justify: center
+        timezone: local
+        time_format: 24hs
+        color: white
+        font_size: auto
+
+  - name: network
+    height: 32px
+    background: darkgrey
+    panels:
+      - type: fact
+        width: 50%
+        justify: left
+        source: hostname
+        # label: "default"
+        color: yellow
+        font_size: 16px
+      - type: fact
+        justify: right
+        source: ip
+        # label: "default"
+        color: lime
+        font_size: 18px
+
+# - name: wifi-status
+#   height: 24px
+#   panels:
+#     - type: wifi_graphic
+#       width: 34px
+#       # justify: center
+#       color: lime
+#       background: navy
+#     - type: fact
+#       # justify: center
+#       source: wifi_status
+#       color: lime
+#       font_size: tiny
+#     - type: fact
+#       # justify: center
+#       source: wifi_ssid
+#       label: "default"
+#       color: darklime
+#       font_size: tiny
+
+  - name: divider-1
+    height: 1px
+    background: black
+    panels:
+      - type: divider
+        height: 1px
+        color: black
+
+  - name: facts
+    height: 24px
+    panels:
+      - type: fact
+        width: 35%
+        # justify: center
+        source: wifi_status
+        # label: "default"
+        font_size: auto
+      - type: wifi_graphic
+        width: 15%
+        color: silver
+      - type: fact
+        width: 50%
+        # justify: center
+        source: cpu
+        label: "default"
+        color: magenta
+        font_size: auto
