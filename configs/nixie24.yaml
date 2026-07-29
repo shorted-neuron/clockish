@@ -65,7 +65,7 @@ default_font: NixieOne-Regular.ttf
 
 rows:
   - name: clock
-    height: "55%"
+    height: "65%"
     panels:
       - type: clock
         justify: center
@@ -83,7 +83,7 @@ rows:
         color: rust
 
   - name: date
-    height: "22%"
+    height: "17%"
     panels:
       - type: date
         justify: center
@@ -107,6 +107,7 @@ rows:
         width: 10%
         color: orange
       - type: fact
+        width: 15%
         source: wifi_status
         color: darkorange
         font_size: tiny
@@ -119,12 +120,11 @@ rows:
         color: darkorange
         font_size: tiny
       - type: fact
-        width: 10%
+        width: 12%
         justify: center
         source: cpu
-        color: rust
+        color: brown
         font_size: auto
-        font_behavior: scale_numeric
       - type: fact
         source: ntp_all
         color: rust
