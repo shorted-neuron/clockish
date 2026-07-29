@@ -86,6 +86,7 @@ _parser.add_argument('config', nargs='?', default=None,
 _args          = None
 DEBUG: bool    = False
 DEBUG_LAYOUT: bool = False
+_PREVIEW_MODE: bool = False
 _config: dict  = {}
 _display_cfg: dict = {}
 width: int     = 320
@@ -1240,20 +1241,28 @@ def _init_layout() -> None:
 
     # Stagger the fetch times so they don't all happen at once.
     # If there are N panels with interval I, space them out over the interval.
+    # In preview mode, force immediate expiry so fresh data is fetched right away.
     if url_fact_panels:
         now = time.monotonic()
         for _idx, (_p, _interval_secs) in enumerate(url_fact_panels):
-            # Offset into the interval window so that panel 0 fetches now,
-            # panel 1 fetches after interval/N, etc.
-            if len(url_fact_panels) > 1:
-                _stagger_offset = (_interval_secs * _idx) / len(url_fact_panels)
-            else:
+            if _PREVIEW_MODE:
+                # Preview: force immediate fetch (cache already "expired")
+                _last_fetch_time = 0
                 _stagger_offset = 0
-            # Set last_fetch_time in the past so first fetch happens after stagger delay
+            else:
+                # Live: offset into the interval window so that panel 0 fetches now,
+                # panel 1 fetches after interval/N, etc.
+                if len(url_fact_panels) > 1:
+                    _stagger_offset = (_interval_secs * _idx) / len(url_fact_panels)
+                else:
+                    _stagger_offset = 0
+                # Set last_fetch_time in the past so first fetch happens after stagger delay
+                _last_fetch_time = now - _interval_secs + _stagger_offset
+            # Initialize cache with fallback value; fetch will be triggered on first render
             _cache_key = id(_p)
             _remote_fact_cache[_cache_key] = {
                 'value': _p.get('fallback', 'n/a'),
-                'last_fetch_time': now - _interval_secs + _stagger_offset,
+                'last_fetch_time': _last_fetch_time,
                 'interval_secs': _interval_secs,
             }
             if DEBUG:
@@ -1465,6 +1474,7 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     verify_ssl = p.get('verify_ssl', False)
     fallback = p.get('fallback', 'n/a')
     label = p.get('label', '')
+    preview_response = p.get('preview_response')
 
     # Parse interval to seconds
     interval_secs = _parse_interval(interval_str)
@@ -1472,30 +1482,39 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     # Generate cache key (use id() of the panel dict as unique ID)
     cache_key = id(p)
 
-    # Check if cache needs refresh (SIGUSR1 was received)
-    if _refresh_remote_cache_flag:
-        _remote_fact_cache.clear()
-        _refresh_remote_cache_flag = False
-
-    # Check cache; fetch if expired
-    now = time.monotonic()
-    if cache_key not in _remote_fact_cache:
-        # First fetch: happens immediately
-        value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
-        _remote_fact_cache[cache_key] = {
-            'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs,
-        }
-    else:
-        cache_entry = _remote_fact_cache[cache_key]
-        last_fetch = cache_entry['last_fetch_time']
-        if now - last_fetch >= interval_secs:
-            # Interval expired: fetch fresh value
-            value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
-            cache_entry['value'] = value
-            cache_entry['last_fetch_time'] = now
+    # In preview mode, if preview_response is defined, use it instead of fetching
+    if _PREVIEW_MODE and preview_response:
+        if json_path:
+            value, _ = _extract_value_by_json_path(preview_response, json_path)
         else:
-            # Use cached value
-            value = cache_entry['value']
+            value = preview_response
+        if value is None:
+            value = fallback
+    else:
+        # Check if cache needs refresh (SIGUSR1 was received)
+        if _refresh_remote_cache_flag:
+            _remote_fact_cache.clear()
+            _refresh_remote_cache_flag = False
+
+        # Check cache; fetch if expired
+        now = time.monotonic()
+        if cache_key not in _remote_fact_cache:
+            # First fetch: happens immediately
+            value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+            _remote_fact_cache[cache_key] = {
+                'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs,
+            }
+        else:
+            cache_entry = _remote_fact_cache[cache_key]
+            last_fetch = cache_entry['last_fetch_time']
+            if now - last_fetch >= interval_secs:
+                # Interval expired: fetch fresh value
+                value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+                cache_entry['value'] = value
+                cache_entry['last_fetch_time'] = now
+            else:
+                # Use cached value
+                value = cache_entry['value']
 
     # Apply transforms to the raw cached value each render (cheap; lets
     # config edits to 'transform:' take effect without cache invalidation).

@@ -464,9 +464,17 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
     # (giant/normal/...) get reloaded fresh, not skipped.
     _ppd._SCALE_FONTS_LOADED = False
 
+    # Clear remote fact cache (url-fact panels) so each config gets fresh data,
+    # not stale cached values from a previous config in the same render batch.
+    _ppd._remote_fact_cache.clear()
+
     _ppd._config = cfg_copy
     # 'config_file' fact source reads _args.config directly.
     _ppd._args.config = config_path
+
+    # Enable preview mode so url-fact panels fetch fresh data immediately
+    # instead of waiting for stagger delays to expire.
+    _ppd._PREVIEW_MODE = True
 
     # Run the real layout pass  --  resolves font: / font_size: auto into
     # row-relative synthetic font entries and pre-computes panel widths,
@@ -513,6 +521,9 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     img.save(out_path)
     print(f"  Saved: {out_path}  ({w}x{h})")
+
+    # Reset preview mode flag for next render
+    _ppd._PREVIEW_MODE = False
 
 
 

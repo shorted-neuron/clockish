@@ -3,14 +3,14 @@ orientation: square
 
 rows:
   - name: time
-    height: 33%
+    height: 23%
     panels:
       - type: clock
         font_size: 100px
         color: '#00ff00'
 
   - name: external-ip
-    height: 22%
+    height: 12%
     panels:
       - type: url-fact
         url: https://api.ipify.org?format=json
@@ -20,9 +20,10 @@ rows:
         label: "Public IP "
         color: '#ffffff'
         font_size: 24px
+        preview_response: '{"ip": "203.0.113.42"}'
 
   - name: random-quote
-    height: 22%
+    height: 12%
     background: '#1a1a1a'
     panels:
       - type: url-fact
@@ -30,51 +31,60 @@ rows:
         json_path: content
         interval: 10m
         timeout: 5
-        fallback: "No quote"
-        color: '#ffff00'
-        font_size: small
+        fallback: "quotable.io?"
+        # preview_response: '{"content": "They didn''t want it right, they wanted it Tuesday - Heinlein"}'
+        preview_response: '{"content": "Don''t sweat the small stuff! -Steve"}'
+        color: yellow
+        font_size: micro
 
   - name: http-example
     height: 11%
     panels:
-      - type: url-fact
-        url: http://example.com/
-        pattern: '<title>([^<]+)</title>'
-        interval: 1h
-        timeout: 5
-        fallback: "example"
-        label: "title "
-        color: '#aaaaaa'
-        font_size: 16px
+    #  - type: text-fact
+    #    url: http://example.com/
+    #    pattern: '<title>([^<]+)</title>'
+    #    interval: 1h
+    #    timeout: 5
+    #    fallback: "example"
+    #    label: "title "
+    #    color: '#aaaaaa'
+    #    font_size: 16px
+
+      - type: text
+        width: 25%
+        label: "Temp:"
+        font_size: auto
+        font_behavior: scale_numeric
 
       - type: url-fact
-        width: 20%
-        justify: right
+        #justify: right
+        label: "inside:"
         url: http://sensor-master.lan/last-json
         json_path: tempF
         interval: 33s
         timeout: 5
-        color: darkorange
+        color: cyan
         font_size: 16px
         # string "71.8" -> float -> int, rounded up to "72"
-        transform: [round]
+        transform: [round, {format: "{:.0f}°F"}]
 
       - type: url-fact
-        width: 20%
-        justify: right
-        url: http://sensor-master.lan/last-json
+        #justify: right
+        label: "outside:"
+        url: http://sensor-outfront.lan/last-json
         json_path: tempF
         interval: 33s
         timeout: 5
-        color: darkorange
+        color: pink
         font_size: 16px
         # 'format' escape hatch: string "71.8" -> float -> "71.8F"
-        transform: [{format: "{:.1f}F"}]
+        transform: [{format: "{:.1f}°F"}]
 
   - name: status-fact
     height: 12%
     panels:
       - type: text
+        width: 25%
         label: "HELLO"
         font_size: 16px
         color: white
@@ -91,7 +101,71 @@ rows:
       - type: text
         label: "hello world"
         font_size: 16px
-        color: '#00ffff'
-        background: darkgrey
+        color: cyan
+        background: darkpurple
         # "hello world" -> "helloWorld" (true camelCase)
         transform: [camelcase]
+
+  - name: divider-2
+    height: 5%
+    panels:
+      - type: blank
+
+  - name: openmeteo-kapa-header
+    height: 10%
+    background: silver
+    panels:
+      - type: text
+        label: "airport KAPA conditions:"
+        font_size: auto
+        font_behavior: scale
+        color: darkgreen
+
+  - name: openmeteo-kapa-weather
+    height: 15%
+    background: '#001f00'
+    panels:
+      - type: url-fact
+        label: "TempC "
+        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        json_path: current.temperature_2m
+        interval: 1h
+        timeout: 5
+        fallback: "N/A"
+        color: '#66ddff'
+        font_size: 14px
+        transform: [{format: "{:.0f}°"}]
+
+      - type: url-fact
+        label: "TempF "
+        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        json_path: current.temperature_2m
+        interval: 1h
+        timeout: 5
+        fallback: "N/A"
+        color: '#ffaa00'
+        font_size: 14px
+        # Convert C to F: (C * 9/5) + 32
+        transform: [{multiply: 1.8}, {add: 32}, {format: "{:.0f}°"}]
+
+      - type: url-fact
+        label: "Wind "
+        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        json_path: current.wind_speed_10m
+        interval: 1h
+        timeout: 5
+        fallback: "N/A"
+        color: '#ffffff'
+        font_size: 12px
+        transform: [{format: "{:.0f}kmh"}]
+
+      - type: url-fact
+        label: "Dir "
+        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        json_path: current.wind_direction_10m
+        interval: 1h
+        timeout: 5
+        fallback: "N/A"
+        color: '#aaffaa'
+        font_size: 14px
+        transform: [{format: "{:.0f}°"}]
