@@ -17,9 +17,9 @@ class TestRootLevelKey:
     """The bug this module guards against: flat top-level JSON, e.g. ipify."""
 
     def test_flat_root_key_extracted_directly(self):
-        response = json.dumps({"ip": "75.71.133.104"})
+        response = json.dumps({"ip": "192.168.84.209"})
         value, missing = _extract_value_by_json_path(response, "ip")
-        assert value == "75.71.133.104"
+        assert value == "192.168.84.209"
         assert missing is False
 
     def test_flat_root_key_numeric_value(self):

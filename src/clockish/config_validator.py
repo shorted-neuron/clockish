@@ -172,7 +172,7 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'url-fact': frozenset({
         'type', 'url', 'pattern', 'json_path', 'interval', 'timeout', 'verify_ssl',
         'fallback', 'label', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'justify', 'transform', 'padding',
+        'background', 'justify', 'transform', 'padding', 'preview_response',
     }),
 }
 
