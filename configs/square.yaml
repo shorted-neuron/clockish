@@ -15,94 +15,218 @@ orientation: square
 preview_size: "240x240"
 
 rows:
-  - name: app-header
-    height: 20px
-    background: navy
-    panels:
-      - type: text
-        # justify: center
-        label: "clockish"
-        color: silver
-        font_size: auto
-      - type: fact
-        # justify: center
-        source: version
-        label: "default"
-        color: grey
-        font_size: auto
+#  - name: header
+#    height: 12px
+#    background: navy
+#    panels:
+#      - type: fact
+#        source: version
+#        justify: right
+#        label: "clockish v"
+#        color: grey
+#        font_size: auto
 
-  - name: local-clock
-    height: 48px
+  - name: clock
+    height: 30%
     panels:
       - type: clock
-        # justify: center
+        width: 100%
         timezone: local
-        time_format: 24hs
+        time_format: "%-I:%M"
         color: white
         font_size: auto
+        font_behavior: scale_numeric
+        justify: center
+        padding: 0
+#      - type: clock
+#        timezone: local
+#        time_format: "%p"
+#        color: white
+#        font_size: auto
+#        font_behavior: scale_numeric
+#        justify: center
 
-  - name: network
-    height: 32px
-    background: darkgrey
+  - name: date-banner
+    height: 18px
+    background: darkblue
     panels:
-      - type: fact
+      - type: date
         width: 50%
-        justify: left
-        source: hostname
-        # label: "default"
-        color: yellow
-        font_size: 16px
-      - type: fact
-        justify: right
-        source: ip
-        # label: "default"
-        color: lime
-        font_size: 18px
-
-# - name: wifi-status
-#   height: 24px
-#   panels:
-#     - type: wifi_graphic
-#       width: 34px
-#       # justify: center
-#       color: lime
-#       background: navy
-#     - type: fact
-#       # justify: center
-#       source: wifi_status
-#       color: lime
-#       font_size: tiny
-#     - type: fact
-#       # justify: center
-#       source: wifi_ssid
-#       label: "default"
-#       color: darklime
-#       font_size: tiny
-
-  - name: divider-1
-    height: 1px
-    background: black
-    panels:
-      - type: divider
-        height: 1px
-        color: black
-
-  - name: facts
-    height: 24px
-    panels:
-      - type: fact
-        width: 35%
-        # justify: center
-        source: wifi_status
-        # label: "default"
+        date_format: "%a %b %d"
+        color: gold
         font_size: auto
+        justify: right
+      - type: clock
+        timezone: local
+        time_format: 24hs
+        color: grey
+        font_size: auto
+        justify: right
+
+#  - name: divider-network
+#    height: 1px
+#    background: darkgrey
+#    panels:
+#      - type: divider
+#        color: darkgrey
+
+  - name: network-1
+    height: 24px
+    background: '#101010'
+    panels:
+      - type: blank
+        width: 5%
       - type: wifi_graphic
         width: 15%
-        color: silver
+        color: lime
       - type: fact
-        width: 50%
-        # justify: center
-        source: cpu
+        width: 35%
+        source: wifi_signal
+        # label: "default"
+        justify: center
+        color: green
+        font_size: 12px
+      - type: fact
+        width: 45%
+        source: wifi_ssid
         label: "default"
-        color: magenta
-        font_size: auto
+        justify: center
+        color: green
+        font_size: 12px
+
+  - name: network-2
+    height: 20px
+    background: dimred
+    panels:
+      - type: fact
+        source: hostname
+        justify: center
+        color: orange
+        font_size: 12px
+      - type: fact
+        source: ip
+        justify: center
+        color: orange
+        font_size: 12px
+
+  - name: system-info1
+    height: 20px
+    background: '#2f2f2f'
+    panels:
+      - type: fact
+        width: 40%
+        source: uptime
+        label: "default"
+        justify: center
+        color: pink
+        font_size: 10px
+      - type: fact
+        source: ntp_status
+        justify: center
+        color: white
+        font_size: 12px
+      - type: fact
+        source: version
+        justify: right
+        # label: "clockish v"
+        color: grey
+        font_size: 12px
+  - name: system-info2
+    height: 20px
+    background: black
+    panels:
+      - type: fact
+        source: mem
+        mem_format: mb
+        label: default
+        justify: center
+        color: orange
+        font_size: tiny
+      - type: fact
+        source: cpu
+        label: default
+        justify: center
+        color: cyan
+        font_size: 12px
+
+  - name: temps1
+    height: 22px
+    background: navy
+    panels:
+      - type: url-fact
+        url: http://sensor-office.lan/last-json
+        json_path: "tempF"
+        interval: 15m
+        label: "Inside: "
+        justify: right
+        color: silver
+        font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"
+      - type: url-fact
+        url: http://sensor-outfront.lan/last-json
+        json_path: "tempF"
+        interval: 15m
+        label: "Outside: "
+        justify: right
+        color: gold
+        background: darkgreen
+        font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"
+  - name: temps2
+    height: 22px
+    background: black
+    panels:
+      - type: url-fact
+        url: http://sensor-master.lan/last-json
+        json_path: "tempF"
+        interval: 15m
+        label: "Bedroom: "
+        justify: right
+        color: silver
+        background: indigo
+        font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"
+      - type: url-fact
+        url: "https://api.open-meteo.com/v1/forecast?latitude=39.5727&longitude=-104.8494&current=temperature_2m&temperature_unit=fahrenheit"  # yamllint disable-line rule:line-length
+        json_path: "current.temperature_2m"
+        interval: 15m
+        label: "Centennial: "
+        justify: right
+        color: grey
+        background: black
+        font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"
+  - name: temps3
+    height: 22px
+    panels:
+      - type: url-fact
+        url: http://sensor-garage.lan/last-json
+        json_path: "tempF"
+        interval: 15m
+        label: "Garage: "
+        justify: right
+        color: silver
+        font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"
+      - type: url-fact
+        url: "https://api.open-meteo.com/v1/forecast?latitude=35.22083&longitude=-97.44361&current=temperature_2m&temperature_unit=fahrenheit"  # yamllint disable-line rule:line-length
+        json_path: "current.temperature_2m"
+        interval: 15m
+        label: "Norman OK: "
+        justify: right
+        color: white
+        background: dimred
+        font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"

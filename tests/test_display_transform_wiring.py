@@ -65,14 +65,14 @@ class TestDateTransform:
 class TestFactTransform:
     def test_transform_applied_to_fact_value(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        monkeypatch.setattr(cd, '_get_fact', lambda source: 'hello world')
+        monkeypatch.setattr(cd, '_get_fact', lambda source, options=None: 'hello world')
         panel = {'source': 'hostname', 'transform': ['titlecase']}
         cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
         assert calls[0] == 'HelloWorld'
 
     def test_no_transform_keeps_raw_fact_value(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        monkeypatch.setattr(cd, '_get_fact', lambda source: 'hello world')
+        monkeypatch.setattr(cd, '_get_fact', lambda source, options=None: 'hello world')
         panel = {'source': 'hostname'}
         cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
         assert calls[0] == 'hello world'
@@ -89,7 +89,7 @@ class TestUrlFactTransform:
 
     def test_transform_rounds_fetched_value(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        monkeypatch.setattr(cd, '_fetch_and_extract', lambda *a, **k: '71.8')
+        monkeypatch.setattr(cd, '_fetch_and_extract', lambda *a, **k: ('71.8', 200))
         # Ensure a clean cache slot for this specific panel dict instance.
         panel = self._fresh_panel(transform=['round'])
         cd._remote_fact_cache.pop(id(panel), None)
@@ -98,7 +98,7 @@ class TestUrlFactTransform:
 
     def test_no_transform_keeps_raw_fetched_value(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        monkeypatch.setattr(cd, '_fetch_and_extract', lambda *a, **k: '71.8')
+        monkeypatch.setattr(cd, '_fetch_and_extract', lambda *a, **k: ('71.8', 200))
         panel = self._fresh_panel()
         cd._remote_fact_cache.pop(id(panel), None)
         cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)
@@ -112,7 +112,7 @@ class TestUrlFactTransform:
 
         def _fake_fetch(*a, **k):
             fetch_calls.append(1)
-            return '71.8'
+            return ('71.8', 200)
 
         monkeypatch.setattr(cd, '_fetch_and_extract', _fake_fetch)
         panel = self._fresh_panel(transform=['round'])

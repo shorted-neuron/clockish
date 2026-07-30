@@ -428,7 +428,8 @@ def get_cpu_percent() -> float:
     _cpu_percent_cache_time = now
     return _cpu_percent_cached
 
-def get_mem_usage():
+def get_mem_usage(format_: str = 'both') -> str:
+    """Get memory usage. format_: 'both' (default), 'mb', 'percent'."""
     meminfo = {}
     with open("/proc/meminfo") as f:
         for line in f:
@@ -438,7 +439,13 @@ def get_mem_usage():
     avail_mb = meminfo['MemAvailable'] // 1024
     used_mb  = total_mb - avail_mb
     pct = used_mb * 100 / total_mb if total_mb else 0
-    return f"Mem: {used_mb}/{total_mb} MB  {pct:.2f}%"
+
+    if format_ == 'mb':
+        return f"{used_mb}/{total_mb}MB"
+    elif format_ == 'percent':
+        return f"{pct:.1f}%"
+    else:  # 'both' or default
+        return f"{used_mb}/{total_mb}MB {pct:.1f}%"
 
 def get_disk_usage():
     usage = shutil.disk_usage("/")
@@ -564,9 +571,18 @@ def get_wifi_info():
     get_wifi_info._cache_time  = now
     return get_wifi_info._cache_value
 
-def _get_fact(source: str) -> str:
-    """Return the raw value for a named system-info source (no label prefix)."""
-    return {
+def _get_fact(source: str, options: dict | None = None) -> str:
+    """Return the raw value for a named system-info source (no label prefix).
+
+    Args:
+        source: fact source name (e.g., 'mem', 'cpu', 'ip')
+        options: optional dict with source-specific format options
+                 (e.g., {'mem_format': 'mb'} for memory format control)
+    """
+    if options is None:
+        options = {}
+
+    registry = {
         'ip':           get_ip_address,
         'hostname':     get_hostname,
         'uptime':       get_uptime_str,
@@ -575,7 +591,7 @@ def _get_fact(source: str) -> str:
                                  else os.path.basename(_DEFAULT_CONFIG),
         'cpu':          lambda: f"{get_cpu_percent():.1f}%",
         'cpu_load':     lambda: f"{get_cpu_load():.2f}",
-        'mem':          get_mem_usage,
+        'mem':          lambda: get_mem_usage(options.get('mem_format', 'both')),
         'disk':         get_disk_usage,
         'temp':         get_cpu_temp,
         'ntp_status':   get_ntp_status,
@@ -589,7 +605,8 @@ def _get_fact(source: str) -> str:
         'wifi_signal':  lambda: get_wifi_info()[2],
         'wifi_quality': lambda: get_wifi_info()[3],
         'wifi_all':     lambda: "  ".join(get_wifi_info()),
-    }.get(source, lambda: source)()
+    }
+    return registry.get(source, lambda: source)()
 
 
 # Default labels shown when a fact panel has label: "default"
@@ -721,13 +738,14 @@ def _log_warning(msg: str) -> None:
             pass
 
 def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
-                       timeout: int, verify_ssl: bool, fallback: str) -> str:
+                       timeout: int, verify_ssl: bool, fallback: str) -> tuple[str, int | None]:
     """Fetch URL and extract value using pattern or json_path.
 
     Returns:
-    - Extracted value (on success)
-    - "?" (if JSON key missing; logs warning)
-    - fallback (on network/fetch error)
+    - Tuple (value, status_code)
+    - Extracted value (on success) with HTTP status code (e.g., 200)
+    - "?" (if JSON key missing; logs warning) with status code
+    - fallback (on network/fetch error) with None status code
     """
     try:
         # Create SSL context (ignore certificate for https by default)
@@ -747,22 +765,23 @@ def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
         else:
             response = urllib.request.urlopen(req, timeout=timeout)
 
+        status_code = response.status
         response_text = response.read().decode('utf-8')
 
         # Extract value
         if pattern:
             value = _extract_value_by_regex(response_text, pattern)
-            return value if value is not None else fallback
+            return (value if value is not None else fallback, status_code)
         else:  # json_path
             value, is_missing_key = _extract_value_by_json_path(response_text, json_path)
             if is_missing_key:
                 _log_warning(f"url-fact: JSON key '{json_path}' not found in {url}")
-                return "?"
-            return value if value is not None else fallback
+                return ("?", status_code)
+            return (value if value is not None else fallback, status_code)
     except Exception as e:
         if DEBUG:
             print(f"DEBUG: url-fact fetch failed: {url} -> {e}")
-        return fallback
+        return (fallback, None)
 
 def _handle_sigusr1(signum, frame):
     """SIGUSR1 handler: invalidate all remote fact cache entries."""
@@ -1440,7 +1459,11 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     f      = _get_font(p.get('font_size', 'normal'))
     color  = p.get('color', _C_WHITE)
     source = p['source']
-    value  = _get_fact(source)
+    # Build options dict for _get_fact (e.g., mem_format for 'mem' source)
+    fact_options = {}
+    if source == 'mem' and 'mem_format' in p:
+        fact_options['mem_format'] = p['mem_format']
+    value  = _get_fact(source, options=fact_options)
     value  = apply_transforms(value, p.get('transform'), debug=DEBUG)
 
     if 'label' not in p:
@@ -1466,7 +1489,7 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
 
     f      = _get_font(p.get('font_size', 'normal'))
     color  = p.get('color', _C_WHITE)
-    url    = p.get('url', '')
+    url    = p.get('url', '').strip()
     pattern = p.get('pattern')
     json_path = p.get('json_path')
     interval_str = p.get('interval', '5m')
@@ -1500,7 +1523,9 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
         now = time.monotonic()
         if cache_key not in _remote_fact_cache:
             # First fetch: happens immediately
-            value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+            value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+            if DEBUG:
+                print(f"DEBUG: url-fact FETCH: {url} -> HTTP {status_code}")
             _remote_fact_cache[cache_key] = {
                 'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs,
             }
@@ -1509,12 +1534,16 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
             last_fetch = cache_entry['last_fetch_time']
             if now - last_fetch >= interval_secs:
                 # Interval expired: fetch fresh value
-                value = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+                value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+                if DEBUG:
+                    print(f"DEBUG: url-fact FETCH (refresh): {url} -> HTTP {status_code}")
                 cache_entry['value'] = value
                 cache_entry['last_fetch_time'] = now
             else:
                 # Use cached value
                 value = cache_entry['value']
+                if DEBUG:
+                    print(f"DEBUG: url-fact CACHED: {url} (expires in {interval_secs - (now - last_fetch):.1f}s)")
 
     # Apply transforms to the raw cached value each render (cheap; lets
     # config edits to 'transform:' take effect without cache invalidation).

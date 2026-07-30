@@ -25,7 +25,7 @@ display:
   spi_speed_hz: 64000000
   invert:       true        # required by most ST7789 panels
 
-  # Panel sits at offset (0, 80) inside the 320x240 ST7789 framebuffer.
-  # Adjust these if your image appears shifted on screen (trial-and-error).
+  # some panels sits at an offset (0, 80) inside the 320x240 ST7789 framebuffer.
+  # Adjust these if your image appears shifted on screen
   offset_left:  0
-  offset_top:   80
+  offset_top:   0
