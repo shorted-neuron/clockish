@@ -93,7 +93,7 @@ rows:
         font_size: auto
 
   - name: network-2
-    height: 26px
+    height: 24px
     background: dimred
     panels:
       - type: fact
@@ -108,16 +108,16 @@ rows:
         font_size: auto
 
   - name: system-info1
-    height: 26px
+    height: 24px
     background: '#2f2f2f'
     panels:
       - type: fact
         width: 40%
         source: uptime
-        label: "default"
+        label: ""
         justify: center
         color: pink
-        font_size: 10px
+        font_size: 16px
       - type: fact
         source: ntp_status
         justify: center
@@ -128,9 +128,9 @@ rows:
         justify: right
         # label: "clockish v"
         color: grey
-        font_size: tiny
+        font_size: auto
   - name: system-info2
-    height: 26px
+    height: 34px
     background: black
     panels:
       - type: fact
@@ -140,7 +140,7 @@ rows:
         label: default
         justify: left
         color: orange
-        font_size: 12px
+        font_size: 14px
       - type: url-fact
         url: http://sensor-office.lan/last-json
         json_path: "tempF"
@@ -154,16 +154,16 @@ rows:
           - suffix: "°F"
 
   - name: temps1
-    height: 36px
+    height: 34px
     background: navy
     panels:
       - type: fact
         width: 35%
         source: cpu
-        label: default
+        # label: default
         justify: left
         color: silver
-        font_size: 12px
+        font_size: auto
       - type: url-fact
         url: http://sensor-outfront.lan/last-json
         json_path: "tempF"
