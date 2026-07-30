@@ -47,7 +47,7 @@ rows:
 #        justify: center
 
   - name: date-banner
-    height: 18px
+    height: 26px
     background: darkblue
     panels:
       - type: date
@@ -55,13 +55,11 @@ rows:
         date_format: "%a %b %d"
         color: gold
         font_size: auto
-        justify: right
       - type: clock
         timezone: local
         time_format: 24hs
         color: grey
         font_size: auto
-        justify: right
 
 #  - name: divider-network
 #    height: 1px
@@ -71,7 +69,7 @@ rows:
 #        color: darkgrey
 
   - name: network-1
-    height: 24px
+    height: 26px
     background: '#101010'
     panels:
       - type: blank
@@ -85,32 +83,32 @@ rows:
         # label: "default"
         justify: center
         color: green
-        font_size: 12px
+        font_size: auto
       - type: fact
         width: 45%
         source: wifi_ssid
         label: "default"
         justify: center
         color: green
-        font_size: 12px
+        font_size: auto
 
   - name: network-2
-    height: 20px
+    height: 26px
     background: dimred
     panels:
       - type: fact
         source: hostname
         justify: center
         color: orange
-        font_size: 12px
+        font_size: auto
       - type: fact
         source: ip
         justify: center
         color: orange
-        font_size: 12px
+        font_size: auto
 
   - name: system-info1
-    height: 20px
+    height: 26px
     background: '#2f2f2f'
     panels:
       - type: fact
@@ -124,109 +122,115 @@ rows:
         source: ntp_status
         justify: center
         color: white
-        font_size: 12px
+        font_size: auto
       - type: fact
         source: version
         justify: right
         # label: "clockish v"
         color: grey
-        font_size: 12px
+        font_size: tiny
   - name: system-info2
-    height: 20px
+    height: 26px
     background: black
     panels:
       - type: fact
+        width: 35%
         source: mem
         mem_format: mb
         label: default
-        justify: center
+        justify: left
         color: orange
-        font_size: tiny
-      - type: fact
-        source: cpu
-        label: default
-        justify: center
-        color: cyan
         font_size: 12px
-
-  - name: temps1
-    height: 22px
-    background: navy
-    panels:
       - type: url-fact
         url: http://sensor-office.lan/last-json
         json_path: "tempF"
         interval: 15m
-        label: "Inside: "
+        label: "In: "
         justify: right
         color: silver
-        font_size: 12px
+        # font_size: 12px
         transform:
           - round: 0
           - suffix: "°F"
+
+  - name: temps1
+    height: 36px
+    background: navy
+    panels:
+      - type: fact
+        width: 35%
+        source: cpu
+        label: default
+        justify: left
+        color: silver
+        font_size: 12px
       - type: url-fact
         url: http://sensor-outfront.lan/last-json
         json_path: "tempF"
         interval: 15m
-        label: "Outside: "
+        label: "Out: "
         justify: right
         color: gold
         background: darkgreen
-        font_size: 12px
+        # font_size: 12px
         transform:
           - round: 0
           - suffix: "°F"
-  - name: temps2
-    height: 22px
-    background: black
-    panels:
-      - type: url-fact
-        url: http://sensor-master.lan/last-json
-        json_path: "tempF"
-        interval: 15m
-        label: "Bedroom: "
-        justify: right
-        color: silver
-        background: indigo
-        font_size: 12px
-        transform:
-          - round: 0
-          - suffix: "°F"
-      - type: url-fact
-        url: "https://api.open-meteo.com/v1/forecast?latitude=39.5727&longitude=-104.8494&current=temperature_2m&temperature_unit=fahrenheit"  # yamllint disable-line rule:line-length
-        json_path: "current.temperature_2m"
-        interval: 15m
-        label: "Centennial: "
-        justify: right
-        color: grey
-        background: black
-        font_size: 12px
-        transform:
-          - round: 0
-          - suffix: "°F"
-  - name: temps3
-    height: 22px
-    panels:
-      - type: url-fact
-        url: http://sensor-garage.lan/last-json
-        json_path: "tempF"
-        interval: 15m
-        label: "Garage: "
-        justify: right
-        color: silver
-        font_size: 12px
-        transform:
-          - round: 0
-          - suffix: "°F"
-      - type: url-fact
-        url: "https://api.open-meteo.com/v1/forecast?latitude=35.22083&longitude=-97.44361&current=temperature_2m&temperature_unit=fahrenheit"  # yamllint disable-line rule:line-length
-        json_path: "current.temperature_2m"
-        interval: 15m
-        label: "Norman OK: "
-        justify: right
-        color: white
-        background: dimred
-        font_size: 12px
-        transform:
-          - round: 0
-          - suffix: "°F"
+#  - name: temps2
+#    height: 22px
+#    background: black
+#    panels:
+#      - type: url-fact
+#        url: http://sensor-master.lan/last-json
+#        json_path: "tempF"
+#        interval: 15m
+#        label: "Bedroom: "
+#        justify: right
+#        color: silver
+#        background: indigo
+#        font_size: 12px
+#        transform:
+#          - round: 0
+#          - suffix: "°F"
+#      - type: url-fact
+#        url: |-
+#          https://api.open-meteo.com/v1/forecast?
+#          latitude=39.5727&longitude=-104.8494&current=temperature_2m&temperature_unit=fahrenheit
+#        json_path: "current.temperature_2m"
+#        interval: 15m
+#        label: "Centennial: "
+#        justify: right
+#        color: grey
+#        background: black
+#        font_size: 12px
+#        transform:
+#          - round: 0
+#          - suffix: "°F"
+#  - name: temps3
+#    height: 22px
+#    panels:
+#      - type: url-fact
+#        url: http://sensor-garage.lan/last-json
+#        json_path: "tempF"
+#        interval: 15m
+#        label: "Garage: "
+#        justify: right
+#        color: silver
+#        font_size: 12px
+#        transform:
+#          - round: 0
+#          - suffix: "°F"
+#      - type: url-fact
+#        url: |-
+#          https://api.open-meteo.com/v1/forecast?
+#          latitude=35.22083&longitude=-97.44361&current=temperature_2m&temperature_unit=fahrenheit
+#        json_path: "current.temperature_2m"
+#        interval: 15m
+#        label: "Norman OK: "
+#        justify: right
+#        color: white
+#        background: dimred
+#        font_size: 12px
+#        transform:
+#          - round: 0
+#          - suffix: "°F"
