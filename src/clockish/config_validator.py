@@ -151,7 +151,7 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     }),
     'fact': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'label', 'source', 'transform', 'padding',
+        'background', 'label', 'source', 'transform', 'padding', 'mem_format',
     }),
     'text': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
@@ -568,6 +568,18 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                         f"unrecognised fact source '{source}' "
                         f"(known sources: {', '.join(sorted(KNOWN_FACT_SOURCES))})",
                     )
+
+                # Validate mem_format if present and source is 'mem'
+                if source == 'mem':
+                    mem_format = panel.get('mem_format')
+                    if mem_format is not None:
+                        valid_mem_formats = {'both', 'mb', 'percent'}
+                        if mem_format not in valid_mem_formats:
+                            err(
+                                ploc,
+                                f"mem_format '{mem_format}' invalid "
+                                f"(use: {', '.join(sorted(valid_mem_formats))})",
+                            )
 
             # 7. url-fact panel: url required, exactly one of pattern/json_path required
             if ptype == 'url-fact':

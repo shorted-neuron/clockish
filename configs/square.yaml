@@ -1,0 +1,142 @@
+---
+# square.yaml  --  clockish config
+# ---------------------------------------------------------------------------
+# Layout for a 240x240 ST7789 display (e.g. Mini-PiTFT 1.3" / Adafruit 240x240).
+#
+# copy display settings: Use configs/display/st7789-240x240.yaml
+#   to ~/.config/clockish/display.yaml on your Pi, or pass it via:
+#   clockish --display configs/display/st7789-240x240.yaml configs/square.yaml
+# ---------------------------------------------------------------------------
+
+orientation: square
+
+# clockish-preview has no way to know the real ST7789 dimensions without a
+# display profile on disk; this hint keeps the PNG preview honest.
+preview_size: "240x240"
+
+rows:
+  - name: header
+    height: 24px
+    background: navy
+    panels:
+      - type: fact
+        source: version
+        justify: right
+        label: "clockish v"
+        color: grey
+        font_size: auto
+
+  - name: clock
+    height: 30%
+    panels:
+      - type: clock
+        width: 100%
+        timezone: local
+        time_format: "%-I:%M"
+        color: white
+        font_size: auto
+        font_behavior: scale_numeric
+        justify: center
+        padding: 0
+
+  - name: date-banner
+    height: 26px
+    background: darkblue
+    panels:
+      - type: date
+        width: 50%
+        date_format: "%a %b %d"
+        color: gold
+        font_size: auto
+      - type: clock
+        timezone: local
+        justify: right
+        time_format: ":%S "
+        color: grey
+        font_size: auto
+
+  - name: network-1
+    height: 26px
+    background: '#101010'
+    panels:
+      - type: blank
+        width: 5%
+      - type: wifi_graphic
+        width: 15%
+        color: lime
+      - type: fact
+        width: 35%
+        source: wifi_signal
+        # label: "default"
+        justify: center
+        color: green
+        font_size: auto
+      - type: fact
+        width: 45%
+        source: wifi_ssid
+        justify: center
+        color: green
+        font_size: auto
+
+  - name: network-2
+    height: 24px
+    background: black
+    panels:
+      - type: fact
+        source: hostname
+        justify: left
+        color: orange
+        font_size: auto
+      - type: fact
+        source: ip
+        justify: right
+        color: orange
+        font_size: auto
+
+  - name: system-info2
+    height: 34px
+    background: black
+    panels:
+      - type: fact
+        width: 35%
+        source: mem
+        mem_format: mb
+        label: default
+        justify: left
+        color: darkorange
+        font_size: 14px
+      - type: url-fact
+        url: http://sensor-office.lan/last-json
+        json_path: "tempF"
+        interval: 15m
+        label: "In: "
+        justify: right
+        color: silver
+        # font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"
+
+  - name: temps1
+    height: 34px
+    background: navy
+    panels:
+      - type: fact
+        width: 35%
+        source: cpu
+        label: default
+        justify: left
+        color: darkorange
+        font_size: 14px
+      - type: url-fact
+        url: http://sensor-outfront.lan/last-json
+        json_path: "tempF"
+        interval: 15m
+        label: "Out: "
+        justify: right
+        color: gold
+        background: black
+        # font_size: 12px
+        transform:
+          - round: 0
+          - suffix: "°F"

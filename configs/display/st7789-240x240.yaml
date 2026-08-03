@@ -1,0 +1,31 @@
+---
+# ST7789  --  240x240 square TFT (e.g. Mini-PiTFT 1.3")
+# ---------------------------------------------------------------------------
+# The ST7789 controller has a 320x240 internal framebuffer.
+# This square panel is a 240x240 window within it, addressed via offset_left/top.
+#
+# Verified on: Mini-PiTFT 1.3" (ST7789 240x240)
+#   backlight_pin: 22 (D22 / GPIO22)
+#
+# Use this profile with: square.yaml and any other 240x240 row config.
+# Supports rotation: 0, 90, 180, 270 (square panel allows all).
+# ---------------------------------------------------------------------------
+
+display:
+  driver:       st7789
+  width:        240
+  height:       240
+  rotation:     0           # ST7789 square panels support: 0, 90, 180, 270
+
+  spi_port:     0
+  spi_cs:       0           # CE0
+  dc_pin:       25          # BCM GPIO 25
+  rst_pin:      ~           # not connected on most breakout boards
+  backlight_pin: 22         # BCM GPIO 22 (D22)
+  spi_speed_hz: 64000000
+  invert:       true        # required by most ST7789 panels
+
+  # some panels sits at an offset (0, 80) inside the 320x240 ST7789 framebuffer.
+  # Adjust these if your image appears shifted on screen
+  offset_left:  0
+  offset_top:   0
