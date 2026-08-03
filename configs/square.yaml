@@ -3,9 +3,9 @@
 # ---------------------------------------------------------------------------
 # Layout for a 240x240 ST7789 display (e.g. Mini-PiTFT 1.3" / Adafruit 240x240).
 #
-# Display settings: Use configs/display/st7789-240x240.yaml
-#   Copy it to ~/.config/clockish/display.yaml on your Pi, or pass it via:
-#     clockish --display configs/display/st7789-240x240.yaml configs/square.yaml
+# copy display settings: Use configs/display/st7789-240x240.yaml
+#   to ~/.config/clockish/display.yaml on your Pi, or pass it via:
+#   clockish --display configs/display/st7789-240x240.yaml configs/square.yaml
 # ---------------------------------------------------------------------------
 
 orientation: square
@@ -15,16 +15,16 @@ orientation: square
 preview_size: "240x240"
 
 rows:
-#  - name: header
-#    height: 12px
-#    background: navy
-#    panels:
-#      - type: fact
-#        source: version
-#        justify: right
-#        label: "clockish v"
-#        color: grey
-#        font_size: auto
+  - name: header
+    height: 24px
+    background: navy
+    panels:
+      - type: fact
+        source: version
+        justify: right
+        label: "clockish v"
+        color: grey
+        font_size: auto
 
   - name: clock
     height: 30%
@@ -38,13 +38,6 @@ rows:
         font_behavior: scale_numeric
         justify: center
         padding: 0
-#      - type: clock
-#        timezone: local
-#        time_format: "%p"
-#        color: white
-#        font_size: auto
-#        font_behavior: scale_numeric
-#        justify: center
 
   - name: date-banner
     height: 26px
@@ -57,16 +50,10 @@ rows:
         font_size: auto
       - type: clock
         timezone: local
-        time_format: 24hs
+        justify: right
+        time_format: ":%S "
         color: grey
         font_size: auto
-
-#  - name: divider-network
-#    height: 1px
-#    background: darkgrey
-#    panels:
-#      - type: divider
-#        color: darkgrey
 
   - name: network-1
     height: 26px
@@ -87,48 +74,25 @@ rows:
       - type: fact
         width: 45%
         source: wifi_ssid
-        label: "default"
         justify: center
         color: green
         font_size: auto
 
   - name: network-2
     height: 24px
-    background: dimred
+    background: black
     panels:
       - type: fact
         source: hostname
-        justify: center
+        justify: left
         color: orange
         font_size: auto
       - type: fact
         source: ip
-        justify: center
+        justify: right
         color: orange
         font_size: auto
 
-  - name: system-info1
-    height: 24px
-    background: '#2f2f2f'
-    panels:
-      - type: fact
-        width: 40%
-        source: uptime
-        label: ""
-        justify: center
-        color: pink
-        font_size: 16px
-      - type: fact
-        source: ntp_status
-        justify: center
-        color: white
-        font_size: auto
-      - type: fact
-        source: version
-        justify: right
-        # label: "clockish v"
-        color: grey
-        font_size: auto
   - name: system-info2
     height: 34px
     background: black
@@ -139,7 +103,7 @@ rows:
         mem_format: mb
         label: default
         justify: left
-        color: orange
+        color: darkorange
         font_size: 14px
       - type: url-fact
         url: http://sensor-office.lan/last-json
@@ -160,10 +124,10 @@ rows:
       - type: fact
         width: 35%
         source: cpu
-        # label: default
+        label: default
         justify: left
-        color: silver
-        font_size: auto
+        color: darkorange
+        font_size: 14px
       - type: url-fact
         url: http://sensor-outfront.lan/last-json
         json_path: "tempF"
@@ -171,66 +135,8 @@ rows:
         label: "Out: "
         justify: right
         color: gold
-        background: darkgreen
+        background: black
         # font_size: 12px
         transform:
           - round: 0
           - suffix: "°F"
-#  - name: temps2
-#    height: 22px
-#    background: black
-#    panels:
-#      - type: url-fact
-#        url: http://sensor-master.lan/last-json
-#        json_path: "tempF"
-#        interval: 15m
-#        label: "Bedroom: "
-#        justify: right
-#        color: silver
-#        background: indigo
-#        font_size: 12px
-#        transform:
-#          - round: 0
-#          - suffix: "°F"
-#      - type: url-fact
-#        url: |-
-#          https://api.open-meteo.com/v1/forecast?
-#          latitude=39.5727&longitude=-104.8494&current=temperature_2m&temperature_unit=fahrenheit
-#        json_path: "current.temperature_2m"
-#        interval: 15m
-#        label: "Centennial: "
-#        justify: right
-#        color: grey
-#        background: black
-#        font_size: 12px
-#        transform:
-#          - round: 0
-#          - suffix: "°F"
-#  - name: temps3
-#    height: 22px
-#    panels:
-#      - type: url-fact
-#        url: http://sensor-garage.lan/last-json
-#        json_path: "tempF"
-#        interval: 15m
-#        label: "Garage: "
-#        justify: right
-#        color: silver
-#        font_size: 12px
-#        transform:
-#          - round: 0
-#          - suffix: "°F"
-#      - type: url-fact
-#        url: |-
-#          https://api.open-meteo.com/v1/forecast?
-#          latitude=35.22083&longitude=-97.44361&current=temperature_2m&temperature_unit=fahrenheit
-#        json_path: "current.temperature_2m"
-#        interval: 15m
-#        label: "Norman OK: "
-#        justify: right
-#        color: white
-#        background: dimred
-#        font_size: 12px
-#        transform:
-#          - round: 0
-#          - suffix: "°F"
