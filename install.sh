@@ -266,8 +266,7 @@ if $INSTALL_ST7789 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
 fi
 if $INSTALL_FB || [[ "$_DRIVER_CHOICE" == "4" ]]; then
     _PROFILES+=(
-        "Framebuffer  800x480   (Raspberry Pi 7\" Touch Display, DSI)                  |configs/display/framebuffer-800x480.yaml"
-        "Framebuffer  1920x1080 (HDMI or high-res DSI panel)                           |configs/display/framebuffer-1920x1080.yaml"
+        "Framebuffer  auto-detected resolution  (DSI/HDMI, /dev/fb0)                  |configs/display/framebuffer.yaml"
     )
 fi
 

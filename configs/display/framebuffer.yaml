@@ -1,14 +1,13 @@
 ---
-# Raspberry Pi Official 7" Touch Display (DSI)  --  800 x 480
+# Linux framebuffer (/dev/fb0)  --  any resolution, DSI or HDMI
 # ---------------------------------------------------------------------------
-# Connects via the DSI ribbon-cable connector, no SPI/GPIO needed.
-# The display appears as /dev/fb0 automatically at boot.
+# Works with:
+#   Raspberry Pi Official 7" Touch Display  (2013 original + 2024 v2, 800x480)
+#   HDMI monitors at whatever resolution the Pi initialises at boot
+#   Any other display the kernel exposes as /dev/fb*
 #
-# Compatible with:
-#   Raspberry Pi Touch Display  (2013 original, 800x480)
-#   Raspberry Pi Touch Display 2 (2024, 800x480 default mode)
-#
-# No extra pip packages required  --  uses the Linux kernel framebuffer.
+# Connects via DSI ribbon-cable or HDMI  --  no SPI/GPIO needed, no extra pip
+# packages  --  uses the Linux kernel framebuffer.
 #
 # Prerequisites:
 #   sudo usermod -aG video $USER   (log out and back in)
@@ -20,21 +19,19 @@
 # For a fully silent boot also add to /boot/firmware/cmdline.txt:
 #   quiet logo.nologo vt.global_cursor_default=0
 #
-# Check your actual resolution first:
+# width/height are OPTIONAL  --  the driver auto-detects real geometry from
+# the kernel at startup (FBIOGET_VSCREENINFO) and that always wins over
+# whatever's configured here (a mismatch just prints a warning, doesn't
+# fail). Add them anyway if you want `clockish-preview` to render at the
+# right size offline (no real /dev/fb0 to query on a dev machine) -- e.g.:
+#   width:  800
+#   height: 480
+# Check your actual resolution with:
 #   fbset -i
 #   cat /sys/class/graphics/fb0/virtual_size
-#
-# width/height below are OPTIONAL -- the framebuffer driver auto-detects
-# real geometry from the kernel at startup and that always wins (a mismatch
-# just prints a warning, doesn't fail). Kept here anyway so
-# `clockish-preview` renders at the right size offline (no real /dev/fb0
-# to query on a dev machine) -- see _resolve_preview_dimensions() in
-# render_preview.py.
 # ---------------------------------------------------------------------------
 
 display:
   driver:   framebuffer
   device:   /dev/fb0
-  width:    800
-  height:   480
   rotation: 0
