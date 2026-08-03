@@ -1,8 +1,12 @@
-# Linux framebuffer  --  1920 x 1080 (HDMI or high-res DSI)
+---
+# Raspberry Pi Official 7" Touch Display (DSI)  --  800 x 480
 # ---------------------------------------------------------------------------
-# Use this profile for any display the Pi initialises at 1080p, including:
-#   HDMI monitors at 1920x1080
-#   High-resolution DSI panels
+# Connects via the DSI ribbon-cable connector, no SPI/GPIO needed.
+# The display appears as /dev/fb0 automatically at boot.
+#
+# Compatible with:
+#   Raspberry Pi Touch Display  (2013 original, 800x480)
+#   Raspberry Pi Touch Display 2 (2024, 800x480 default mode)
 #
 # No extra pip packages required  --  uses the Linux kernel framebuffer.
 #
@@ -19,11 +23,18 @@
 # Check your actual resolution first:
 #   fbset -i
 #   cat /sys/class/graphics/fb0/virtual_size
+#
+# width/height below are OPTIONAL -- the framebuffer driver auto-detects
+# real geometry from the kernel at startup and that always wins (a mismatch
+# just prints a warning, doesn't fail). Kept here anyway so
+# `clockish-preview` renders at the right size offline (no real /dev/fb0
+# to query on a dev machine) -- see _resolve_preview_dimensions() in
+# render_preview.py.
 # ---------------------------------------------------------------------------
 
 display:
   driver:   framebuffer
   device:   /dev/fb0
-  width:    1920
-  height:   1080
+  width:    800
+  height:   480
   rotation: 0
