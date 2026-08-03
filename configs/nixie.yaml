@@ -60,8 +60,7 @@ default_font: NixieOne-Regular.ttf
 
 # Display settings are in a display profile  --  pair with one of:
 #   configs/display/ili9486-landscape.yaml     (480x320 SPI display)
-#   configs/display/framebuffer-800x480.yaml   (800x480 framebuffer)
-#   configs/display/framebuffer-1920x1080.yaml (1920x1080 framebuffer)
+#   configs/display/framebuffer.yaml   (linux console framebuffer)
 
 rows:
   - name: clock

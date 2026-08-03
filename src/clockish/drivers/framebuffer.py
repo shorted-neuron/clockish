@@ -53,12 +53,18 @@ in your display profile::
     display:
       driver:   framebuffer
       device:   /dev/fb0   # framebuffer device node
-      width:    800        # must match the actual display width
-      height:   480        # must match the actual display height
+      width:    800        # optional -- see below
+      height:   480        # optional -- see below
       rotation: 0          # software rotation: 0 / 90 / 180 / 270
 
-``width`` and ``height`` must match your physical display.
-Check yours with::
+Width/height are auto-detected  --  ``begin()`` queries the kernel via
+``FBIOGET_VSCREENINFO`` and that reported geometry always wins, so
+``width``/``height`` can be omitted entirely.  If given anyway (e.g. copied
+from another profile) and they don't match what the kernel reports, a
+warning is printed but startup continues using the DETECTED values, not
+the config's.  Only used as a fallback if the ioctl itself fails.
+
+Check the detected geometry yourself with::
 
     fbset -i              # shows geometry line, e.g. "geometry 800 480 ..."
     # or:
@@ -200,19 +206,22 @@ class FramebufferDriver(DisplayDriver):
             self._blue_off   = blue_off
             self._line_bytes = xres_v * (bpp // 8)
 
-            # Warn if config dimensions don't match reality
+            # Warn if config dimensions don't match reality -- detected wins
+            # regardless (self._width/height below), config is just noise.
             cfg_w = int(self._cfg.get('width',  0))
             cfg_h = int(self._cfg.get('height', 0))
             if cfg_w and cfg_w != xres:
                 print(
                     f"WARNING: display profile width={cfg_w} but {device} reports "
-                    f"{xres}px wide  --  update your display profile.",
+                    f"{xres}px wide  --  using detected value; "
+                    f"remove/update width: in your display profile.",
                     file=sys.stderr,
                 )
             if cfg_h and cfg_h != yres:
                 print(
                     f"WARNING: display profile height={cfg_h} but {device} reports "
-                    f"{yres}px tall  --  update your display profile.",
+                    f"{yres}px tall  --  using detected value; "
+                    f"remove/update height: in your display profile.",
                     file=sys.stderr,
                 )
             self._width  = xres
@@ -221,7 +230,8 @@ class FramebufferDriver(DisplayDriver):
         except OSError as exc:
             print(
                 f"WARNING: FBIOGET_VSCREENINFO failed ({exc}); "
-                "falling back to config dimensions and assuming 32bpp XRGB.",
+                "falling back to config dimensions (or 800x480 default) "
+                "and assuming 32bpp XRGB.",
                 file=sys.stderr,
             )
             self._line_bytes = self._width * (self._bpp // 8)
@@ -235,7 +245,7 @@ class FramebufferDriver(DisplayDriver):
         )
 
         print(
-            f"Framebuffer: {device}  {self._width}x{self._height}  "
+            f"Framebuffer: {device}  detected {self._width}x{self._height}  "
             f"{self._bpp}bpp  R<<{self._red_off} G<<{self._green_off} B<<{self._blue_off}"
         )
 
