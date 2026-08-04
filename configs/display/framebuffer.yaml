@@ -1,0 +1,37 @@
+---
+# Linux framebuffer (/dev/fb0)  --  any resolution, DSI or HDMI
+# ---------------------------------------------------------------------------
+# Works with:
+#   Raspberry Pi Official 7" Touch Display  (2013 original + 2024 v2, 800x480)
+#   HDMI monitors at whatever resolution the Pi initialises at boot
+#   Any other display the kernel exposes as /dev/fb*
+#
+# Connects via DSI ribbon-cable or HDMI  --  no SPI/GPIO needed, no extra pip
+# packages  --  uses the Linux kernel framebuffer.
+#
+# Prerequisites:
+#   sudo usermod -aG video $USER   (log out and back in)
+#
+# The driver automatically switches the VT to KD_GRAPHICS mode on start,
+# which suppresses the blinking cursor and any console text overlay.
+# Masking getty@tty1 is enough for a clean display:
+#   sudo systemctl mask getty@tty1
+# For a fully silent boot also add to /boot/firmware/cmdline.txt:
+#   quiet logo.nologo vt.global_cursor_default=0
+#
+# width/height are OPTIONAL  --  the driver auto-detects real geometry from
+# the kernel at startup (FBIOGET_VSCREENINFO) and that always wins over
+# whatever's configured here (a mismatch just prints a warning, doesn't
+# fail). Add them anyway if you want `clockish-preview` to render at the
+# right size offline (no real /dev/fb0 to query on a dev machine) -- e.g.:
+#   width:  800
+#   height: 480
+# Check your actual resolution with:
+#   fbset -i
+#   cat /sys/class/graphics/fb0/virtual_size
+# ---------------------------------------------------------------------------
+
+display:
+  driver:   framebuffer
+  device:   /dev/fb0
+  rotation: 0

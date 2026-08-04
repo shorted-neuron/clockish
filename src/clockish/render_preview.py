@@ -392,6 +392,16 @@ def _resolve_preview_dimensions(cfg: dict, config_path: str) -> tuple[int, int]:
          target (e.g. small.yaml's 240x135 ST7789) where the orientation fallback
          below would be wrong.
       4. 'orientation:' fallback  --  landscape -> 480x320, else -> 320x480.
+
+    Note: some drivers (currently ``framebuffer``) auto-detect their real
+    width/height from hardware at runtime and don't strictly need
+    ``width``/``height`` in the profile (see drivers/framebuffer.py). Preview
+    mode has no hardware to query though, so a profile missing both
+    ``width``/``height`` AND a ``preview_size:`` hint falls all the way to
+    step 4's generic per-orientation guess -- which is very likely NOT your
+    real target's resolution. A warning is printed when this happens; add
+    ``preview_size: "WxH"`` to the config (or width/height to the profile) to
+    get an accurate preview.
     """
     disp = cfg.get("display")
     if isinstance(disp, dict) and "width" in disp and "height" in disp:
@@ -414,7 +424,17 @@ def _resolve_preview_dimensions(cfg: dict, config_path: str) -> tuple[int, int]:
         except ValueError:
             pass
 
-    return (480, 320) if cfg.get("orientation") == "landscape" else (320, 480)
+    fallback = (480, 320) if cfg.get("orientation") == "landscape" else (320, 480)
+    print(
+        f"WARNING: {config_path}: could not resolve real display dimensions "
+        f"(no inline display:, no width/height in the display profile, no "
+        f"preview_size: hint) -- guessing {fallback[0]}x{fallback[1]} from "
+        f"orientation alone. This is very likely wrong for your actual "
+        f"target; add 'preview_size: \"WxHpx\"' to the config, or "
+        f"width/height to the display profile, for an accurate preview.",
+        file=sys.stderr,
+    )
+    return fallback
 
 
 def render_config(config_path: str, out_path: str, mock: bool) -> None:

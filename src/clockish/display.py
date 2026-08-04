@@ -1937,9 +1937,15 @@ def _init() -> None:
 
     # --- Display dimensions and PIL canvas ---------------------------------
     _display_cfg = _config.get('display', {})
-    width    = _display_cfg.get('width',    320)
-    height   = _display_cfg.get('height',   480)
     rotation = _display_cfg.get('rotation', 0)
+
+    # --- Hardware ------------------------------------------------------
+    # Init the driver FIRST: some drivers (e.g. framebuffer) auto-detect
+    # their real width/height from hardware at begin() time, which may
+    # differ from (or be entirely absent from) the config. lcd.dimensions
+    # is the authoritative after this point.
+    lcd = load_driver(_display_cfg).begin()
+    width, height = lcd.dimensions
 
     image = Image.new("RGB", (width, height))
     draw  = ImageDraw.Draw(image)
@@ -1950,8 +1956,6 @@ def _init() -> None:
     bottom  = height - padding
     x       = 0
 
-    # --- Hardware ----------------------------------------------------------
-    lcd = load_driver(_display_cfg).begin()
     print(f'Initialized display: {width}x{height} rotation={rotation}, '
           f'landscape={lcd.is_landscape}, dimensions={lcd.dimensions}')
 

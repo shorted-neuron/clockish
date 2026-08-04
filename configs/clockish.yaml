@@ -13,6 +13,7 @@
 # ---------------------------------------------------------------------------
 
 orientation: portrait
+preview_size: "320x480"
 
 rows:
   - name: app-header
