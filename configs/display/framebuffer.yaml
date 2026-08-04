@@ -4,10 +4,8 @@
 # Works with:
 #   Raspberry Pi Official 7" Touch Display  (2013 original + 2024 v2, 800x480)
 #   HDMI monitors at whatever resolution the Pi initialises at boot
+#   DSI connected displays (e.g. Waveshare 5" DSI, 800x480)
 #   Any other display the kernel exposes as /dev/fb*
-#
-# Connects via DSI ribbon-cable or HDMI  --  no SPI/GPIO needed, no extra pip
-# packages  --  uses the Linux kernel framebuffer.
 #
 # Prerequisites:
 #   sudo usermod -aG video $USER   (log out and back in)
