@@ -64,7 +64,7 @@ default_font: NixieOne-Regular.ttf
 
 rows:
   - name: clock
-    height: "65%"
+    height: 65%
     panels:
       - type: clock
         justify: center
@@ -75,32 +75,31 @@ rows:
         font_behavior: scale_numeric
 
   - name: divider-1
-    height: "5%"
+    height: 5%
     panels:
       - type: divider
         height: 1px
         color: rust
 
   - name: date
-    height: "17%"
+    height: 17%
     panels:
       - type: date
         justify: center
         timezone: US/Mountain
         date_format: "%A, %B %-d"
         color: darkorange
-        #font_size: 11%
         font_behavior: scale
 
   - name: divider-2
-    height: "3%"            # ~10px @ 320  ~14px @ 480  ~32px @ 1080
+    height: 3%
     panels:
       - type: divider
         height: 1px
         color: rust
 
   - name: info
-    height: "10%"           #  32px @ 320   48px @ 480  108px @ 1080
+    height: 10%
     panels:
       - type: wifi_graphic
         width: 10%

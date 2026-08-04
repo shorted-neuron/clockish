@@ -177,6 +177,22 @@ The out-of-the-box config: time, date, network, Wi-Fi graphic, CPU, uptime, and 
 
 ---
 
+### `font-behavior-demo.yaml` — font_behavior reference (800×280 landscape)
+Side-by-side demo of all five `font_behavior` values (`default`, `scale`, `scale_numeric`,
+`stretch_y`, `stretch_x`) — see AGENTS.md for details.
+
+![font-behavior-demo](docs/previews/font-behavior-demo.png)
+
+---
+
+### `fourteen-segment.yaml` — VFD-style 14-segment clock (requires DSEG14Classic font)
+Time and date rendered in a 14-segment VFD look — the 14-seg font supports full alphabet,
+so even the date row gets the retro display treatment.
+
+![fourteen-segment](docs/previews/fourteen-segment.png)
+
+---
+
 ### `landscape-demo.yaml` — landscape demo (480×320)
 Multiple panels demonstrating landscape orientation.
 
@@ -184,17 +200,33 @@ Multiple panels demonstrating landscape orientation.
 
 ---
 
-### `system-info.yaml` — system info (320×480 portrait)
-All available fact sources: IP, hostname, uptime, CPU, memory, disk, temp, NTP, Wi-Fi.
+### `nixie.yaml` — nixie-tube-style clock, 12h (requires Nixie One font)
+Warm glowing cathode-tube look for a 12-hour clock, via the Nixie One Google Font.
 
-![system-info](docs/previews/system-info.png)
+![nixie](docs/previews/nixie.png)
 
 ---
 
-### `vert-clocks.yaml` — multi-timezone clocks (320×480 portrait)
-Several clocks in different timezones stacked vertically, plus system facts below.
+### `nixie24.yaml` — nixie-tube-style clock, 24h (requires Nixie One font)
+Same nixie-tube look as above, using 24-hour time.
 
-![vert-clocks](docs/previews/vert-clocks.png)
+![nixie24](docs/previews/nixie24.png)
+
+---
+
+### `sensor-test.yaml` — url-fact panel test (square)
+Single `url-fact` panel polling a local sensor endpoint (`tempF` via JSON path) — handy for
+testing the `url-fact` panel type against your own HTTP source.
+
+![sensor-test](docs/previews/sensor-test.png)
+
+---
+
+### `seven-segment.yaml` — red 7-segment-style clock (requires DSEG7Classic font)
+Classic digital-clock look using the DSEG7 font; digits/symbols only, so date and info rows
+fall back to DejaVu Sans.
+
+![seven-segment](docs/previews/seven-segment.png)
 
 ---
 
@@ -205,19 +237,35 @@ Minimal layout for a tiny screen.
 
 ---
 
-### `debug.yaml` — debug portrait (320×480)
-Layout focused on the debug timing panel.
+### `square.yaml` — square display (240×240, ST7789)
+Layout tuned for a 240×240 square panel (e.g. Mini-PiTFT 1.3" / Adafruit 240×240).
 
-![debug](docs/previews/debug.png)
+![square](docs/previews/square.png)
+
+---
+
+### `system-info.yaml` — system info (320×480 portrait)
+All available fact sources: IP, hostname, uptime, CPU, memory, disk, temp, NTP, Wi-Fi.
+
+![system-info](docs/previews/system-info.png)
 
 ---
 
-### `debug-landscape.yaml` — debug landscape (480×320)
-Same as above in landscape orientation.
+### `url-fact-sample.yaml` — url-fact panel demo (portrait)
+Clock plus a `url-fact` panel pulling public IP from a remote HTTP+JSON API
+(`api.ipify.org`) — see `URL_FACT_GUIDE.md` for full details.
 
-![debug-landscape](docs/previews/debug-landscape.png)
+![url-fact-sample](docs/previews/url-fact-sample.png)
 
 ---
+
+### `vert-clocks.yaml` — multi-timezone clocks (320×480 portrait)
+Several clocks in different timezones stacked vertically, plus system facts below.
+
+![vert-clocks](docs/previews/vert-clocks.png)
+
+---
+
 
 ## Contributing / Developing / Nerd and hacker concerns
 
