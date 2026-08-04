@@ -55,7 +55,7 @@ rows:
       - type: date
         justify: left
         timezone: US/Mountain
-        date_format: "%a, %B %-d"   # 14-seg handles letters  --  no need to fall back to DejaVu
+        date_format: "%a, %b %-d"   # 14-seg handles letters  --  no need to fall back to DejaVu
         color: yellow
         font_size: normal
       - type: clock

@@ -1,5 +1,5 @@
 ---
-orientation: square
+orientation: portrait
 
 rows:
   - name: time
@@ -57,7 +57,7 @@ rows:
         font_behavior: scale_numeric
 
       - type: url-fact
-        #justify: right
+        # justify: right
         label: "inside:"
         url: http://sensor-master.lan/last-json
         json_path: tempF
@@ -69,7 +69,7 @@ rows:
         transform: [round, {format: "{:.0f}°F"}]
 
       - type: url-fact
-        #justify: right
+        # justify: right
         label: "outside:"
         url: http://sensor-outfront.lan/last-json
         json_path: tempF
@@ -127,7 +127,9 @@ rows:
     panels:
       - type: url-fact
         label: "TempC "
-        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.temperature_2m
         interval: 1h
         timeout: 5
@@ -138,7 +140,9 @@ rows:
 
       - type: url-fact
         label: "TempF "
-        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        url:  |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.temperature_2m
         interval: 1h
         timeout: 5
@@ -150,7 +154,9 @@ rows:
 
       - type: url-fact
         label: "Wind "
-        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.wind_speed_10m
         interval: 1h
         timeout: 5
@@ -161,7 +167,9 @@ rows:
 
       - type: url-fact
         label: "Dir "
-        url: https://api.open-meteo.com/v1/forecast?latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.wind_direction_10m
         interval: 1h
         timeout: 5

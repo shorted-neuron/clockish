@@ -85,43 +85,56 @@ rows:
     height: "11%"
     panels:
       - type: wifi_graphic
-        width: 9.17%
+        width: 10%
         color: burntsienna
       - type: fact
         # justify: center
-        width: 25%
+        width: 23%
         source: wifi_status
         color: burntsienna
         font_size: small
       - type: fact
         # justify: center
-        width: 40%
+        width: 34%
         source: wifi_ssid
         label: "SSID "
         color: rust
         font_size: small
       - type: fact
         justify: right
-        width: 18%
-        source: wifi_quality
-        label: "q:"
-        color: rust
+        width: 33%
+        source: wifi_signal
+        label: ""
+        color: burntsienna
         font_size: small
 
   - name: host-ip
-    height: "14%"
+    height: "12%"
     panels:
       - type: fact
-        width: 24%
         justify: left
         source: hostname
         color: burntsienna
         font_size: small
       - type: fact
-        width: 38%
         justify: center
         source: ip
         color: burntsienna
         font_size: tiny
+      - type: fact
+        justify: right
+        source: uptime
+        color: burntsienna
+        font_size: tiny
+
+  - name: debug
+    height: "9%"
+    panels:
       - type: debug
         color: rust
+      - type: fact
+        justify: right
+        source: version
+        label: "clockish v"
+        color: darkorange
+        font_size: small
