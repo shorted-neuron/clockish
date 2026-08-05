@@ -5,10 +5,12 @@ It supports multiple "panel" widgets that can show time, date, weather, and more
 
 Unique in the universe?  Doubtful.  But I had fun making it.
 
-Here's a photo of two raspberry pi's running clockish in portrait and landscape orientations.
-The left side one is running the default `clockish.yaml` config, and right side is running `landscape-demo.yaml`.
+Here are photos of Raspberry Pi original, zero, zero2w, 2b, 4b, 5 all running clockish with various displays.
+All of these layouts are in the config examples and previews below!
 
-![clockish_in_real_life.jpeg](docs/clockish_in_real_life.jpeg)
+<a href="docs/clockish_in_real_life.jpeg"><img height="200" src="docs/clockish_in_real_life.jpeg" alt="clockish in real life"/></a>
+<a href="docs/more-clocks.jpeg"><img height="200" src="docs/more-clocks.jpeg" alt="more-clocks"/></a>
+<a href="docs/lots-o-clocks.jpeg"><img height="200" src="docs/lots-o-clocks.jpeg" alt="lots-o-clocks"/></a>
 
 
 ---
@@ -26,8 +28,8 @@ The left side one is running the default `clockish.yaml` config, and right side 
 
 ## Overview
 
-Clockish drives a small ILI9486-based SPI LCD (the common 3.5" Raspberry Pi display) as a
-config-driven dashboard. The layout is defined entirely in YAML: you describe rows of panels,
+Clockish drives a display as a config-driven dashboard. 
+The layout is defined entirely in YAML: you describe rows of panels,
 and each panel shows one thing — a clock, date, system fact, Wi-Fi signal graphic, divider,
 or static text. Multiple timezones, font sizes, colors, and panel widths are all controlled
 from config with no code changes required.
@@ -35,7 +37,14 @@ from config with no code changes required.
 Target hardware: Raspberry Pi ( original thru pi5, zeros on armv6l, armv7l / aarch64).
 Target OS: Raspberry Pi OS or Ubuntu, 32 or 64 bit.
 Tested displays:
-  - 3.5" ILI9486-based SPI LCD (480x320, 16-bit color).
+- 3.5" ILI9486-based SPI LCD (480x320, 16-bit color).
+- 1.1" Mini PiTFT (ST7789, 240x135, 16-bit color).
+- 1.3" Mini PiTFT (ST7789, 240x240, 16-bit color).
+- Linux Framebuffer (any size, any resolution, any color depth):
+  - DSI displays (like 5" and 7" Waveshare panels or others found on Amazon)
+  - DSI displays (like 7" and 10" Raspberry Pi DSI panels)
+  - HDMI displays or your TV
+
 
 ---
 
@@ -43,7 +52,8 @@ Tested displays:
 
 - Python 3.11 or newer
 - Raspberry Pi OS Bookworm / Ubuntu 22.04+ (for hardware features)
-- On Windows: most features work in a normal venv; GPIO / I²C stubs are skipped
+- Almost any display with a PIL-compatible driver (ST7789, ILI9486, DSI, HDMI, etc.)
+- Develop on Linux/Mac/Windows: most features work in a normal venv; GPIO / I²C stubs are skipped
 
 ---
 
