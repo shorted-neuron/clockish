@@ -118,6 +118,20 @@ _refresh_remote_cache_flag: bool = False  # Set by SIGUSR1 handler to invalidate
 # ---------------------------------------------------------------------------
 # Config loader (needed before display init to read display settings)
 # ---------------------------------------------------------------------------
+def _sanitize_url_fact_urls(config: dict) -> None:
+    """Strip all whitespace (spaces, tabs, newlines) from url-fact panels' `url`.
+
+    YAML block scalars (`|-`) are handy for wrapping long URLs across lines in
+    a config file, but the folded/literal newlines (and any incidental
+    leading/trailing spaces) end up embedded in the string and break the
+    request. Mutates `config` in place.
+    """
+    for row in config.get('rows') or []:
+        for panel in row.get('panels') or []:
+            if panel.get('type') == 'url-fact' and isinstance(panel.get('url'), str):
+                panel['url'] = re.sub(r'\s+', '', panel['url'])
+
+
 def _load_config(path: str | None) -> dict:
     if path is None:
         path = _DEFAULT_CONFIG
@@ -125,7 +139,9 @@ def _load_config(path: str | None) -> dict:
         sys.exit(f"ERROR: config file not found: {path}")
     print(f"Loading config: {path}")
     with open(path) as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f)
+    _sanitize_url_fact_urls(config)
+    return config
 
 
 def _find_display_profile(config_path: str | None) -> str | None:
