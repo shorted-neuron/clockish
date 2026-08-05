@@ -67,22 +67,45 @@ rows:
     height: 65%
     panels:
       - type: clock
+        width: 42%
         justify: center
         timezone: US/Mountain
-        time_format: 24hs
+        time_format: "%H"
         color: darkorange   # classic warm nixie yellow-orange
+        font_size: auto
+        font_behavior: scale_numeric
+      - type: text
+        width: 6%
+        justify: center
+        label: ":"
+        color: darkorange
+        font_size: auto
+      - type: clock
+        width: 42%
+        justify: center
+        timezone: US/Mountain
+        time_format: "%M"
+        color: darkorange
+        font_size: auto
+        font_behavior: scale_numeric
+      - type: clock
+        width: 10%
+        justify: center
+        timezone: US/Mountain
+        time_format: ":%S"
+        color: darkorange
         font_size: auto
         font_behavior: scale_numeric
 
   - name: divider-1
-    height: 5%
+    height: 6%
     panels:
       - type: divider
         height: 1px
         color: rust
 
   - name: date
-    height: 17%
+    height: 12%
     panels:
       - type: date
         justify: center
@@ -92,7 +115,7 @@ rows:
         font_behavior: scale
 
   - name: divider-2
-    height: 3%
+    height: 6%
     panels:
       - type: divider
         height: 1px
