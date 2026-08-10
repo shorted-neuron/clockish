@@ -754,14 +754,16 @@ def _log_warning(msg: str) -> None:
             pass
 
 def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
-                       timeout: int, verify_ssl: bool, fallback: str) -> tuple[str, int | None]:
+                       timeout: int, verify_ssl: bool) -> tuple[str | None, int | None]:
     """Fetch URL and extract value using pattern or json_path.
 
-    Returns:
-    - Tuple (value, status_code)
+    Returns tuple (value, status_code):
     - Extracted value (on success) with HTTP status code (e.g., 200)
-    - "?" (if JSON key missing; logs warning) with status code
-    - fallback (on network/fetch error) with None status code
+    - None (communication error, JSON key missing, or non-matching pattern) --
+      caller falls back to the cached value (preferred) or the configured
+      `fallback` (only if there's no cache yet). status_code is None only
+      for network/fetch exceptions; a missing key or non-matching pattern
+      still carries the real HTTP status code.
     """
     try:
         # Create SSL context (ignore certificate for https by default)
@@ -787,17 +789,17 @@ def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
         # Extract value
         if pattern:
             value = _extract_value_by_regex(response_text, pattern)
-            return (value if value is not None else fallback, status_code)
+            return (value, status_code)
         else:  # json_path
             value, is_missing_key = _extract_value_by_json_path(response_text, json_path)
             if is_missing_key:
                 _log_warning(f"url-fact: JSON key '{json_path}' not found in {url}")
-                return ("?", status_code)
-            return (value if value is not None else fallback, status_code)
+                return (None, status_code)
+            return (value, status_code)
     except Exception as e:
         if DEBUG:
             print(f"DEBUG: url-fact fetch failed: {url} -> {e}")
-        return (fallback, None)
+        return (None, None)
 
 def _handle_sigusr1(signum, frame):
     """SIGUSR1 handler: invalidate all remote fact cache entries."""
@@ -1538,23 +1540,45 @@ def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
         # Check cache; fetch if expired
         now = time.monotonic()
         if cache_key not in _remote_fact_cache:
-            # First fetch: happens immediately
-            value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+            # First fetch: happens immediately. No cache to fall back on yet,
+            # so a communication error uses the configured `fallback`, but we
+            # retry soon (interval/10) instead of waiting the full interval.
+            value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl)
             if DEBUG:
                 print(f"DEBUG: url-fact FETCH: {url} -> HTTP {status_code}")
-            _remote_fact_cache[cache_key] = {
-                'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs,
-            }
+            if value is None:
+                value = fallback
+                retry_delay = max(1, interval_secs // 10)
+                _remote_fact_cache[cache_key] = {
+                    'value': value, 'last_fetch_time': now - interval_secs + retry_delay,
+                    'interval_secs': interval_secs,
+                }
+            else:
+                _remote_fact_cache[cache_key] = {
+                    'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs,
+                }
         else:
             cache_entry = _remote_fact_cache[cache_key]
             last_fetch = cache_entry['last_fetch_time']
             if now - last_fetch >= interval_secs:
                 # Interval expired: fetch fresh value
-                value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl, fallback)
+                fetched_value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl)
                 if DEBUG:
                     print(f"DEBUG: url-fact FETCH (refresh): {url} -> HTTP {status_code}")
-                cache_entry['value'] = value
-                cache_entry['last_fetch_time'] = now
+                if fetched_value is None:
+                    # Communication error (or missing key / no pattern match):
+                    # keep the previously cached value and retry sooner
+                    # (interval/10) instead of waiting the full interval.
+                    value = cache_entry['value']
+                    retry_delay = max(1, interval_secs // 10)
+                    cache_entry['last_fetch_time'] = now - interval_secs + retry_delay
+                    if DEBUG:
+                        print(f"DEBUG: url-fact fetch failed; reusing cached value, "
+                              f"retrying in {retry_delay}s")
+                else:
+                    value = fetched_value
+                    cache_entry['value'] = value
+                    cache_entry['last_fetch_time'] = now
             else:
                 # Use cached value
                 value = cache_entry['value']
