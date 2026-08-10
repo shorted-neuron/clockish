@@ -452,6 +452,7 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
 
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
+    _ppd._sanitize_url_fact_urls(cfg)
 
     # On non-Linux platforms, %-d etc. are not supported by strftime.
     # Normalize them to the zero-padded equivalents (%d etc.) in format strings.
