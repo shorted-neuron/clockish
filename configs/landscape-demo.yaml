@@ -1,33 +1,41 @@
 ---
 # landscape-demo.yaml  --  clockish config
 # ---------------------------------------------------------------------------
-# Display layout configuration for clockish
-# Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml.
+# Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml or similar
 # ---------------------------------------------------------------------------
 
 orientation: landscape
+preview_size: "480x320"
 
 rows:
-  - name: utc-clock
-    height: 22%
+  - name: clock
+    height: 30%
     panels:
       - type: clock
-        justify: center
+        width: 66.67%
+        justify: right
         timezone: UTC
-        time_format: 24hs
-        color: lime
+        time_format: "  %H:%M"
+        color: silver
         font_size: auto
-        font_behavior: scale_numeric
+        font_behavior: scale
+      - type: clock
+        width: 33%
+        justify: left
+        timezone: US/Mountain
+        time_format: ":%S"
+        color: grey
+        font_size: auto
 
   - name: divider-1
-    height: 5px
+    height: 2%
     panels:
       - type: divider
         height: 1px
         color: darkgrey
 
   - name: utc-date
-    height: 13.13%
+    height: 13%
     panels:
       - type: date
         justify: center
@@ -37,7 +45,7 @@ rows:
         font_size: auto
 
   - name: divider-2
-    height: 5px
+    height: 2%
     panels:
       - type: divider
         height: 1px
@@ -45,10 +53,10 @@ rows:
 
 
   - name: world-clocks
-    height: 16.25%
+    height: 16%
     panels:
       - type: clock
-        # justify: center
+        width: 32%
         timezone: America/Denver
         time_format: 24h
         color: cornflower
@@ -57,9 +65,8 @@ rows:
         width: 2%
         color: black
       - type: clock
-        # justify: center
         width: 31%
-        background: darkred
+        background: dimred
         timezone: US/Eastern
         time_format: 24h
         color: orange
@@ -68,19 +75,19 @@ rows:
         width: 2%
         color: black
       - type: clock
-        # justify: center
+        width: 32%
         timezone: Asia/Kolkata
         time_format: 24h
         background: black
         color: brown
         font_size: auto
 
-  - name: world-labels
-    height: 13.13%
+  - name: world-labels  # aligns with row above
+    height: 13%
     panels:
       - type: text
-        # justify: center
-        label: " Denver"
+        width: 32%
+        label: "Denver"
         color: cornflower
         font_size: auto
         background: black
@@ -88,83 +95,117 @@ rows:
         width: 2%
         color: black
       - type: text
-        # justify: center
         width: 31%
-        label: "US/Eastern"
-        background: darkred
+        label: "Atlanta"
+        background: dimred
         color: orange
         font_size: small
       - type: divider
         width: 2%
         color: black
       - type: text
-        # justify: center
+        width: 32%
         label: "India"
         font_size: auto
         color: brown
 
+  - name: world-temps  # aligns with row above
+    height: 13%
+    panels:
+      - type: url-fact
+        width: 32%
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=39.5727&longitude=-104.8494&current=temperature_2m&temperature_unit=fahrenheit
+        json_path: "current.temperature_2m"
+        interval: 20m
+        justify: center
+        color: cornflower
+        fallback: "68°F"
+        background: black
+        font_size: auto
+        transform:
+          - round: 0
+          - suffix: "°F"
+
+      - type: divider
+        width: 2%
+        color: black
+
+      - type: url-fact
+        width: 31%
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=33.8761&longitude=-84.4598&current=temperature_2m&temperature_unit=fahrenheit
+        json_path: "current.temperature_2m"
+        interval: 20m
+        justify: center
+        color: orange
+        background: dimred
+        font_size: auto
+        transform:
+          - round: 0
+          - suffix: "°F"
+      - type: divider
+        width: 2%
+        color: black
+      - type: url-fact
+        width: 16%
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=12.680916&longitude=79.350600&current=temperature_2m&temperature_unit=fahrenheit
+        json_path: "current.temperature_2m"
+        interval: 20m
+        justify: center
+        color: brown
+        background: black
+        font_size: small
+        transform:
+          - round: 0
+          - suffix: "°F"
+
+      - type: url-fact
+        width: 16%
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=12.680916&longitude=79.350600&current=temperature_2m&temperature_unit=celsius
+        json_path: "current.temperature_2m"
+        interval: 20m
+        justify: center
+        color: brown
+        background: black
+        font_size: auto
+        transform:
+          - round: 0
+          - suffix: "°C"
+
   - name: divider-3
-    height: 5px
+    height: 2%
     panels:
       - type: divider
         height: 1px
 
   - name: wifi-info
-    height: 10.63%
+    height: 10%
     panels:
       - type: wifi_graphic
-        width: 9.17%
-        # justify: center
-        color: white
+        width: 10%
+        color: darklime
+      - type: blank
+        width: 2%
       - type: fact
-        # justify: center
-        width: 25%
+        width: 21%
+        justify: center
         source: wifi_status
-        color: ff8888
+        color: grey
         font_size: auto
       - type: fact
-        # justify: center
-        width: 40%
-        source: wifi_ssid
-        label: "SSID "
-        color: skyblue
-        font_size: small
-      - type: fact
-        # justify: center
-        width: 25%
+        justify: center
         source: wifi_signal
-        color: pink
-        font_size: small
-#      - type: fact
-#        # justify: center
-#        width: 15%
-#        source: wifi_quality
-#        label: "qual:"
-#        color: purple
-#        font_size: auto
-#        font_behavior: stretch_x
-
-  - name: host-ip
-    height: 10%
-    panels:
-      - type: fact
-        width: 40%
-        justify: center
-        source: hostname
-        color: green
+        color: grey
         font_size: auto
       - type: fact
-        source: uptime
-        color: silver
-        padding: 0
-        font_behavior: stretch_y
-  - name: host-ip
-    height: 10%
-    panels:
-      - type: fact
-        width: 40%
-        justify: center
         source: ip
-        color: green
+        justify: right
+        color: grey
         font_size: auto
-      - type: debug
