@@ -73,13 +73,13 @@ rows:
         # justify: right
         label: "outside:"
         url: http://sensor-outfront.lan/last-json
-        preview_response: '{"tempF": "79.6"}'
+        preview_response: '{"tempF": "42.3"}'
         json_path: tempF
         interval: 33s
         timeout: 5
         color: pink
         font_size: 16px
-        # 'format' escape hatch: string "79.6" -> float -> "71.8F"
+        # 'format' escape hatch: string "42.3" -> float -> "42.3F"
         transform: [{format: "{:.1f}°F"}]
 
   - name: status-fact
