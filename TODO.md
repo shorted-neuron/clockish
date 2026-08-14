@@ -8,6 +8,9 @@ TODOs
 - add ability for user to change their display driver/profile without doing the entire installation again
 - add systemd unit during installer to disable console cursor blinking if using console framebuffer driver
   - see `misc/systemd/disable-cursor-blink.service` for a working example
+- url-fact are not re-usable.  For things like callouts to open-meteo.com for weather info, this is VERY
+  inefficient.  Might need to retrieve full data, on a background thread schedule, cache it, and then allow 
+  display configs to reference cached data and transform/render it as needed.
 
 ### Internal / developer improvements:
 - tighten up mypy type errors and warnings
