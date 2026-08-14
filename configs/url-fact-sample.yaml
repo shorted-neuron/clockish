@@ -1,5 +1,6 @@
 ---
 orientation: portrait
+preview_size: 320x480
 
 rows:
   - name: time
@@ -81,7 +82,7 @@ rows:
         transform: [{format: "{:.1f}°F"}]
 
   - name: status-fact
-    height: 12%
+    height: 8%
     panels:
       - type: text
         width: 25%
@@ -107,12 +108,12 @@ rows:
         transform: [camelcase]
 
   - name: divider-2
-    height: 5%
+    height: 1%
     panels:
       - type: blank
 
   - name: openmeteo-kapa-header
-    height: 10%
+    height: 5%
     background: silver
     panels:
       - type: text
@@ -177,3 +178,42 @@ rows:
         color: '#aaffaa'
         font_size: 14px
         transform: [{format: "{:.0f}°"}]
+
+  # NOTE: a single url-fact panel's `transform:` is a linear pipeline
+  # (transforms.py: apply_transforms()) -- each step overwrites the value,
+  # so converting C->F discards the original C. Can't show "both" out of
+  # ONE panel's transform. The supported YAML-only
+  # workaround: two url-fact panels hitting the SAME url/json_path, each
+  # with its own transform (already shown above as TempC/TempF) -- costs
+  # one extra fetch per interval (cache is keyed per-panel, not per-url).
+  # Packed together tight (no gap, shared background) it reads as one panel.
+  - name: openmeteo-kapa-combined-cf
+    height: 10%
+    background: navy
+    panels:
+      - type: url-fact
+        width: 50%
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        json_path: current.temperature_2m
+        interval: 1h
+        timeout: 5
+        fallback: "-"
+        color: cyan
+        font_behavior: scale_numeric
+        transform: [{format: "{:.0f}°C"}]
+
+      - type: url-fact
+        width: 50%
+        url: |-
+          https://api.open-meteo.com/v1/forecast?
+          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+        json_path: current.temperature_2m
+        interval: 1h
+        timeout: 5
+        fallback: "-"
+        color: orange
+        font_behavior: scale_numeric
+        # Convert C to F: (C * 9/5) + 32
+        transform: [{multiply: 1.8}, {add: 32}, {format: "{:.0f}°F"}]
