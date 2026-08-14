@@ -1,49 +1,24 @@
 ---
 # landscape-demo.yaml  --  clockish config
 # ---------------------------------------------------------------------------
-# Display layout configuration for clockish
-# Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml.
+# Display settings are in display.yaml  --  use configs/display/ili9486-landscape.yaml or similar
 # ---------------------------------------------------------------------------
 
 orientation: landscape
 preview_size: "480x320"
 
 rows:
-#  - name: utc-clock
-#    height: 33%
-#    panels:
-#      - type: clock
-#        justify: center
-#        timezone: UTC
-#        time_format: 24hs
-#        color: lime
-#        font_size: auto
-#        font_behavior: scale_numeric
   - name: clock
     height: 30%
     panels:
       - type: clock
         width: 66.67%
         justify: right
-        timezone: US/Mountain
+        timezone: UTC
         time_format: "  %H:%M"
-        color: silver   # classic warm nixie yellow-orange
+        color: silver
         font_size: auto
         font_behavior: scale
-#      - type: text
-#        width: 3%
-#        justify: center
-#        label: ":"
-#        color: grey
-#        font_size: auto
-#      - type: clock
-#        width: 34%
-#        justify: center
-#        timezone: US/Mountain
-#        time_format: "%M"
-#        color: silver
-#        font_size: auto
-#        font_behavior: scale
       - type: clock
         width: 33%
         justify: left
@@ -51,7 +26,7 @@ rows:
         time_format: ":%S"
         color: grey
         font_size: auto
-        #font_behavior: auto
+
   - name: divider-1
     height: 2%
     panels:
@@ -82,7 +57,6 @@ rows:
     panels:
       - type: clock
         width: 32%
-        # justify: center
         timezone: America/Denver
         time_format: 24h
         color: cornflower
@@ -91,7 +65,6 @@ rows:
         width: 2%
         color: black
       - type: clock
-        # justify: center
         width: 31%
         background: dimred
         timezone: US/Eastern
@@ -103,20 +76,18 @@ rows:
         color: black
       - type: clock
         width: 32%
-        # justify: center
         timezone: Asia/Kolkata
         time_format: 24h
         background: black
         color: brown
         font_size: auto
 
-  - name: world-labels
+  - name: world-labels  # aligns with row above
     height: 13%
     panels:
       - type: text
         width: 32%
-        # justify: center
-        label: " Denver"
+        label: "Denver"
         color: cornflower
         font_size: auto
         background: black
@@ -124,7 +95,6 @@ rows:
         width: 2%
         color: black
       - type: text
-        # justify: center
         width: 31%
         label: "Atlanta"
         background: dimred
@@ -135,12 +105,11 @@ rows:
         color: black
       - type: text
         width: 32%
-        # justify: center
         label: "India"
         font_size: auto
         color: brown
 
-  - name: world-temps
+  - name: world-temps  # aligns with row above
     height: 13%
     panels:
       - type: url-fact
@@ -154,7 +123,7 @@ rows:
         color: cornflower
         fallback: "68°F"
         background: black
-        font_size: small
+        font_size: auto
         transform:
           - round: 0
           - suffix: "°F"
@@ -173,7 +142,7 @@ rows:
         justify: center
         color: orange
         background: dimred
-        font_size: small
+        font_size: auto
         transform:
           - round: 0
           - suffix: "°F"
@@ -205,7 +174,7 @@ rows:
         justify: center
         color: brown
         background: black
-        font_size: small
+        font_size: auto
         transform:
           - round: 0
           - suffix: "°C"
@@ -240,14 +209,3 @@ rows:
         justify: right
         color: grey
         font_size: auto
-#
-#  - name: debug
-#    height: 5%
-#    panels:
-#      - type: fact
-#        width: 40%
-#        justify: center
-#        source: ip
-#        color: green
-#        font_size: auto
-#      - type: debug
