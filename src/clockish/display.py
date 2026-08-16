@@ -13,6 +13,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -110,26 +111,34 @@ _C_BLACK:    str = '#000000'
 bigfont = medfont = font = smallfont = tiny = None
 _cpu_stat_prev: tuple[int, int] = (0, 0)
 
-# url-fact panel caching
-_remote_fact_cache: dict = {}  # {panel_id: {value, last_fetch_time, interval_secs}}
-_refresh_remote_cache_flag: bool = False  # Set by SIGUSR1 handler to invalidate cache
+# cached-facts: background-thread-fetched remote data, read (never fetched)
+# by the render loop. Each entry's dict is REPLACED wholesale on every
+# update (never mutated in place) so a read via plain dict access is atomic
+# under the GIL without needing an explicit lock.
+#   name -> {'raw': str | None, 'ok': bool}
+_cached_facts_cache: dict = {}
+#: name -> threading.Event  --  set by SIGUSR1 to wake a worker thread early
+#: (forces an immediate refetch instead of waiting out its current backoff).
+_cached_facts_events: dict = {}
+#: name -> threading.Thread  --  daemon workers; kept around for debugging /
+#: introspection only, never joined (process exit kills them).
+_cached_facts_threads: dict = {}
 
 
 # ---------------------------------------------------------------------------
 # Config loader (needed before display init to read display settings)
 # ---------------------------------------------------------------------------
-def _sanitize_url_fact_urls(config: dict) -> None:
-    """Strip all whitespace (spaces, tabs, newlines) from url-fact panels' `url`.
+def _sanitize_cached_fact_urls(config: dict) -> None:
+    """Strip all whitespace (spaces, tabs, newlines) from cached-facts' `url`.
 
     YAML block scalars (`|-`) are handy for wrapping long URLs across lines in
     a config file, but the folded/literal newlines (and any incidental
     leading/trailing spaces) end up embedded in the string and break the
     request. Mutates `config` in place.
     """
-    for row in config.get('rows') or []:
-        for panel in row.get('panels') or []:
-            if panel.get('type') == 'url-fact' and isinstance(panel.get('url'), str):
-                panel['url'] = re.sub(r'\s+', '', panel['url'])
+    for entry in config.get('cached-facts') or []:
+        if isinstance(entry, dict) and isinstance(entry.get('url'), str):
+            entry['url'] = re.sub(r'\s+', '', entry['url'])
 
 
 def _load_config(path: str | None) -> dict:
@@ -140,7 +149,7 @@ def _load_config(path: str | None) -> dict:
     print(f"Loading config: {path}")
     with open(path) as f:
         config = yaml.safe_load(f)
-    _sanitize_url_fact_urls(config)
+    _sanitize_cached_fact_urls(config)
     return config
 
 
@@ -753,17 +762,17 @@ def _log_warning(msg: str) -> None:
         except Exception:
             pass
 
-def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
-                       timeout: int, verify_ssl: bool) -> tuple[str | None, int | None]:
-    """Fetch URL and extract value using pattern or json_path.
+def _fetch_url_raw(url: str, timeout: int, verify_ssl: bool) -> tuple[str | None, int | None]:
+    """Fetch *url* and return its raw response body (no extraction).
 
-    Returns tuple (value, status_code):
-    - Extracted value (on success) with HTTP status code (e.g., 200)
-    - None (communication error, JSON key missing, or non-matching pattern) --
-      caller falls back to the cached value (preferred) or the configured
-      `fallback` (only if there's no cache yet). status_code is None only
-      for network/fetch exceptions; a missing key or non-matching pattern
-      still carries the real HTTP status code.
+    Extraction (pattern/json_path) happens later, per-consuming-panel, at
+    render time (cheap, no I/O) -- see _render_fact_panel(). This function is
+    only ever called from a cached-facts background thread (or, in preview
+    mode without a preview_response, once synchronously at startup).
+
+    Returns tuple (response_text, status_code):
+    - response_text (on success) with HTTP status code (e.g., 200)
+    - (None, None) on any network/fetch exception.
     """
     try:
         # Create SSL context (ignore certificate for https by default)
@@ -785,28 +794,109 @@ def _fetch_and_extract(url: str, pattern: str | None, json_path: str | None,
 
         status_code = response.status
         response_text = response.read().decode('utf-8')
-
-        # Extract value
-        if pattern:
-            value = _extract_value_by_regex(response_text, pattern)
-            return (value, status_code)
-        else:  # json_path
-            value, is_missing_key = _extract_value_by_json_path(response_text, json_path)
-            if is_missing_key:
-                _log_warning(f"url-fact: JSON key '{json_path}' not found in {url}")
-                return (None, status_code)
-            return (value, status_code)
+        return (response_text, status_code)
     except Exception as e:
         if DEBUG:
-            print(f"DEBUG: url-fact fetch failed: {url} -> {e}")
+            print(f"DEBUG: cached-facts fetch failed: {url} -> {e}")
         return (None, None)
 
+
+def _cached_fact_worker(name: str, url: str, interval_secs: int, timeout: int,
+                         verify_ssl: bool, stagger_delay: float) -> None:
+    """Background daemon thread: fetch *url* every ~interval_secs, forever.
+
+    Never blocks the render loop -- writes results into
+    _cached_facts_cache[name] (whole-dict replacement, so reads elsewhere
+    never need a lock). On fetch failure, the previous 'raw' value is kept
+    (never cleared) and the retry backs off: starts at interval/10 (min 1s),
+    doubles on each consecutive failure, capped at the full interval -- so a
+    transient outage retries soon, but a persistent one settles down to the
+    normal cadence instead of hammering the remote endpoint.
+    """
+    event = _cached_facts_events[name]
+    if stagger_delay > 0 and event.wait(timeout=stagger_delay):
+        event.clear()
+
+    consecutive_failures = 0
+    base_retry = max(1, interval_secs // 10)
+    while True:
+        text, status_code = _fetch_url_raw(url, timeout, verify_ssl)
+        prev = _cached_facts_cache.get(name) or {}
+        if text is not None:
+            _cached_facts_cache[name] = {'raw': text, 'ok': True}
+            consecutive_failures = 0
+            delay = interval_secs
+            if DEBUG:
+                print(f"DEBUG: cached-facts '{name}' FETCH: {url} -> HTTP {status_code}")
+        else:
+            consecutive_failures += 1
+            # Keep the previous raw value (if any); just mark not-ok.
+            _cached_facts_cache[name] = {'raw': prev.get('raw'), 'ok': False}
+            delay = min(interval_secs, base_retry * (2 ** (consecutive_failures - 1)))
+            if DEBUG:
+                print(f"DEBUG: cached-facts '{name}' fetch failed; "
+                      f"retrying in {delay}s (failures={consecutive_failures})")
+
+        if event.wait(timeout=delay):
+            event.clear()  # woken early (SIGUSR1) -- loop immediately, refetch now
+
+
+def _init_cached_facts(config: dict) -> None:
+    """(Re)initialize cached-facts state from config['cached-facts'].
+
+    Live mode: spawns one daemon thread per entry (staggered start so N
+    entries with the same interval don't all hit the network at once).
+    Preview mode: no threads (single-shot render) -- uses preview_response
+    verbatim if given, else fetches once synchronously so data is ready
+    before the frame is rendered ("immediate" fetch, per design).
+    """
+    global _cached_facts_cache, _cached_facts_events, _cached_facts_threads
+    _cached_facts_cache = {}
+    _cached_facts_events = {}
+    _cached_facts_threads = {}
+
+    entries = config.get('cached-facts') or []
+    n = len(entries)
+    for idx, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get('name')
+        if not name:
+            continue
+        url = (entry.get('url') or '').strip()
+        interval_secs = _parse_interval(entry.get('interval', '5m'))
+        timeout = entry.get('timeout', 5)
+        verify_ssl = entry.get('verify_ssl', False)
+        preview_response = entry.get('preview_response')
+
+        _cached_facts_events[name] = threading.Event()
+
+        if _PREVIEW_MODE:
+            if preview_response:
+                _cached_facts_cache[name] = {'raw': preview_response, 'ok': True}
+            else:
+                text, _status = _fetch_url_raw(url, timeout, verify_ssl)
+                _cached_facts_cache[name] = {'raw': text, 'ok': text is not None}
+            continue  # one-shot render -- no background thread needed
+
+        _cached_facts_cache[name] = {'raw': None, 'ok': False}
+        stagger_delay = (interval_secs * idx / n) if n > 1 else 0
+        t = threading.Thread(
+            target=_cached_fact_worker,
+            args=(name, url, interval_secs, timeout, verify_ssl, stagger_delay),
+            daemon=True,
+        )
+        _cached_facts_threads[name] = t
+        t.start()
+
+
 def _handle_sigusr1(signum, frame):
-    """SIGUSR1 handler: invalidate all remote fact cache entries."""
-    global _refresh_remote_cache_flag
-    _refresh_remote_cache_flag = True
+    """SIGUSR1 handler: wake every cached-facts worker thread to refetch now
+    (instead of waiting out its current interval/backoff)."""
+    for ev in _cached_facts_events.values():
+        ev.set()
     if DEBUG:
-        print("DEBUG: SIGUSR1 received; invalidating remote fact cache")
+        print("DEBUG: SIGUSR1 received; waking all cached-facts workers for immediate refetch")
 
 
 # ---------------------------------------------------------------------------
@@ -1266,45 +1356,9 @@ def _init_layout() -> None:
         if _wp:
             _wr['_widths'] = _resolve_panel_widths(_wp, width, _wi)
 
-    # Stagger url-fact panel cache initialization to spread fetches over time.
-    # Collect all url-fact panels with their intervals.
-    url_fact_panels = []
-    for _r, _, _ in _LAYOUT:
-        for _p in _r.get('panels', []):
-            if _p.get('type') == 'url-fact':
-                _interval_str = _p.get('interval', '5m')
-                _interval_secs = _parse_interval(_interval_str)
-                url_fact_panels.append((_p, _interval_secs))
-
-    # Stagger the fetch times so they don't all happen at once.
-    # If there are N panels with interval I, space them out over the interval.
-    # In preview mode, force immediate expiry so fresh data is fetched right away.
-    if url_fact_panels:
-        now = time.monotonic()
-        for _idx, (_p, _interval_secs) in enumerate(url_fact_panels):
-            if _PREVIEW_MODE:
-                # Preview: force immediate fetch (cache already "expired")
-                _last_fetch_time = 0
-                _stagger_offset = 0
-            else:
-                # Live: offset into the interval window so that panel 0 fetches now,
-                # panel 1 fetches after interval/N, etc.
-                if len(url_fact_panels) > 1:
-                    _stagger_offset = (_interval_secs * _idx) / len(url_fact_panels)
-                else:
-                    _stagger_offset = 0
-                # Set last_fetch_time in the past so first fetch happens after stagger delay
-                _last_fetch_time = now - _interval_secs + _stagger_offset
-            # Initialize cache with fallback value; fetch will be triggered on first render
-            _cache_key = id(_p)
-            _remote_fact_cache[_cache_key] = {
-                'value': _p.get('fallback', 'n/a'),
-                'last_fetch_time': _last_fetch_time,
-                'interval_secs': _interval_secs,
-            }
-            if DEBUG:
-                print(f"  url-fact panel {_idx}: interval={_interval_secs}s, "
-                      f"stagger_offset={_stagger_offset:.1f}s")
+    # Start/reset cached-facts background threads (or, in preview mode, do a
+    # synchronous one-shot fetch) -- see _init_cached_facts().
+    _init_cached_facts(_config)
 
 
 
@@ -1477,11 +1531,37 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     f      = _get_font(p.get('font_size', 'normal'))
     color  = p.get('color', _C_WHITE)
     source = p['source']
-    # Build options dict for _get_fact (e.g., mem_format for 'mem' source)
-    fact_options = {}
-    if source == 'mem' and 'mem_format' in p:
-        fact_options['mem_format'] = p['mem_format']
-    value  = _get_fact(source, options=fact_options)
+
+    if isinstance(source, str) and source.startswith('cached-facts.'):
+        # Background-thread-fetched data (see _cached_fact_worker() /
+        # _init_cached_facts() above). Never blocks: just reads whatever the
+        # worker thread last wrote. Extraction (json_path/pattern) happens
+        # HERE, per panel, every render -- cheap, no I/O -- so multiple
+        # panels can pull different fields out of one shared fetch.
+        cf_name = source[len('cached-facts.'):]
+        entry = _cached_facts_cache.get(cf_name)
+        raw = entry['raw'] if entry else None
+        if raw is None:
+            value = ''  # not fetched yet (or never succeeded) -- show blank
+        else:
+            pattern = p.get('pattern')
+            json_path = p.get('json_path')
+            if pattern:
+                extracted = _extract_value_by_regex(raw, pattern)
+            elif json_path:
+                extracted, is_missing = _extract_value_by_json_path(raw, json_path)
+                if is_missing:
+                    _log_warning(f"fact: JSON key '{json_path}' not found in cached-facts.{cf_name}")
+            else:
+                extracted = raw
+            value = extracted if extracted is not None else ''
+    else:
+        # Build options dict for _get_fact (e.g., mem_format for 'mem' source)
+        fact_options = {}
+        if source == 'mem' and 'mem_format' in p:
+            fact_options['mem_format'] = p['mem_format']
+        value = _get_fact(source, options=fact_options)
+
     value  = apply_transforms(value, p.get('transform'), debug=DEBUG)
 
     if 'label' not in p:
@@ -1491,109 +1571,6 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
     else:
         text = p['label'] + value
 
-    behavior = p.get('font_behavior', 'default')
-    measure_text = None
-    if behavior in ('scale', 'scale_numeric', 'stretch_y') and getattr(f, 'path', None):
-        measure_text = _generic_numeric_reference(str(f.path), len(text))
-    _draw_text_line(d, px, py, pw, ph, text, f, color, justify=p.get('justify', 'center'),
-                    behavior=behavior, img=img, measure_text=measure_text)
-
-
-def _render_url_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
-                            d: ImageDraw.ImageDraw,
-                            img: 'Image.Image | None' = None) -> None:
-    """Render a url-fact panel: fetch from URL, extract, cache, display."""
-    global _refresh_remote_cache_flag, _remote_fact_cache
-
-    f      = _get_font(p.get('font_size', 'normal'))
-    color  = p.get('color', _C_WHITE)
-    url    = p.get('url', '').strip()
-    pattern = p.get('pattern')
-    json_path = p.get('json_path')
-    interval_str = p.get('interval', '5m')
-    timeout = p.get('timeout', 5)
-    verify_ssl = p.get('verify_ssl', False)
-    fallback = p.get('fallback', 'n/a')
-    label = p.get('label', '')
-    preview_response = p.get('preview_response')
-
-    # Parse interval to seconds
-    interval_secs = _parse_interval(interval_str)
-
-    # Generate cache key (use id() of the panel dict as unique ID)
-    cache_key = id(p)
-
-    # In preview mode, if preview_response is defined, use it instead of fetching
-    if _PREVIEW_MODE and preview_response:
-        if json_path:
-            value, _ = _extract_value_by_json_path(preview_response, json_path)
-        else:
-            value = preview_response
-        if value is None:
-            value = fallback
-    else:
-        # Check if cache needs refresh (SIGUSR1 was received)
-        if _refresh_remote_cache_flag:
-            _remote_fact_cache.clear()
-            _refresh_remote_cache_flag = False
-
-        # Check cache; fetch if expired
-        now = time.monotonic()
-        if cache_key not in _remote_fact_cache:
-            # First fetch: happens immediately. No cache to fall back on yet,
-            # so a communication error uses the configured `fallback`, but we
-            # retry soon (interval/10) instead of waiting the full interval.
-            value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl)
-            if DEBUG:
-                print(f"DEBUG: url-fact FETCH: {url} -> HTTP {status_code}")
-            if value is None:
-                value = fallback
-                retry_delay = max(1, interval_secs // 10)
-                _remote_fact_cache[cache_key] = {
-                    'value': value, 'last_fetch_time': now - interval_secs + retry_delay,
-                    'interval_secs': interval_secs,
-                }
-            else:
-                _remote_fact_cache[cache_key] = {
-                    'value': value, 'last_fetch_time': now, 'interval_secs': interval_secs,
-                }
-        else:
-            cache_entry = _remote_fact_cache[cache_key]
-            last_fetch = cache_entry['last_fetch_time']
-            if now - last_fetch >= interval_secs:
-                # Interval expired: fetch fresh value
-                fetched_value, status_code = _fetch_and_extract(url, pattern, json_path, timeout, verify_ssl)
-                if DEBUG:
-                    print(f"DEBUG: url-fact FETCH (refresh): {url} -> HTTP {status_code}")
-                if fetched_value is None:
-                    # Communication error (or missing key / no pattern match):
-                    # keep the previously cached value and retry sooner
-                    # (interval/10) instead of waiting the full interval.
-                    value = cache_entry['value']
-                    retry_delay = max(1, interval_secs // 10)
-                    cache_entry['last_fetch_time'] = now - interval_secs + retry_delay
-                    if DEBUG:
-                        print(f"DEBUG: url-fact fetch failed; reusing cached value, "
-                              f"retrying in {retry_delay}s")
-                else:
-                    value = fetched_value
-                    cache_entry['value'] = value
-                    cache_entry['last_fetch_time'] = now
-            else:
-                # Use cached value
-                value = cache_entry['value']
-                if DEBUG:
-                    print(f"DEBUG: url-fact CACHED: {url} (expires in {interval_secs - (now - last_fetch):.1f}s)")
-
-    # Apply transforms to the raw cached value each render (cheap; lets
-    # config edits to 'transform:' take effect without cache invalidation).
-    value = apply_transforms(value, p.get('transform'), debug=DEBUG)
-
-    # Render like fact panel
-    if label:
-        text = label + value
-    else:
-        text = value
 
     behavior = p.get('font_behavior', 'default')
     measure_text = None
@@ -1776,8 +1753,6 @@ def _dispatch_panel(p: dict, px: int, py: int, pw: int, ph: int,
                             target_draw, target_img)
     elif pt == 'fact':
         _render_fact_panel(p, px, py, pw, ph, target_draw, target_img)
-    elif pt == 'url-fact':
-        _render_url_fact_panel(p, px, py, pw, ph, target_draw, target_img)
     elif pt == 'text':
         _render_text_panel(p, px, py, pw, ph, target_draw, target_img)
     elif pt == 'divider':
@@ -2032,11 +2007,12 @@ def _init() -> None:
     _init_layout()
 
     # --- Register signal handlers -------------------------------------------
-    # SIGUSR1: invalidate url-fact cache (gracefully ignored on Windows)
+    # SIGUSR1: wake all cached-facts worker threads for an immediate refetch
+    # (gracefully ignored on Windows, which has no SIGUSR1).
     try:
         signal.signal(signal.SIGUSR1, _handle_sigusr1)
         if DEBUG:
-            print("SIGUSR1 signal handler registered for url-fact cache invalidation")
+            print("SIGUSR1 signal handler registered for cached-facts refetch")
     except (AttributeError, ValueError):
         # Windows doesn't have SIGUSR1; silently continue
         pass

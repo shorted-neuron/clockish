@@ -452,7 +452,7 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
 
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
-    _ppd._sanitize_url_fact_urls(cfg)
+    _ppd._sanitize_cached_fact_urls(cfg)
 
     # On non-Linux platforms, %-d etc. are not supported by strftime.
     # Normalize them to the zero-padded equivalents (%d etc.) in format strings.
@@ -485,16 +485,16 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
     # (giant/normal/...) get reloaded fresh, not skipped.
     _ppd._SCALE_FONTS_LOADED = False
 
-    # Clear remote fact cache (url-fact panels) so each config gets fresh data,
-    # not stale cached values from a previous config in the same render batch.
-    _ppd._remote_fact_cache.clear()
+    # cached-facts state is fully reset by _init_layout() -> _init_cached_facts()
+    # below (called after _PREVIEW_MODE is set), so each config gets fresh data
+    # -- no stale values carried over from a previous config in the same batch.
 
     _ppd._config = cfg_copy
     # 'config_file' fact source reads _args.config directly.
     _ppd._args.config = config_path
 
-    # Enable preview mode so url-fact panels fetch fresh data immediately
-    # instead of waiting for stagger delays to expire.
+    # Enable preview mode so cached-facts entries fetch synchronously (or use
+    # preview_response) instead of spawning background threads.
     _ppd._PREVIEW_MODE = True
 
     # Run the real layout pass  --  resolves font: / font_size: auto into

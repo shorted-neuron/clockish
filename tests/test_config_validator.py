@@ -634,130 +634,160 @@ class TestValidationResultAPI:
 
 
 # ---------------------------------------------------------------------------
-# url-fact panel validation
+# cached-facts validation (background-thread-fetched remote data)
 # ---------------------------------------------------------------------------
 
-class TestUrlFactPanel:
-    """Tests for the new url-fact panel type."""
+class TestCachedFacts:
+    """Tests for top-level 'cached-facts:' entries + fact panels that consume
+    them via 'source: cached-facts.<name>'."""
 
-    def test_url_fact_valid_with_pattern(self) -> None:
-        """Valid url-fact with regex pattern should pass."""
+    def test_valid_with_json_path(self) -> None:
         cfg = _minimal_config(rows=[{
             'name': 'r', 'height': 40,
             'panels': [{
-                'type': 'url-fact',
-                'url': 'https://example.com/data',
+                'type': 'fact',
+                'source': 'cached-facts.weather',
+                'json_path': 'current.temp',
+            }],
+        }])
+        cfg['cached-facts'] = [{
+            'name': 'weather', 'type': 'url-fact',
+            'url': 'https://api.example.com/data', 'interval': '10m',
+        }]
+        result = validate_config_dict(cfg)
+        assert result.ok, f"expected no issues, got: {result.issues}"
+
+    def test_valid_with_pattern(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{
+                'type': 'fact',
+                'source': 'cached-facts.page',
                 'pattern': r'value: (\d+)',
-                'interval': '5m',
             }],
         }])
+        cfg['cached-facts'] = [{
+            'name': 'page', 'type': 'url-fact',
+            'url': 'https://example.com/data', 'interval': '5m',
+        }]
         result = validate_config_dict(cfg)
-        assert result.ok, f"Valid url-fact panel should have no errors, got: {result.errors}"
+        assert result.ok, f"expected no issues, got: {result.issues}"
 
-    def test_url_fact_valid_with_json_path(self) -> None:
-        """Valid url-fact with json_path should pass."""
-        cfg = _minimal_config(rows=[{
-            'name': 'r', 'height': 40,
-            'panels': [{
-                'type': 'url-fact',
-                'url': 'https://api.example.com/data',
-                'json_path': 'result.value',
-                'interval': '10m',
-                'timeout': 5,
-                'fallback': 'N/A',
-            }],
-        }])
-        result = validate_config_dict(cfg)
-        assert result.ok
-
-    def test_url_fact_missing_url_errors(self) -> None:
-        """url-fact without url key should ERROR."""
-        cfg = _minimal_config(rows=[{
-            'name': 'r', 'height': 40,
-            'panels': [{
-                'type': 'url-fact',
-                'pattern': r'test',
-            }],
-        }])
+    def test_cached_facts_entry_missing_url_errors(self) -> None:
+        cfg = _minimal_config(rows=[{'name': 'r', 'height': 40, 'panels': [{'type': 'blank'}]}])
+        cfg['cached-facts'] = [{'name': 'weather', 'type': 'url-fact', 'interval': '5m'}]
         result = validate_config_dict(cfg)
         assert result.has_errors
         msgs = [i.message for i in result.errors]
         assert any('url' in m.lower() for m in msgs)
 
-    def test_url_fact_missing_pattern_and_json_path_errors(self) -> None:
-        """url-fact without pattern or json_path should ERROR."""
-        cfg = _minimal_config(rows=[{
-            'name': 'r', 'height': 40,
-            'panels': [{
-                'type': 'url-fact',
-                'url': 'https://example.com',
-            }],
-        }])
+    def test_cached_facts_entry_missing_name_errors(self) -> None:
+        cfg = _minimal_config(rows=[{'name': 'r', 'height': 40, 'panels': [{'type': 'blank'}]}])
+        cfg['cached-facts'] = [{'type': 'url-fact', 'url': 'https://example.com'}]
         result = validate_config_dict(cfg)
         assert result.has_errors
         msgs = [i.message for i in result.errors]
-        assert any(
-            ('pattern' in m.lower() or 'json_path' in m.lower())
-            for m in msgs
-        )
+        assert any('name' in m.lower() for m in msgs)
 
-    def test_url_fact_both_pattern_and_json_path_errors(self) -> None:
-        """url-fact with both pattern and json_path should ERROR."""
-        cfg = _minimal_config(rows=[{
-            'name': 'r', 'height': 40,
-            'panels': [{
-                'type': 'url-fact',
-                'url': 'https://example.com',
-                'pattern': r'test',
-                'json_path': 'data.value',
-            }],
-        }])
+    def test_cached_facts_entry_unknown_type_errors(self) -> None:
+        cfg = _minimal_config(rows=[{'name': 'r', 'height': 40, 'panels': [{'type': 'blank'}]}])
+        cfg['cached-facts'] = [{'name': 'weather', 'type': 'bogus', 'url': 'https://example.com'}]
         result = validate_config_dict(cfg)
         assert result.has_errors
         msgs = [i.message for i in result.errors]
-        assert any(
-            ('both' in m.lower() or 'one' in m.lower())
-            for m in msgs
-        )
+        assert any('type' in m.lower() for m in msgs)
 
-    def test_url_fact_invalid_interval_warns(self) -> None:
-        """url-fact with invalid interval format should WARN."""
-        cfg = _minimal_config(rows=[{
-            'name': 'r', 'height': 40,
-            'panels': [{
-                'type': 'url-fact',
-                'url': 'https://example.com',
-                'pattern': r'test',
-                'interval': 'invalid',
-            }],
-        }])
+    def test_cached_facts_duplicate_name_errors(self) -> None:
+        cfg = _minimal_config(rows=[{'name': 'r', 'height': 40, 'panels': [{'type': 'blank'}]}])
+        cfg['cached-facts'] = [
+            {'name': 'weather', 'type': 'url-fact', 'url': 'https://example.com/1'},
+            {'name': 'weather', 'type': 'url-fact', 'url': 'https://example.com/2'},
+        ]
         result = validate_config_dict(cfg)
-        assert not result.has_errors  # Interval is optional
+        assert result.has_errors
+        msgs = [i.message for i in result.errors]
+        assert any('duplicate' in m.lower() for m in msgs)
+
+    def test_cached_facts_invalid_interval_warns(self) -> None:
+        cfg = _minimal_config(rows=[{'name': 'r', 'height': 40, 'panels': [{'type': 'blank'}]}])
+        cfg['cached-facts'] = [{
+            'name': 'weather', 'type': 'url-fact',
+            'url': 'https://example.com', 'interval': 'invalid',
+        }]
+        result = validate_config_dict(cfg)
+        assert not result.has_errors  # interval is optional
         msgs = [i.message for i in result.warnings]
         assert any('interval' in m.lower() for m in msgs)
 
-    def test_url_fact_verify_ssl_with_http_warns(self) -> None:
-        """url-fact with verify_ssl on http:// URL should WARN."""
-        cfg = _minimal_config(rows=[{
-            'name': 'r', 'height': 40,
-            'panels': [{
-                'type': 'url-fact',
-                'url': 'http://example.com',
-                'pattern': r'test',
-                'verify_ssl': True,
-            }],
-        }])
+    def test_cached_facts_verify_ssl_with_http_warns(self) -> None:
+        cfg = _minimal_config(rows=[{'name': 'r', 'height': 40, 'panels': [{'type': 'blank'}]}])
+        cfg['cached-facts'] = [{
+            'name': 'weather', 'type': 'url-fact',
+            'url': 'http://example.com', 'verify_ssl': True,
+        }]
         result = validate_config_dict(cfg)
         msgs = [i.message for i in result.warnings]
         assert any('verify_ssl' in m.lower() and 'http' in m.lower() for m in msgs)
 
-    def test_url_fact_styling_attrs(self) -> None:
-        """url-fact should support standard styling attributes."""
+    def test_fact_panel_missing_json_path_and_pattern_errors(self) -> None:
+        """fact panel with a cached-facts source but no extraction key ERRORs."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'fact', 'source': 'cached-facts.weather'}],
+        }])
+        cfg['cached-facts'] = [{
+            'name': 'weather', 'type': 'url-fact', 'url': 'https://example.com',
+        }]
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        msgs = [i.message for i in result.errors]
+        assert any(('pattern' in m.lower() or 'json_path' in m.lower()) for m in msgs)
+
+    def test_fact_panel_both_json_path_and_pattern_errors(self) -> None:
         cfg = _minimal_config(rows=[{
             'name': 'r', 'height': 40,
             'panels': [{
-                'type': 'url-fact',
-                'url': 'https://example.com',
+                'type': 'fact', 'source': 'cached-facts.weather',
+                'json_path': 'a.b', 'pattern': r'x',
+            }],
+        }])
+        cfg['cached-facts'] = [{
+            'name': 'weather', 'type': 'url-fact', 'url': 'https://example.com',
+        }]
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        msgs = [i.message for i in result.errors]
+        assert any(('both' in m.lower() or 'one' in m.lower()) for m in msgs)
+
+    def test_fact_panel_unknown_cached_facts_reference_errors(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{
+                'type': 'fact', 'source': 'cached-facts.nope', 'json_path': 'a.b',
+            }],
+        }])
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        msgs = [i.message for i in result.errors]
+        assert any('unknown cached-facts' in m.lower() for m in msgs)
+
+    def test_fact_panel_json_path_ignored_warning_for_builtin_source(self) -> None:
+        """json_path/pattern only apply to cached-facts sources -- WARN otherwise."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'fact', 'source': 'hostname', 'json_path': 'a.b'}],
+        }])
+        result = validate_config_dict(cfg)
+        assert not result.has_errors
+        msgs = [i.message for i in result.warnings]
+        assert any('json_path' in m.lower() for m in msgs)
+
+    def test_cached_facts_styling_attrs_on_fact_panel(self) -> None:
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{
+                'type': 'fact',
+                'source': 'cached-facts.weather',
                 'json_path': 'data.value',
                 'label': 'Value: ',
                 'color': '#ffffff',
@@ -766,8 +796,11 @@ class TestUrlFactPanel:
                 'background': '#000000',
             }],
         }])
+        cfg['cached-facts'] = [{
+            'name': 'weather', 'type': 'url-fact', 'url': 'https://example.com',
+        }]
         result = validate_config_dict(cfg)
-        assert result.ok
+        assert result.ok, f"expected no issues, got: {result.issues}"
 
 
 # ---------------------------------------------------------------------------
@@ -775,7 +808,7 @@ class TestUrlFactPanel:
 # ---------------------------------------------------------------------------
 
 class TestTransform:
-    """Tests for the generic 'transform:' key (fact/url-fact/clock/date/text)."""
+    """Tests for the generic 'transform:' key (clock/date/fact/text)."""
 
     def test_transform_valid_simple_list_on_text_panel(self) -> None:
         cfg = _minimal_config(rows=[{
@@ -826,16 +859,19 @@ class TestTransform:
         result = validate_config_dict(cfg)
         assert result.ok
 
-    def test_transform_valid_on_url_fact_with_params(self) -> None:
+    def test_transform_valid_on_cached_facts_fact_with_params(self) -> None:
         cfg = _minimal_config(rows=[{
             'name': 'r', 'height': 40,
             'panels': [{
-                'type': 'url-fact',
-                'url': 'https://example.com',
+                'type': 'fact',
+                'source': 'cached-facts.weather',
                 'json_path': 'tempF',
                 'transform': [{'round': 0}, {'suffix': 'F'}],
             }],
         }])
+        cfg['cached-facts'] = [{
+            'name': 'weather', 'type': 'url-fact', 'url': 'https://example.com',
+        }]
         result = validate_config_dict(cfg)
         assert result.ok
 
@@ -961,7 +997,7 @@ class TestFontBehavior:
 
     def test_font_behavior_not_flagged_as_unknown_panel_key(self) -> None:
         """font_behavior must be a recognised attr for text-drawing panel
-        types (clock/date/fact/text/url-fact), not an 'unknown key' warning."""
+        types (clock/date/fact/text), not an 'unknown key' warning."""
         cfg = _minimal_config(rows=[{
             'name': 'r', 'height': 40,
             'panels': [{'type': 'clock', 'font_behavior': 'scale_numeric'}],

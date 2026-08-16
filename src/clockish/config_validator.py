@@ -85,8 +85,11 @@ except ImportError:  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------
-# Helpers for url-fact validation
+# Helpers for cached-facts validation
 # ---------------------------------------------------------------------------
+
+#: Prefix a fact panel's `source:` uses to reference a top-level cached-facts entry.
+CACHED_FACTS_SOURCE_PREFIX: str = 'cached-facts.'
 
 def _is_valid_interval(interval_str: str) -> bool:
     """Check if interval_str is in valid format: <number>[s|m|h].
@@ -104,16 +107,27 @@ def _is_valid_interval(interval_str: str) -> bool:
 
 #: Panel types recognised by the display engine.
 KNOWN_PANEL_TYPES: frozenset[str] = frozenset({
-    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'debug', 'blank', 'url-fact',
+    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'debug', 'blank',
 })
 
-#: Valid ``source:`` values for ``type: fact`` panels.
+#: Valid ``source:`` values for ``type: fact`` panels. A ``fact`` panel may
+#: ALSO use ``source: cached-facts.<name>`` to pull from a top-level
+#: ``cached-facts:`` entry (background-thread-fetched, non-blocking) -- see
+#: ``CACHED_FACTS_SOURCE_PREFIX`` / ``_CACHED_FACT_ATTRS`` below.
 KNOWN_FACT_SOURCES: frozenset[str] = frozenset({
     'ip', 'hostname', 'uptime', 'version', 'config_file',
     'cpu', 'cpu_load', 'mem', 'disk', 'temp',
     'ntp_status', 'ntp_upstream', 'ntp_all',
     'wireguard',
     'wifi_status', 'wifi_ssid', 'wifi_signal', 'wifi_quality', 'wifi_all',
+})
+
+#: Fetcher ``type:`` values recognised for ``cached-facts:`` entries.
+KNOWN_CACHED_FACT_TYPES: frozenset[str] = frozenset({'url-fact'})
+
+#: All valid attribute keys for a ``cached-facts:`` list entry.
+_CACHED_FACT_ATTRS: frozenset[str] = frozenset({
+    'name', 'type', 'url', 'interval', 'timeout', 'verify_ssl', 'preview_response',
 })
 
 #: Built-in font scale names (should be used with ``font_size:``, not ``font:``).
@@ -152,6 +166,7 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'fact': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
         'background', 'label', 'source', 'transform', 'padding', 'mem_format',
+        'json_path', 'pattern',
     }),
     'text': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
@@ -169,11 +184,6 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'blank': frozenset({
         'type', 'width', 'background', 'padding',
     }),
-    'url-fact': frozenset({
-        'type', 'url', 'pattern', 'json_path', 'interval', 'timeout', 'verify_ssl',
-        'fallback', 'label', 'color', 'font', 'font_size', 'font_behavior', 'width',
-        'background', 'justify', 'transform', 'padding', 'preview_response',
-    }),
 }
 
 #: Valid row-level keys.
@@ -184,7 +194,7 @@ _KNOWN_ROW_KEYS: frozenset[str] = frozenset({
 
 #: Valid top-level config keys.
 _KNOWN_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
-    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size',
+    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size', 'cached-facts',
 })
 
 #: Format for preview_size: "WxH", e.g. "240x135". Preview-tool only; ignored by production.
@@ -445,6 +455,67 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
             if not isinstance(fentry, dict):
                 warn(f'fonts.{fname}', "font entry must be a mapping with at least a 'file:' key")
 
+    # -- cached-facts section -------------------------------------------------
+    # Background-thread-fetched data sources, referenced by `fact` panels via
+    # `source: cached-facts.<name>`. Collect valid names here (used below when
+    # walking panels) and validate each entry's own shape.
+    cached_fact_names: set[str] = set()
+    cached_facts_cfg = config.get('cached-facts')
+    if cached_facts_cfg is not None:
+        if not isinstance(cached_facts_cfg, list):
+            err('cached-facts', "'cached-facts' must be a list of entries")
+        else:
+            seen_names: set[str] = set()
+            for ci, entry in enumerate(cached_facts_cfg):
+                cloc = f'cached-facts[{ci}]'
+                if not isinstance(entry, dict):
+                    err(cloc, "cached-facts entry must be a mapping")
+                    continue
+
+                for key in entry:
+                    if key not in _CACHED_FACT_ATTRS:
+                        warn(cloc, f"unexpected key '{key}' on cached-facts entry")
+
+                name = entry.get('name')
+                if not name or not isinstance(name, str):
+                    err(cloc, "cached-facts entry missing required 'name' key (string)")
+                elif name in seen_names:
+                    err(cloc, f"duplicate cached-facts name '{name}'")
+                else:
+                    seen_names.add(name)
+                    cached_fact_names.add(name)
+
+                cf_type = entry.get('type')
+                if not cf_type:
+                    err(cloc, "cached-facts entry missing required 'type' key")
+                elif cf_type not in KNOWN_CACHED_FACT_TYPES:
+                    err(
+                        cloc,
+                        f"unknown cached-facts type '{cf_type}' "
+                        f"(known types: {', '.join(sorted(KNOWN_CACHED_FACT_TYPES))})",
+                    )
+
+                url = entry.get('url')
+                if not url:
+                    err(cloc, "cached-facts entry missing required 'url' key (will crash at runtime)")
+
+                interval = entry.get('interval')
+                if interval is not None:
+                    if not isinstance(interval, str) or not _is_valid_interval(interval):
+                        warn(
+                            cloc,
+                            f"cached-facts entry invalid 'interval: {interval}' "
+                            "(use format: 30s, 5m, 1h, etc.)",
+                        )
+
+                verify_ssl = entry.get('verify_ssl')
+                if verify_ssl is not None and isinstance(url, str) and url.lower().startswith('http://'):
+                    warn(
+                        cloc,
+                        "cached-facts entry has 'verify_ssl' but URL is http:// "
+                        "(verify_ssl ignored for http)",
+                    )
+
     # -- rows ---------------------------------------------------------------
     rows = config.get('rows')
     if not isinstance(rows, list):
@@ -559,15 +630,46 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
             # 6. fact panel: source required (runtime crash without it) + must be recognised
             if ptype == 'fact':
                 source = panel.get('source')
+                pattern = panel.get('pattern')
+                json_path = panel.get('json_path')
+                has_pattern = pattern is not None
+                has_json_path = json_path is not None
+
                 if not source:
                     # p['source'] is accessed directly in the renderer -- KeyError at runtime.
                     err(ploc, "fact panel is missing required 'source' key (will crash at runtime)")
-                elif source not in KNOWN_FACT_SOURCES:
-                    warn(
-                        ploc,
-                        f"unrecognised fact source '{source}' "
-                        f"(known sources: {', '.join(sorted(KNOWN_FACT_SOURCES))})",
-                    )
+                elif isinstance(source, str) and source.startswith(CACHED_FACTS_SOURCE_PREFIX):
+                    cf_name = source[len(CACHED_FACTS_SOURCE_PREFIX):]
+                    if cf_name not in cached_fact_names:
+                        err(
+                            ploc,
+                            f"fact panel references unknown cached-facts entry '{cf_name}' "
+                            f"(known: {', '.join(sorted(cached_fact_names)) or '(none defined)'})",
+                        )
+                    # Exactly one of pattern or json_path required to extract from the
+                    # cached-facts entry's raw fetched value.
+                    if has_pattern and has_json_path:
+                        err(ploc, "fact panel has both 'pattern' and 'json_path' (use one)")
+                    elif not has_pattern and not has_json_path:
+                        err(
+                            ploc,
+                            "fact panel with 'source: cached-facts.*' must have 'pattern' "
+                            "or 'json_path' (use exactly one)",
+                        )
+                else:
+                    if source not in KNOWN_FACT_SOURCES:
+                        warn(
+                            ploc,
+                            f"unrecognised fact source '{source}' "
+                            f"(known sources: {', '.join(sorted(KNOWN_FACT_SOURCES))}, "
+                            f"or 'cached-facts.<name>')",
+                        )
+                    if has_pattern or has_json_path:
+                        warn(
+                            ploc,
+                            "'pattern'/'json_path' only apply to "
+                            "'source: cached-facts.<name>' -- ignored otherwise",
+                        )
 
                 # Validate mem_format if present and source is 'mem'
                 if source == 'mem':
@@ -581,48 +683,6 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                 f"(use: {', '.join(sorted(valid_mem_formats))})",
                             )
 
-            # 7. url-fact panel: url required, exactly one of pattern/json_path required
-            if ptype == 'url-fact':
-                url = panel.get('url')
-                pattern = panel.get('pattern')
-                json_path = panel.get('json_path')
-                interval = panel.get('interval')
-                verify_ssl = panel.get('verify_ssl')
-
-                if not url:
-                    msg = "url-fact panel missing 'url' key (will crash at runtime)"
-                    err(ploc, msg)
-
-                # Exactly one of pattern or json_path
-                has_pattern = pattern is not None
-                has_json_path = json_path is not None
-                if has_pattern and has_json_path:
-                    msg = "url-fact panel has both 'pattern' and 'json_path' (use one)"
-                    err(ploc, msg)
-                elif not has_pattern and not has_json_path:
-                    msg = (
-                        "url-fact panel must have 'pattern' or 'json_path' "
-                        "(use exactly one)"
-                    )
-                    err(ploc, msg)
-
-                # Validate interval format if present
-                if interval is not None:
-                    if not isinstance(interval, str) or not _is_valid_interval(interval):
-                        msg = (
-                            f"url-fact panel invalid 'interval: {interval}' "
-                            "(use format: 30s, 5m, 1h, etc.)"
-                        )
-                        warn(ploc, msg)
-
-                # warn if verify_ssl used with http URL
-                if verify_ssl is not None:
-                    if isinstance(url, str) and url.lower().startswith('http://'):
-                        msg = (
-                            "url-fact panel has 'verify_ssl' but URL is http:// "
-                            "(verify_ssl ignored for http)"
-                        )
-                        warn(ploc, msg)
 
             # 8. transform: list validation (any panel type that supports it)
             if 'transform' in panel:
@@ -678,7 +738,7 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                     f"transform '{name}' argument must be a number "
                                     f"(decimal places), got {arg!r}",
                                 )
-                        elif name in ('multiply', 'add') and has_arg:
+                        elif name in ('multiply', 'add', 'subtract', 'divide') and has_arg:
                             if not isinstance(arg, (int, float)):
                                 warn(
                                     tloc,
