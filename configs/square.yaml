@@ -14,6 +14,18 @@ orientation: square
 # display profile on disk; this hint keeps the PNG preview honest.
 preview_size: "240x240"
 
+cached-facts:
+  - name: sensor-office
+    type: url-fact
+    url: http://sensor-office.lan/last-json
+    interval: 15m
+    preview_response: '{"tempF": "71.8"}'
+  - name: sensor-outfront
+    type: url-fact
+    url: http://sensor-outfront.lan/last-json
+    interval: 15m
+    preview_response: '{"tempF": "68.5"}'
+
 rows:
   - name: header
     height: 24px
@@ -105,10 +117,9 @@ rows:
         justify: left
         color: darkorange
         font_size: 14px
-      - type: url-fact
-        url: http://sensor-office.lan/last-json
+      - type: fact
+        source: cached-facts.sensor-office
         json_path: "tempF"
-        interval: 15m
         label: "In: "
         justify: right
         color: silver
@@ -128,10 +139,9 @@ rows:
         justify: left
         color: darkorange
         font_size: 14px
-      - type: url-fact
-        url: http://sensor-outfront.lan/last-json
+      - type: fact
+        source: cached-facts.sensor-outfront
         json_path: "tempF"
-        interval: 15m
         label: "Out: "
         justify: right
         color: gold
