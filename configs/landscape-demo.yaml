@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------
 
 orientation: landscape
-preview_size: "480x320"
+preview_size: 480x320
 
 cached-facts:
   - name: Denver-Weather
@@ -40,7 +40,7 @@ cached-facts:
 
 rows:
   - name: clock
-    height: 30%
+    height: 32%
     panels:
       - type: clock
         width: 66.67%
@@ -145,7 +145,7 @@ rows:
     panels:
       - type: fact
         source: cached-facts.Denver-Weather
-        width: 16%
+        width: 16.1%  # needs slight nudge on 480x320
         json_path: "current.temperature_2m"
         justify: center
         color: cornflower
@@ -164,9 +164,8 @@ rows:
         background: black
         font_size: tiny
         transform:
-          # Convert F to C: (F - 32) / 1.8
-          - subtract: 32
-          - divide: 1.8
+          # Convert F to C with built-in.  see later for example with filters
+          - fahrenheit_to_celsius
           - format: "{:.0f}"
           - suffix: "°C"
 
@@ -188,14 +187,14 @@ rows:
 
       - type: fact
         source: cached-facts.Atlanta-Weather
-        width: 16%
+        width: 15%
         json_path: "current.temperature_2m"
         justify: center
         color: orange
         background: dimred
         font_size: tiny
         transform:
-          # Convert F to C: (F - 32) / 1.8
+          # the harder way - Convert F to C: (F - 32) / 1.8
           - subtract: 32
           - divide: 1.8
           - format: "{:.0f}"
@@ -214,10 +213,9 @@ rows:
         background: black
         font_size: tiny
         transform:
-          # Convert C to F: (C * 9/5) + 32
-          - multiply: 1.8
-          - add: 32
-          - round: 0
+          # Convert C to F
+          - celsius_to_fahrenheit
+          - format: "{:.0f}"
           - suffix: "°F"
 
       - type: fact
@@ -229,7 +227,6 @@ rows:
         background: black
         font_size: auto
         transform:
-          - round: 0
           - format: "{:.0f}°C"
 
   - name: divider-3
@@ -238,27 +235,27 @@ rows:
       - type: divider
         height: 1px
 
-  - name: wifi-info
-    height: 10%
+  - name: system-info
+    height: 8%
     panels:
       - type: wifi_graphic
-        width: 10%
+        width: 8%
         color: darklime
       - type: blank
-        width: 2%
+        width: 3%
       - type: fact
-        width: 21%
+        width: 22%
         justify: center
-        source: wifi_status
+        source: hostname
         color: grey
-        font_size: auto
+        font_size: tiny
       - type: fact
         justify: center
-        source: wifi_signal
+        source: ntp_status
         color: grey
-        font_size: auto
+        font_size: tiny
       - type: fact
         source: ip
-        justify: right
+        justify: center
         color: grey
-        font_size: auto
+        font_size: tiny
