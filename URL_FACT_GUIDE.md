@@ -45,7 +45,9 @@ panels:
 - `timeout`: HTTP request timeout (default: `5`)
 - `verify_ssl`: Check TLS certificate (default: `false`)
   - HTTP URLs ignore this setting
-- `fallback`: Value shown if fetch/parse fails (default: `n/a`)
+- `fallback`: Value shown only if the *very first* fetch fails and there's no
+  cached value yet (default: `n/a`). Later failures reuse the last cached value
+  instead -- see [Error Handling](#error-handling).
 - `label`: Text prepended to the extracted value
 - `transform`: Ordered list of value transforms applied before `label` -- see [Transforms](#transforms) below
 - Standard styling: `color`, `font_size`, `justify`, `width`, `background`
@@ -262,16 +264,23 @@ On Windows/macOS, SIGUSR1 is gracefully ignored; caches refresh only by interval
 
 ## Error Handling
 
-If a fetch fails or pattern doesn't match:
-1. Last cached value is reused (if available)
-2. `fallback` is shown (if no prior cache)
-3. Display continues normally (non-fatal)
+If a fetch fails (network/timeout error), the JSON path/regex doesn't match, or the
+HTTP request otherwise doesn't yield a value:
+1. Last cached value is reused (if available) -- the panel keeps showing its most
+   recent good value instead of flashing `fallback`/an error string.
+2. The cache's next expiry is set to **1/10th the configured `interval`** (minimum
+   1s) instead of the full interval, so a transient failure is retried soon rather
+   than waiting out the normal cadence.
+3. `fallback` is only shown if there is no prior cache yet (i.e. the very first
+   fetch for that panel fails) -- same 1/10th-interval retry applies.
+4. Display continues normally (non-fatal); a warning is logged (stderr + syslog if
+   available) for JSON-path-not-found cases.
 
-Common failures:
-- Network timeout → show `fallback`
-- Invalid regex → show `fallback`
-- JSON path not found → show `fallback`
-- HTTP error (404, 500, etc.) → show `fallback`
+Common failures (all trigger the retry-soon + reuse-cache behavior above):
+- Network timeout
+- Invalid/non-matching regex
+- JSON path not found
+- HTTP error (404, 500, etc.)
 
 Enable `--debug` to see detailed error messages:
 ```bash
