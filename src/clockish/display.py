@@ -2098,6 +2098,17 @@ def _attempt_config_reload() -> None:
     smallfont = _get_font('small')
     tiny      = _get_font('tiny')
 
+    # Wake cached-facts worker threads immediately so they fetch any new/changed
+    # URLs from the reloaded config (equivalent to delivering SIGUSR2).
+    try:
+        for ev in _cached_facts_events.values():
+            ev.set()
+        if DEBUG:
+            print("DEBUG: Waking cached-facts workers after config reload")
+    except Exception:
+        # Non-fatal: if no workers exist (preview mode) or other issue, ignore.
+        pass
+
     print(f"Config reloaded successfully.")
 
 
