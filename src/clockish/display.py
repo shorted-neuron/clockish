@@ -855,9 +855,11 @@ def _cached_fact_worker(name: str, url: str, interval_secs: int, timeout: int,
 
 def _stop_cached_facts() -> None:
     """Stop all running cached-facts worker threads (blocking)."""
-    global _cached_facts_stop_events, _cached_facts_threads
+    global _cached_facts_stop_events, _cached_facts_events, _cached_facts_threads
     for stop_event in _cached_facts_stop_events.values():
         stop_event.set()
+    for event in _cached_facts_events.values():
+        event.set()  # wake threads from event.wait() so they check stop_event
     for t in _cached_facts_threads.values():
         t.join(timeout=5)
 
