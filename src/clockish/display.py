@@ -2069,6 +2069,15 @@ def _attempt_config_reload() -> None:
     _FONTS.clear()
     _FIT_FONT_CACHE.clear()
     _NUMERIC_INK_CACHE.clear()
+    # Reset the built-in scale-loaded flag so _get_font() rebuilds the
+    # named scale fonts (giant/huge/.../micro) using the new default_font.
+    global _SCALE_FONTS_LOADED
+    _SCALE_FONTS_LOADED = False
+    # Clear derived caches that key by font path so metrics are recomputed
+    # for the newly loaded font files (avoid mixing old metrics with new fonts).
+    _WIDEST_CHAR_CACHE.clear()
+    _WIDEST_STRING_CACHE.clear()
+    _CLOCK_REFERENCE_CACHE.clear()
 
     # Swap in the new config and rebuild layout
     _config = new_config
