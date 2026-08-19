@@ -2,6 +2,44 @@
 orientation: portrait
 preview_size: 320x480
 
+cached-facts:
+  - name: public-ip
+    type: url-fact
+    url: https://api.ipify.org?format=json
+    interval: 5m
+    timeout: 5
+    preview_response: '{"ip": "203.0.113.42"}'
+
+  - name: quotable
+    type: url-fact
+    url: https://api.quotable.io/random
+    interval: 10m
+    timeout: 5
+    preview_response: '{"content": "Don''t sweat the small stuff! -Steve"}'
+
+  - name: sensor-master
+    type: url-fact
+    url: http://sensor-master.lan/last-json
+    interval: 33s
+    timeout: 5
+    preview_response: '{"tempF": "71.8"}'
+
+  - name: sensor-outfront
+    type: url-fact
+    url: http://sensor-outfront.lan/last-json
+    interval: 33s
+    timeout: 5
+    preview_response: '{"tempF": "42.3"}'
+
+  - name: kapa-weather
+    type: url-fact
+    url: |-
+      https://api.open-meteo.com/v1/forecast?
+      latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
+    interval: 1h
+    timeout: 5
+    preview_response: '{"current": {"temperature_2m": 5.2, "wind_speed_10m": 12.5, "wind_direction_10m": 240}}'
+
 rows:
   - name: time
     height: 23%
@@ -13,27 +51,20 @@ rows:
   - name: external-ip
     height: 12%
     panels:
-      - type: url-fact
-        url: https://api.ipify.org?format=json
+      - type: fact
+        source: cached-facts.public-ip
         json_path: ip
-        interval: 5m
-        timeout: 5
         label: "Public IP "
         color: '#ffffff'
         font_size: 24px
-        preview_response: '{"ip": "203.0.113.42"}'
 
   - name: random-quote
     height: 12%
     background: '#1a1a1a'
     panels:
-      - type: url-fact
-        url: https://api.quotable.io/random
+      - type: fact
+        source: cached-facts.quotable
         json_path: content
-        interval: 10m
-        timeout: 5
-        fallback: "quotable.io?"
-        preview_response: '{"content": "Don''t sweat the small stuff! -Steve"}'
         color: yellow
         font_size: micro
 
@@ -56,27 +87,19 @@ rows:
         font_size: auto
         font_behavior: scale_numeric
 
-      - type: url-fact
-        # justify: right
+      - type: fact
+        source: cached-facts.sensor-master
         label: "inside:"
-        url: http://sensor-master.lan/last-json
-        preview_response: '{"tempF": "71.8"}'
         json_path: tempF
-        interval: 33s
-        timeout: 5
         color: cyan
         font_size: 16px
         # string "71.8" -> float -> int, rounded up to "72"
         transform: [round, {format: "{:.0f}°F"}]
 
-      - type: url-fact
-        # justify: right
+      - type: fact
+        source: cached-facts.sensor-outfront
         label: "outside:"
-        url: http://sensor-outfront.lan/last-json
-        preview_response: '{"tempF": "42.3"}'
         json_path: tempF
-        interval: 33s
-        timeout: 5
         color: pink
         font_size: 16px
         # 'format' escape hatch: string "42.3" -> float -> "42.3F"
@@ -86,7 +109,7 @@ rows:
     height: 8%
     panels:
       - type: text
-        width: 25%
+        width: 15%
         label: "HELLO"
         font_size: 16px
         color: white
@@ -107,6 +130,15 @@ rows:
         background: darkpurple
         # "hello world" -> "helloWorld" (true camelCase)
         transform: [camelcase]
+      - type: text
+        width: 25%
+        label: "replacement"
+        font_size: 16px
+        color: orange
+        background: navy
+        # "replacement" -> "replaced"
+        transform:
+          - replace: {from: "placement", to: "placed"}
 
   - name: divider-2
     height: 1%
@@ -127,93 +159,62 @@ rows:
     height: 15%
     background: '#001f00'
     panels:
-      - type: url-fact
+      - type: fact
+        source: cached-facts.kapa-weather
         label: "TempC "
-        url: |-
-          https://api.open-meteo.com/v1/forecast?
-          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.temperature_2m
-        interval: 1h
-        timeout: 5
-        fallback: "N/A"
         color: '#66ddff'
         font_size: 14px
         transform: [{format: "{:.0f}°"}]
 
-      - type: url-fact
+      - type: fact
+        source: cached-facts.kapa-weather
         label: "TempF "
-        url:  |-
-          https://api.open-meteo.com/v1/forecast?
-          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.temperature_2m
-        interval: 1h
-        timeout: 5
-        fallback: "N/A"
         color: '#ffaa00'
         font_size: 14px
         # Convert C to F: (C * 9/5) + 32
         transform: [{multiply: 1.8}, {add: 32}, {format: "{:.0f}°"}]
 
-      - type: url-fact
+      - type: fact
+        source: cached-facts.kapa-weather
         label: "Wind "
-        url: |-
-          https://api.open-meteo.com/v1/forecast?
-          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.wind_speed_10m
-        interval: 1h
-        timeout: 5
-        fallback: "N/A"
         color: '#ffffff'
         font_size: 12px
         transform: [{format: "{:.0f}kmh"}]
 
-      - type: url-fact
+      - type: fact
+        source: cached-facts.kapa-weather
         label: "Dir "
-        url: |-
-          https://api.open-meteo.com/v1/forecast?
-          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.wind_direction_10m
-        interval: 1h
-        timeout: 5
-        fallback: "N/A"
         color: '#aaffaa'
         font_size: 14px
         transform: [{format: "{:.0f}°"}]
 
-  # NOTE: a single url-fact panel's `transform:` is a linear pipeline
+  # NOTE: a single fact panel's `transform:` is a linear pipeline
   # (transforms.py: apply_transforms()) -- each step overwrites the value,
   # so converting C->F discards the original C. Can't show "both" out of
   # ONE panel's transform. The supported YAML-only
-  # workaround: two url-fact panels hitting the SAME url/json_path, each
-  # with its own transform (already shown above as TempC/TempF) -- costs
-  # one extra fetch per interval (cache is keyed per-panel, not per-url).
-  # Packed together tight (no gap, shared background) it reads as one panel.
+  # workaround: two fact panels hitting the SAME cached-facts source/json_path, each
+  # with its own transform (already shown above as TempC/TempF) -- hits the cache,
+  # no extra fetch. Packed together tight (no gap, shared background) it reads as one panel.
   - name: openmeteo-kapa-combined-cf
     height: 10%
     background: navy
     panels:
-      - type: url-fact
+      - type: fact
+        source: cached-facts.kapa-weather
         width: 50%
-        url: |-
-          https://api.open-meteo.com/v1/forecast?
-          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.temperature_2m
-        interval: 1h
-        timeout: 5
-        fallback: "-"
         color: cyan
         font_behavior: scale_numeric
         transform: [{format: "{:.0f}°C"}]
 
-      - type: url-fact
+      - type: fact
+        source: cached-facts.kapa-weather
         width: 50%
-        url: |-
-          https://api.open-meteo.com/v1/forecast?
-          latitude=40.2163&longitude=-104.8101&current=temperature_2m,wind_speed_10m,wind_direction_10m
         json_path: current.temperature_2m
-        interval: 1h
-        timeout: 5
-        fallback: "-"
         color: orange
         font_behavior: scale_numeric
         # Convert C to F: (C * 9/5) + 32

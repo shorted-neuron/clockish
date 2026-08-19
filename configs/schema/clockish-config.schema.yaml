@@ -60,6 +60,48 @@ properties:
       Ignored by production (which always uses the real display profile / display: section).
       Only needed when the orientation-based preview default (480x320 landscape /
       320x480 portrait) doesn't match the config's intended display.
+  cached-facts:
+    type: array
+    description: |
+      Background-thread-fetched remote data sources, decoupled from the render loop
+      (never blocks a frame). Each entry is fetched independently on its own interval;
+      'fact' panels consume an entry via 'source: cached-facts.<name>' plus a
+      'json_path'/'pattern' to extract the field(s) they need -- multiple panels can
+      pull different fields from ONE shared fetch (e.g. temperature in both F and C,
+      or wind speed/direction, from a single weather API call).
+    items:
+      type: object
+      required:
+        - name
+        - type
+        - url
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: "Unique identifier, referenced by panels as 'source: cached-facts.<name>'."
+        type:
+          type: string
+          enum: [url-fact]
+          description: Fetcher kind. Only 'url-fact' (HTTP/HTTPS GET) is currently supported.
+        url:
+          type: string
+          description: HTTP/HTTPS URL to fetch. YAML block scalars (|-) are whitespace-stripped.
+        interval:
+          type: string
+          description: 'Fetch frequency, e.g. "30s", "5m", "1h". Default: 5m.'
+        timeout:
+          type: number
+          description: 'HTTP request timeout, seconds. Default: 5.'
+        verify_ssl:
+          type: boolean
+          description: 'TLS certificate verification for https:// URLs. Default: false.'
+        preview_response:
+          type: string
+          description: |
+            Raw response body used verbatim by clockish-preview/clockish-time-samples instead
+            of a real network fetch -- keeps preview renders offline/deterministic. If omitted,
+            preview mode fetches once synchronously (real network) before rendering.
   rows:
     type: array
     minItems: 1
@@ -111,6 +153,18 @@ properties:
                 type: string
                 description: 'Panel renderer. Known types:
                   clock, date, fact, text, divider, wifi_graphic, debug, blank.'
+              json_path:
+                type: string
+                description: |
+                  Dot-notation path into a cached-facts entry's raw JSON (e.g. 'current.temp').
+                  Only applies to 'fact' panels with 'source: cached-facts.<name>' -- exactly
+                  one of json_path/pattern is required in that case, and both are ignored for
+                  built-in fact sources (ip, cpu, mem, ...).
+              pattern:
+                type: string
+                description: |
+                  Regex with a capture group, applied to a cached-facts entry's raw response
+                  text (first group extracted). Alternative to json_path -- see above.
               justify:
                 type: string
                 enum:
@@ -179,8 +233,9 @@ properties:
                   'ceil', 'floor', 'int', 'Titlecase', 'PascalCase', 'camelCase', 'strip', 'abs')
                   or a single-key mapping for parameterised transforms
                   ({round: 1}, {multiply: 1.8}, {add: 32}, {replace: {from: a, to: b}},
-                  {prefix: '~'}, {suffix: '%'}, {format: '{:.1f}F'}).
-                  Supported on: clock, date, fact, text, url-fact panels.
+                  {prefix: '~'}, {suffix: '%'}, {format: '{:.1f}F'}, {subtract: 32}, {divide: 1.8}).
+                  Also supports no-arg 'celsius_to_fahrenheit'/'fahrenheit_to_celsius'.
+                  Supported on: clock, date, fact, text panels.
                 items:
                   anyOf:
                     - type: string

@@ -98,18 +98,28 @@ fonts:                         # optional custom fonts
     file: DSEG7.ttf
     size: 20  # or "15%"
 
+cached-facts:                  # optional; background-thread-fetched remote data
+  - name: Denver-Weather       # referenced by fact panels as source: cached-facts.Denver-Weather
+    type: url-fact             # fetcher kind; only 'url-fact' (HTTP GET) supported today
+    url: https://api.open-meteo.com/v1/forecast?...
+    interval: 20m              # fetch frequency; default 5m
+    timeout: 5                 # optional; HTTP timeout seconds, default 5
+    verify_ssl: false           # optional; TLS verification, default false
+    preview_response: '{...}'  # optional; used verbatim by clockish-preview instead of a real fetch
+
 rows:
   - name: row-name
     height: 40  # pixels | float 0-1 | "15%"
     background: navy  # optional; default black
     font_behavior: default  # optional row-level default: default|scale|scale_numeric|stretch_y|stretch_x
     panels:
-      - type: clock | date | fact | text | divider | wifi_graphic | debug | blank | url-fact
+      - type: clock | date | fact | text | divider | wifi_graphic | debug | blank
         # common: color, font_size, font, font_behavior, width, background, justify, padding
         # clock/date: timezone, time_format / date_format
-        # fact: source (required), label
+        # fact: source (required) -- built-in (ip, cpu, mem, ...) or 'cached-facts.<name>'
+        # fact + cached-facts source: json_path or pattern (exactly one) to extract a field
         # text: label
-        # clock/date/fact/text/url-fact: transform (see below)
+        # clock/date/fact/text: transform (see below)
 
 display:  # optional here; search display.yaml alongside config or ~/.config/clockish/
   driver: ili9486 | st7789 | framebuffer  # default ili9486
@@ -134,7 +144,9 @@ Custom fonts (`font: my_font`) resolved at init; `font_size` determines final si
 All renderers: `(panel_dict, px, py, pw, ph, ...)` → draw on `ImageDraw`.
 
 - **clock, date**: render time/date string centered or justified in rect
-- **fact**: query system info (ip, hostname, cpu%, mem, disk, temp, ntp, wifi_*), format with label
+- **fact**: query system info (ip, hostname, cpu%, mem, disk, temp, ntp, wifi_*) OR extract a
+  field (via `json_path`/`pattern`) from a `cached-facts.<name>` background-fetched source,
+  format with label
 - **text**: static label
 - **divider**: horizontal line
 - **wifi_graphic**: arc-based signal-strength display (0–4 bars + dot)
@@ -145,7 +157,7 @@ Text vertical-centering: `_center_y()` aligns ink baseline within row height.
 
 ### font_behavior (row-default / panel-override)
 
-Text-drawing panels (`clock`/`date`/`fact`/`text`/`url-fact`) and rows support `font_behavior:`,
+Text-drawing panels (`clock`/`date`/`fact`/`text`) and rows support `font_behavior:`,
 resolved once in `_init_layout()` (panel value > row default > `'default'`) and written back onto
 the panel dict, so renderers just read `p['font_behavior']`. Values (`KNOWN_FONT_BEHAVIORS` in both
 `display.py` and `config_validator.py` -- duplicated, not imported, to keep the validator free of
@@ -208,7 +220,7 @@ worst-case reference so the fitted size is CONSTANT for the life of the process 
   way (weekday/month names -- `%a`/`%A`/`%b`/`%B`; their width varies far more than digit
   substitution can account for). **`date` panels are not covered** -- same reason, out of scope
   for now; they still measure their live text.
-- **fact / url-fact panels**: no format string to parse, so `_generic_numeric_reference()` just
+- **fact panels**: no format string to parse, so `_generic_numeric_reference()` just
   repeats this font's widest character among `"0123456789.-%"` to the *current* text's length.
   Stable against digit-glyph-width variance, but still shifts if the value's character count
   itself changes (e.g. `"9.9%"` -> `"100.0%"`) -- an inherent limit of not having a format string
@@ -226,18 +238,22 @@ full, unpadded cell). Invalid values (negative, non-numeric) fall back to the de
 
 ### Value transforms
 
-`clock`, `date`, `fact`, `text`, `url-fact` panels support `transform:` -- an ordered list of
+`clock`, `date`, `fact`, `text` panels support `transform:` -- an ordered list of
 named operations applied to the panel's core string before any `label` prefix. Registry lives
 in `transforms.py` (`TRANSFORM_REGISTRY`), shared by `display.py` (application) and
 `config_validator.py` (name/arg validation). Built-ins: case (`upper`/`lower`/`title`/
 `capitalize`/`titlecase`/`pascalcase`/`camelcase`/`strip`), rounding (`round`/`ceil`/`floor`/
-`int`, string→float→int), arithmetic (`multiply`/`add`/`abs`), string ops (`replace`/`prefix`/
-`suffix`), and a `format` escape hatch (raw Python format-spec). See `URL_FACT_GUIDE.md` for
-full examples.
+`int`, string→float→int), arithmetic (`multiply`/`add`/`subtract`/`divide`/`abs`), unit
+conversion (`celsius_to_fahrenheit`/`fahrenheit_to_celsius`, no-arg), string ops
+(`replace`/`prefix`/`suffix`), and a `format` escape hatch (raw Python format-spec). See
+`URL_FACT_GUIDE.md` for full examples.
 
 ### System info sources
 
-`_get_fact(source)` maps strings to lambdas:
+`_get_fact(source)` maps strings to lambdas -- used when a `fact` panel's `source:` is one of
+the built-ins below. `source: cached-facts.<name>` (see "cached-facts" section further down)
+bypasses this entirely and instead extracts a field (`json_path`/`pattern`) from a
+background-thread-fetched raw value:
 
 | source         | value                                                            |
 |----------------|------------------------------------------------------------------|
@@ -253,6 +269,53 @@ full examples.
 | `ntp_upstream` | number of upstream sources                                       |
 | `wireguard`    | wg status (stubbed if no wg)                                     |
 | `wifi_*`       | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
+
+### cached-facts (background-thread-fetched remote data)
+
+Top-level `cached-facts:` list -- each entry is fetched **out of the render loop entirely**, on
+its own background daemon thread, decoupling slow/flaky network I/O from `show_rows()`'s
+once-per-second cadence (the old `url-fact` panel type fetched synchronously inline in the
+render loop; it has been removed -- no backward compatibility).
+
+```yaml
+cached-facts:
+  - name: Denver-Weather        # referenced by panels as source: cached-facts.Denver-Weather
+    type: url-fact               # fetcher kind; only 'url-fact' (HTTP GET) supported today
+    url: https://api.open-meteo.com/v1/forecast?...
+    interval: 20m                 # fetch frequency; default 5m
+    timeout: 5                    # optional; HTTP timeout seconds, default 5
+    verify_ssl: false              # optional; TLS cert verification, default false
+    preview_response: '{...}'     # optional; used verbatim by clockish-preview, no real fetch
+```
+
+A `fact` panel consumes an entry via `source: cached-facts.<name>` plus exactly one of
+`json_path`/`pattern` to extract the field it needs -- multiple panels can pull different
+fields out of ONE shared fetch (e.g. temperature in both °F and °C via `transform:`, plus
+wind speed/direction elsewhere, from a single weather API call).
+
+**Mechanics** (`display.py`):
+- `_init_cached_facts(config)` (called from `_init_layout()`) spawns one daemon
+  `threading.Thread` per entry (`_cached_fact_worker()`), staggered across the interval window
+  so N entries don't all hit the network at once.
+- Each worker writes `_cached_facts_cache[name] = {'raw': str|None, 'ok': bool}` -- the **whole
+  dict is replaced**, never mutated in place, so a plain read from the render loop
+  (`_render_fact_panel()`) is atomic under the GIL without needing a lock.
+- On fetch failure, the previous `raw` value is kept (never cleared) and the retry backs off:
+  starts at `interval/10` (min 1s), doubles each consecutive failure, capped at the full
+  `interval` -- a transient outage retries soon; a persistent one settles to normal cadence.
+- `SIGUSR1` -> `_handle_sigusr1()` sets every entry's `threading.Event`, waking its worker
+  immediately for a fresh fetch (instead of waiting out the current interval/backoff).
+- Extraction (`json_path`/`pattern`) happens in `_render_fact_panel()`, **every render**, not
+  in the worker thread -- cheap (no I/O), and lets multiple panels share one fetch.
+- Before a cached-fact's first successful fetch (or if it has never once succeeded), the
+  consuming `fact` panel renders an empty string -- there is no `fallback:` key (unlike the
+  old `url-fact` panel).
+
+**Preview mode** (`clockish-preview`/`clockish-time-samples`, `_PREVIEW_MODE=True`): no
+background threads (a preview render is one-shot). If `preview_response` is set, it's used
+verbatim (fully offline/deterministic). If not, `_init_cached_facts()` fetches once,
+synchronously, before the frame renders -- a real network call is allowed here (per design),
+it just has to complete before rendering, not run in the background.
 
 ### Display drivers
 
@@ -274,7 +337,9 @@ Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idl
 
 ### Testing & validation
 
-**pytest**: `tests/test_config_validator.py` (623 lines), `test_platform_utils.py`, `test_all_encoding.py`.
+**pytest**: `tests/test_config_validator.py`, `tests/test_cached_facts.py` (background-thread
+fetch/retry/SIGUSR1 machinery), `tests/test_display_transform_wiring.py`,
+`test_platform_utils.py`, `test_all_encoding.py`.
 
 Run:
 ```bash
@@ -289,8 +354,9 @@ pytest --cov=src/clockish
 Validation layers:
 1. yamllint (YAML syntax/style)
 2. PyYAML parse
-3. jsonschema (structural: orientation, rows, panel types required)
-4. Semantic walker (deprecated keys, unknown attrs, fact source checks, font misuse)
+3. jsonschema (structural: orientation, rows, panel types, cached-facts entries required)
+4. Semantic walker (deprecated keys, unknown attrs, fact source checks, cached-facts name
+   uniqueness + panel-reference checks, font misuse)
 
 ### Platform quirks
 
@@ -448,6 +514,14 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 2. Add lambda to `_get_fact()` dict in `display.py`
 3. Optional: add default label to `_FACT_DEFAULT_LABELS`
 4. Test in validator tests
+
+**Add a cached-facts fetcher type** (currently only `url-fact` exists):
+1. Add name to `KNOWN_CACHED_FACT_TYPES` in `config_validator.py`; validate its required
+   attrs in the `cached-facts` section of `_validate_semantics()`
+2. Implement the fetch logic (parallel to `_fetch_url_raw()`) and wire it into
+   `_init_cached_facts()`/`_cached_fact_worker()` in `display.py` -- entries of this type still
+   just need to end up writing `_cached_facts_cache[name] = {'raw': ..., 'ok': ...}`
+3. Test in `test_cached_facts.py` + `test_config_validator.py::TestCachedFacts`
 
 **Add a value transform**:
 1. Write `_t_<name>(value: str, arg) -> str` in `transforms.py`, add to `TRANSFORM_REGISTRY`

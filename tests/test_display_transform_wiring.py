@@ -1,10 +1,11 @@
 """tests/test_display_transform_wiring.py
 
 Regression tests proving `transform:` actually reaches the rendered text for
-each supported panel type (clock, date, fact, url-fact, text) -- not just
-that config_validator.py accepts it. This guards against the transform
-application call sites silently disappearing from display.py (has happened
-once already during development).
+each supported panel type (clock, date, fact, text -- including a `fact`
+panel backed by a `cached-facts.*` source) -- not just that config_validator.py
+accepts it. This guards against the transform application call sites
+silently disappearing from display.py (has happened once already during
+development).
 
 Renderers are exercised directly with `_draw_text_line` and font/fetch
 helpers monkeypatched out, so no real fonts, files, or network I/O are
@@ -78,50 +79,54 @@ class TestFactTransform:
         assert calls[0] == 'hello world'
 
 
-class TestUrlFactTransform:
-    def _fresh_panel(self, **overrides):
-        panel = {
-            'url': 'https://example.com',
-            'json_path': 'ip',
-        }
-        panel.update(overrides)
-        return panel
+class TestCachedFactsFactTransform:
+    """fact panel with source: cached-facts.<name> -- extraction (json_path/
+    pattern) happens at render time from the shared cached-facts raw value;
+    no network I/O, no background thread (that's covered separately in
+    test_config_validator.py / a dedicated cached-facts test module)."""
 
-    def test_transform_rounds_fetched_value(self, monkeypatch):
+    def _fresh_cache(self, monkeypatch, raw: str):
+        monkeypatch.setattr(cd, '_cached_facts_cache', {'weather': {'raw': raw, 'ok': True}})
+
+    def test_transform_rounds_extracted_value(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        monkeypatch.setattr(cd, '_fetch_and_extract', lambda *a, **k: ('71.8', 200))
-        # Ensure a clean cache slot for this specific panel dict instance.
-        panel = self._fresh_panel(transform=['round'])
-        cd._remote_fact_cache.pop(id(panel), None)
-        cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)
+        self._fresh_cache(monkeypatch, '{"ip": "71.8"}')
+        panel = {'source': 'cached-facts.weather', 'json_path': 'ip', 'transform': ['round']}
+        cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
         assert calls[0] == '72'
 
-    def test_no_transform_keeps_raw_fetched_value(self, monkeypatch):
+    def test_no_transform_keeps_raw_extracted_value(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        monkeypatch.setattr(cd, '_fetch_and_extract', lambda *a, **k: ('71.8', 200))
-        panel = self._fresh_panel()
-        cd._remote_fact_cache.pop(id(panel), None)
-        cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)
+        self._fresh_cache(monkeypatch, '{"ip": "71.8"}')
+        panel = {'source': 'cached-facts.weather', 'json_path': 'ip'}
+        cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
         assert calls[0] == '71.8'
 
-    def test_transform_reapplied_on_cached_value_without_refetch(self, monkeypatch):
-        """Editing transform (e.g. via config reload) should affect display
-        even for an already-cached raw value -- no need to invalidate cache."""
+    def test_pattern_extraction(self, monkeypatch):
         calls = _capture_draw_text(monkeypatch)
-        fetch_calls = []
+        self._fresh_cache(monkeypatch, '<title>Example Domain</title>')
+        panel = {'source': 'cached-facts.weather', 'pattern': r'<title>([^<]+)</title>'}
+        cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
+        assert calls[0] == 'Example Domain'
 
-        def _fake_fetch(*a, **k):
-            fetch_calls.append(1)
-            return ('71.8', 200)
+    def test_no_data_yet_renders_empty_string(self, monkeypatch):
+        """Before the background thread's first successful fetch, raw is None
+        -- fact panel shows an empty string (no 'fallback' concept)."""
+        calls = _capture_draw_text(monkeypatch)
+        monkeypatch.setattr(cd, '_cached_facts_cache', {})
+        panel = {'source': 'cached-facts.weather', 'json_path': 'ip'}
+        cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
+        assert calls[0] == ''
 
-        monkeypatch.setattr(cd, '_fetch_and_extract', _fake_fetch)
-        panel = self._fresh_panel(transform=['round'])
-        cd._remote_fact_cache.pop(id(panel), None)
-
-        cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)  # first: fetches + caches raw
-        cd._render_url_fact_panel(panel, 0, 0, 100, 40, d=None)  # second: cache hit, transforms
-
-        assert fetch_calls == [1]  # only fetched once (interval not expired)
+    def test_transform_reapplied_each_render(self, monkeypatch):
+        """Editing transform (e.g. via config reload) should affect display
+        even though the underlying cached-facts raw value never changes --
+        extraction + transform both happen fresh every render."""
+        calls = _capture_draw_text(monkeypatch)
+        self._fresh_cache(monkeypatch, '{"ip": "71.8"}')
+        panel = {'source': 'cached-facts.weather', 'json_path': 'ip', 'transform': ['round']}
+        cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
+        cd._render_fact_panel(panel, 0, 0, 100, 40, d=None)
         assert calls == ['72', '72']
 
 

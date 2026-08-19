@@ -1,15 +1,21 @@
 ---
 orientation: square
 
+cached-facts:
+  - name: sensor-master
+    type: url-fact
+    url: http://sensor-master.lan/last-json
+    interval: 1m
+    timeout: 5
+    preview_response: '{"tempF": "71.8"}'
+
 rows:
   - name: sensor-temp
     height: 100%
     panels:
-      - type: url-fact
-        url: http://sensor-master.lan/last-json
+      - type: fact
+        source: cached-facts.sensor-master
         json_path: tempF
-        interval: 1m
-        timeout: 5
         label: "TempF: "
         color: orange
         font_size: 50px

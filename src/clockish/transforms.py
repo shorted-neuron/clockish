@@ -177,6 +177,40 @@ def _t_add(value: str, arg: Any) -> str:
     return str(int(r)) if r == int(r) else str(r)
 
 
+def _t_subtract(value: str, arg: Any) -> str:
+    x = _as_float(value)
+    amount = _as_float(str(arg)) if arg is not None else None
+    if x is None or amount is None:
+        return value
+    r = x - amount
+    return str(int(r)) if r == int(r) else str(r)
+
+
+def _t_divide(value: str, arg: Any) -> str:
+    x = _as_float(value)
+    divisor = _as_float(str(arg)) if arg is not None else None
+    if x is None or not divisor:  # None or 0
+        return value
+    r = x / divisor
+    return str(int(r)) if r == int(r) else str(r)
+
+
+def _t_celsius_to_fahrenheit(value: str, _arg: Any) -> str:
+    x = _as_float(value)
+    if x is None:
+        return value
+    r = x * 9 / 5 + 32
+    return str(int(r)) if r == int(r) else str(r)
+
+
+def _t_fahrenheit_to_celsius(value: str, _arg: Any) -> str:
+    x = _as_float(value)
+    if x is None:
+        return value
+    r = (x - 32) * 5 / 9
+    return str(int(r)) if r == int(r) else str(r)
+
+
 def _t_replace(value: str, arg: Any) -> str:
     if not isinstance(arg, dict):
         return value
@@ -241,6 +275,10 @@ TRANSFORM_REGISTRY: dict[str, Callable[[str, Any], str]] = {
     'abs': _t_abs,
     'multiply': _t_multiply,
     'add': _t_add,
+    'subtract': _t_subtract,
+    'divide': _t_divide,
+    'celsius_to_fahrenheit': _t_celsius_to_fahrenheit,
+    'fahrenheit_to_celsius': _t_fahrenheit_to_celsius,
     'replace': _t_replace,
     'prefix': _t_prefix,
     'suffix': _t_suffix,
@@ -250,12 +288,12 @@ TRANSFORM_REGISTRY: dict[str, Callable[[str, Any], str]] = {
 #: Transform names that take no argument (simple string form only).
 NO_ARG_TRANSFORMS: frozenset[str] = frozenset({
     'upper', 'lower', 'title', 'capitalize', 'titlecase', 'pascalcase',
-    'camelcase', 'strip', 'abs',
+    'camelcase', 'strip', 'abs', 'celsius_to_fahrenheit', 'fahrenheit_to_celsius',
 })
 
 #: Transform names that require an argument (must be given as a mapping).
 REQUIRED_ARG_TRANSFORMS: frozenset[str] = frozenset({
-    'multiply', 'add', 'replace', 'prefix', 'suffix', 'format',
+    'multiply', 'add', 'subtract', 'divide', 'replace', 'prefix', 'suffix', 'format',
 })
 
 #: Transform names that accept an optional numeric argument (decimal places).
