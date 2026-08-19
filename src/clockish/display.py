@@ -2075,6 +2075,11 @@ def _attempt_config_reload() -> None:
     _display_cfg = new_display_cfg
     _orientation = _config.get('orientation')
     _resolve_colors(_config)  # re-resolve color overrides from new config
+
+    # Reset default font path in case config specifies different default_font
+    global _FONT_PATH
+    _FONT_PATH = _find_font(_config.get('default_font', 'DejaVuSans.ttf'))
+
     _init_layout()
 
     # Reload default font variables (used by some renderers)
