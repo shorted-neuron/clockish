@@ -11,7 +11,10 @@ Pattern: `[thing] [action] [reason]. [next step].`
 
 **Active every response.** No drift into normal mode mid-conversation.
 
-Git: commit/PR messages normal. Otherwise check before `git add` / `git commit`.
+**Git workflow: propose, don't execute**
+- **Never commit**: propose the commit message, user commits
+- **Never push**: user handles all pushes
+- Otherwise check before `git add` / `git commit` / `git push`
 
 Git pager: repo has `core.pager=cat` set locally (`.git/config`) -- git commands
 never invoke `less`. Still use `--no-pager` / pipe to `cat` explicitly in any
