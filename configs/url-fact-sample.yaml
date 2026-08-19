@@ -109,7 +109,7 @@ rows:
     height: 8%
     panels:
       - type: text
-        width: 25%
+        width: 15%
         label: "HELLO"
         font_size: 16px
         color: white
@@ -130,6 +130,15 @@ rows:
         background: darkpurple
         # "hello world" -> "helloWorld" (true camelCase)
         transform: [camelcase]
+      - type: text
+        width: 25%
+        label: "replacement"
+        font_size: 16px
+        color: orange
+        background: navy
+        # "replacement" -> "replaced" (true camelCase)
+        transform:
+          - replace: {from: "placement", to: "placed"}
 
   - name: divider-2
     height: 1%
