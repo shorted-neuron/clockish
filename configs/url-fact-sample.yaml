@@ -136,7 +136,7 @@ rows:
         font_size: 16px
         color: orange
         background: navy
-        # "replacement" -> "replaced" (true camelCase)
+        # "replacement" -> "replaced"
         transform:
           - replace: {from: "placement", to: "placed"}
 
