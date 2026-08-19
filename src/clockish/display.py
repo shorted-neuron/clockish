@@ -1083,7 +1083,12 @@ def _fit_font(path: str, text: str, avail_w: int, avail_h: int,
         return cached
 
     def _fits(size: int) -> bool:
-        f = ImageFont.truetype(path, size)
+        try:
+            f = ImageFont.truetype(path, size)
+        except OSError as e:
+            if DEBUG:
+                print(f"DEBUG: _fit_font failed to load font at '{path}' size {size}: {e}")
+            raise
         if numeric:
             ink_top, ink_h = _numeric_ink_metrics(f)
         else:
@@ -2059,10 +2064,11 @@ def _attempt_config_reload() -> None:
     # Stop and rejoin old cached-facts workers before reinitializing
     _stop_cached_facts()
 
-    # Clear font caches before re-running layout
+    # Clear all font caches before re-running layout
     global bigfont, medfont, font, smallfont, tiny
     _FONTS.clear()
     _FIT_FONT_CACHE.clear()
+    _NUMERIC_INK_CACHE.clear()
 
     # Swap in the new config and rebuild layout
     _config = new_config
