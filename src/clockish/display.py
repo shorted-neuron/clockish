@@ -2064,6 +2064,7 @@ def _attempt_config_reload() -> None:
     _config = new_config
     _display_cfg = new_display_cfg
     _orientation = _config.get('orientation')
+    _resolve_colors(_config)  # re-resolve color overrides from new config
     _init_layout()
 
     print(f"Config reloaded successfully.")
