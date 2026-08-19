@@ -2059,8 +2059,10 @@ def _attempt_config_reload() -> None:
     # Stop and rejoin old cached-facts workers before reinitializing
     _stop_cached_facts()
 
-    # Clear font cache before re-running layout
+    # Clear font caches before re-running layout
+    global bigfont, medfont, font, smallfont, tiny
     _FONTS.clear()
+    _FIT_FONT_CACHE.clear()
 
     # Swap in the new config and rebuild layout
     _config = new_config
@@ -2068,6 +2070,13 @@ def _attempt_config_reload() -> None:
     _orientation = _config.get('orientation')
     _resolve_colors(_config)  # re-resolve color overrides from new config
     _init_layout()
+
+    # Reload default font variables (used by some renderers)
+    bigfont   = _get_font('big')
+    medfont   = _get_font('med')
+    font      = _get_font('normal')
+    smallfont = _get_font('small')
+    tiny      = _get_font('tiny')
 
     print(f"Config reloaded successfully.")
 
