@@ -2033,7 +2033,7 @@ def _attempt_config_reload() -> None:
         _cfg_path = _args.config or _DEFAULT_CONFIG
         _vr = _validate_cfg(new_config, path=_cfg_path, run_yamllint=False)
         if _vr.has_errors:
-            print(f"WARNING: config reload aborted (validation errors):", file=sys.stderr)
+            print("WARNING: config reload aborted (validation errors):", file=sys.stderr)
             _vr.print_summary(file=sys.stderr)
             return
         elif _vr.issues:
@@ -2109,7 +2109,7 @@ def _attempt_config_reload() -> None:
         # Non-fatal: if no workers exist (preview mode) or other issue, ignore.
         pass
 
-    print(f"Config reloaded successfully.")
+    print("Config reloaded successfully.")
 
 
 # ---------------------------------------------------------------------------

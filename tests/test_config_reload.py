@@ -158,9 +158,6 @@ class TestReloadConfigValidation:
 
     def test_attempt_config_reload_with_valid_config(self, temp_config):
         """Reload with valid config should swap it in."""
-        # Save the original config
-        orig_config = display._config.copy()
-
         # Modify the config file
         new_config_data = {
             'orientation': 'landscape',
@@ -186,9 +183,6 @@ class TestReloadConfigValidation:
 
     def test_attempt_config_reload_with_broken_config(self, temp_config):
         """Reload with invalid config should keep old config in place."""
-        # Save the original config
-        orig_config = display._config.copy()
-
         # Write broken YAML
         with open(temp_config, 'w') as f:
             f.write('{ invalid yaml ][')
