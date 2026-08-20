@@ -108,6 +108,11 @@ After running `install.sh`, three scripts are available at the repo root:
 
 # Install as a systemd service — starts on every boot automatically:
 ./run-clockish.sh --install-service
+
+# ... or with a specific config ...
+./run-clockish.sh --install-service configs/seven-segment.yaml
+
+# edit config with your favorite editor, clockish will reload it automatically every 10 seconds or so!
 ```
 
 Pass `--debug` to print per-frame timing, or `--debug-layout` to render one frame and exit.

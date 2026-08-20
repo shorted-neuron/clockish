@@ -194,7 +194,7 @@ _KNOWN_ROW_KEYS: frozenset[str] = frozenset({
 
 #: Valid top-level config keys.
 _KNOWN_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
-    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size', 'cached-facts',
+    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size', 'cached-facts', 'reload',
 })
 
 #: Format for preview_size: "WxH", e.g. "240x135". Preview-tool only; ignored by production.
@@ -515,6 +515,21 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                         "cached-facts entry has 'verify_ssl' but URL is http:// "
                         "(verify_ssl ignored for http)",
                     )
+
+    # -- reload section ---------------------------------------------------
+    reload_cfg = config.get('reload')
+    if reload_cfg is not None:
+        if not isinstance(reload_cfg, dict):
+            err('reload', "'reload' must be a mapping")
+        else:
+            for key in reload_cfg:
+                if key not in ('poll_interval',):
+                    warn('reload', f"unexpected key '{key}' in reload section")
+
+            poll_interval = reload_cfg.get('poll_interval')
+            if poll_interval is not None:
+                if not isinstance(poll_interval, str) or not _is_valid_interval(poll_interval):
+                    err('reload', f"poll_interval '{poll_interval}' must be a string in format <number>[s|m|h]")
 
     # -- rows ---------------------------------------------------------------
     rows = config.get('rows')

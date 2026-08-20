@@ -114,7 +114,7 @@ class TestLiveMode:
             time.sleep(0.01)
         assert fetch_count['n'] == 1
 
-        cd._handle_sigusr1(None, None)
+        cd._handle_sigusr2_cached_facts(None, None)
 
         for _ in range(50):
             if fetch_count['n'] >= 2:
@@ -144,7 +144,7 @@ class TestRetryBackoff:
 
         # Wake the worker; it will fetch again (fails this time) but must
         # keep showing the last good raw value instead of clearing it.
-        cd._handle_sigusr1(None, None)
+        cd._handle_sigusr2_cached_facts(None, None)
         for _ in range(50):
             if cd._cached_facts_cache.get('weather', {}).get('ok') is False:
                 break

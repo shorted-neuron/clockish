@@ -117,12 +117,20 @@ _cpu_stat_prev: tuple[int, int] = (0, 0)
 # under the GIL without needing an explicit lock.
 #   name -> {'raw': str | None, 'ok': bool}
 _cached_facts_cache: dict = {}
-#: name -> threading.Event  --  set by SIGUSR1 to wake a worker thread early
+#: name -> threading.Event  --  set by SIGUSR2 to wake a worker thread early
 #: (forces an immediate refetch instead of waiting out its current backoff).
 _cached_facts_events: dict = {}
+#: name -> threading.Event  --  stop signal for each worker thread.
+_cached_facts_stop_events: dict = {}
 #: name -> threading.Thread  --  daemon workers; kept around for debugging /
 #: introspection only, never joined (process exit kills them).
 _cached_facts_threads: dict = {}
+
+# config reload: background file watcher + main-thread reload orchestration.
+_reload_event: threading.Event = threading.Event()  # set by watcher or signal handler
+_reload_watcher_thread: threading.Thread | None = None  # file mtime watcher
+_reload_watcher_stop: threading.Event = threading.Event()  # stop signal for watcher
+_resolved_display_config: dict = {}  # snapshot of last-applied display: section
 
 
 # ---------------------------------------------------------------------------
@@ -811,15 +819,19 @@ def _cached_fact_worker(name: str, url: str, interval_secs: int, timeout: int,
     (never cleared) and the retry backs off: starts at interval/10 (min 1s),
     doubles on each consecutive failure, capped at the full interval -- so a
     transient outage retries soon, but a persistent one settles down to the
-    normal cadence instead of hammering the remote endpoint.
+    normal cadence instead of hammering the remote endpoint. Exits when the
+    stop event is set (on config reload).
     """
     event = _cached_facts_events[name]
+    stop_event = _cached_facts_stop_events[name]
     if stagger_delay > 0 and event.wait(timeout=stagger_delay):
+        if stop_event.is_set():
+            return
         event.clear()
 
     consecutive_failures = 0
     base_retry = max(1, interval_secs // 10)
-    while True:
+    while not stop_event.is_set():
         text, status_code = _fetch_url_raw(url, timeout, verify_ssl)
         prev = _cached_facts_cache.get(name) or {}
         if text is not None:
@@ -838,7 +850,18 @@ def _cached_fact_worker(name: str, url: str, interval_secs: int, timeout: int,
                       f"retrying in {delay}s (failures={consecutive_failures})")
 
         if event.wait(timeout=delay):
-            event.clear()  # woken early (SIGUSR1) -- loop immediately, refetch now
+            event.clear()  # woken early (SIGUSR2) -- loop immediately, refetch now
+
+
+def _stop_cached_facts() -> None:
+    """Stop all running cached-facts worker threads (blocking)."""
+    global _cached_facts_stop_events, _cached_facts_events, _cached_facts_threads
+    for stop_event in _cached_facts_stop_events.values():
+        stop_event.set()
+    for event in _cached_facts_events.values():
+        event.set()  # wake threads from event.wait() so they check stop_event
+    for t in _cached_facts_threads.values():
+        t.join(timeout=5)
 
 
 def _init_cached_facts(config: dict) -> None:
@@ -850,9 +873,10 @@ def _init_cached_facts(config: dict) -> None:
     verbatim if given, else fetches once synchronously so data is ready
     before the frame is rendered ("immediate" fetch, per design).
     """
-    global _cached_facts_cache, _cached_facts_events, _cached_facts_threads
+    global _cached_facts_cache, _cached_facts_events, _cached_facts_stop_events, _cached_facts_threads
     _cached_facts_cache = {}
     _cached_facts_events = {}
+    _cached_facts_stop_events = {}
     _cached_facts_threads = {}
 
     entries = config.get('cached-facts') or []
@@ -870,6 +894,7 @@ def _init_cached_facts(config: dict) -> None:
         preview_response = entry.get('preview_response')
 
         _cached_facts_events[name] = threading.Event()
+        _cached_facts_stop_events[name] = threading.Event()
 
         if _PREVIEW_MODE:
             if preview_response:
@@ -890,13 +915,20 @@ def _init_cached_facts(config: dict) -> None:
         t.start()
 
 
-def _handle_sigusr1(signum, frame):
-    """SIGUSR1 handler: wake every cached-facts worker thread to refetch now
+def _handle_sigusr1_reload(signum, frame):
+    """SIGUSR1 handler: trigger a full config reload."""
+    _reload_event.set()
+    if DEBUG:
+        print("DEBUG: SIGUSR1 received; triggering config reload")
+
+
+def _handle_sigusr2_cached_facts(signum, frame):
+    """SIGUSR2 handler: wake every cached-facts worker thread to refetch now
     (instead of waiting out its current interval/backoff)."""
     for ev in _cached_facts_events.values():
         ev.set()
     if DEBUG:
-        print("DEBUG: SIGUSR1 received; waking all cached-facts workers for immediate refetch")
+        print("DEBUG: SIGUSR2 received; waking all cached-facts workers for immediate refetch")
 
 
 # ---------------------------------------------------------------------------
@@ -1051,7 +1083,12 @@ def _fit_font(path: str, text: str, avail_w: int, avail_h: int,
         return cached
 
     def _fits(size: int) -> bool:
-        f = ImageFont.truetype(path, size)
+        try:
+            f = ImageFont.truetype(path, size)
+        except OSError as e:
+            if DEBUG:
+                print(f"DEBUG: _fit_font failed to load font at '{path}' size {size}: {e}")
+            raise
         if numeric:
             ink_top, ink_h = _numeric_ink_metrics(f)
         else:
@@ -1891,6 +1928,191 @@ def show_rows():
 
 
 # ---------------------------------------------------------------------------
+# Config reload helpers
+# ---------------------------------------------------------------------------
+def _resolve_config(config: dict, args) -> tuple[dict, dict]:
+    """Resolve the config's display: section from profile file if needed.
+
+    Returns: (config with 'display' section ensured, resolved_display_dict)
+    """
+    if 'display' not in config:
+        _profile_path = _find_display_profile(args.config)
+        if _profile_path:
+            print(f"Loading display profile: {_profile_path}")
+            with open(_profile_path) as _pf:
+                _profile = yaml.safe_load(_pf) or {}
+            if 'display' not in _profile:
+                raise ValueError(f"display profile '{_profile_path}' has no 'display:' section")
+            config['display'] = _profile['display']
+        else:
+            raise ValueError(
+                "no 'display:' section in config and no display profile found.\n"
+                "  Tried: display.yaml alongside config, ~/.config/clockish/display.yaml\n"
+                "  Fix:   run install.sh to set up a display profile, or copy one from\n"
+                "         configs/display/ to ~/.config/clockish/display.yaml"
+            )
+    return config, config.get('display', {})
+
+
+def _init_driver_and_canvas(display_cfg: dict) -> tuple:
+    """Initialize the display driver and PIL canvas.
+
+    Returns: (lcd, width, height, image, draw)
+    """
+    rotation = display_cfg.get('rotation', 0)
+    lcd = load_driver(display_cfg).begin()
+    w, h = lcd.dimensions
+    img = Image.new("RGB", (w, h))
+    drw = ImageDraw.Draw(img)
+    drw.rectangle((0, 0, w, h), outline=0, fill=0)
+    print(f'Initialized display: {w}x{h} rotation={rotation}, '
+          f'landscape={lcd.is_landscape}, dimensions={lcd.dimensions}')
+    return lcd, w, h, img, drw
+
+
+def _config_reload_watcher(config_path: str, poll_interval_secs: float) -> None:
+    """Background daemon thread: watch config file mtime, trigger reload on change."""
+    global _reload_watcher_stop
+    last_mtime = None
+    try:
+        last_mtime = os.path.getmtime(config_path)
+    except OSError:
+        pass
+
+    while not _reload_watcher_stop.is_set():
+        if _reload_watcher_stop.wait(timeout=poll_interval_secs):
+            break  # stop event set; exit cleanly
+        try:
+            current_mtime = os.path.getmtime(config_path)
+            if last_mtime is not None and current_mtime != last_mtime:
+                if DEBUG:
+                    print(f"DEBUG: config file changed ({last_mtime} -> {current_mtime})")
+                _reload_event.set()
+            last_mtime = current_mtime
+        except OSError:
+            pass
+
+
+def _start_reload_watcher(config_path: str, poll_interval_secs: float) -> None:
+    """Start the config reload watcher thread (skipped in preview mode)."""
+    global _reload_watcher_thread, _reload_watcher_stop
+    if _PREVIEW_MODE:
+        return
+    _reload_watcher_stop.clear()
+    _reload_watcher_thread = threading.Thread(
+        target=_config_reload_watcher,
+        args=(config_path, poll_interval_secs),
+        daemon=True,
+    )
+    _reload_watcher_thread.start()
+    if DEBUG:
+        print(f"DEBUG: config reload watcher started (poll_interval={poll_interval_secs}s)")
+
+
+def _attempt_config_reload() -> None:
+    """Attempt to reload the config from disk. On failure, log a warning and continue."""
+    global _config, _display_cfg, _resolved_display_config
+    global width, height, rotation, image, draw, lcd, _orientation, _FONTS, _LAYOUT
+
+    try:
+        new_config = _load_config(_args.config)
+    except Exception as e:
+        print(f"WARNING: config reload failed to load: {e}", file=sys.stderr)
+        return
+
+    # Resolve display profile
+    try:
+        new_config, new_display_cfg = _resolve_config(new_config, _args)
+    except Exception as e:
+        print(f"WARNING: config reload failed to resolve display profile: {e}", file=sys.stderr)
+        return
+
+    # Validate the new config
+    try:
+        from clockish.config_validator import validate_config_dict as _validate_cfg
+        _cfg_path = _args.config or _DEFAULT_CONFIG
+        _vr = _validate_cfg(new_config, path=_cfg_path, run_yamllint=False)
+        if _vr.has_errors:
+            print("WARNING: config reload aborted (validation errors):", file=sys.stderr)
+            _vr.print_summary(file=sys.stderr)
+            return
+        elif _vr.issues:
+            # Warnings are OK; print but continue
+            _vr.print_summary(file=sys.stderr)
+    except Exception as e:
+        print(f"WARNING: config reload validation failed: {e}", file=sys.stderr)
+        return
+
+    # Check if display section changed; if so, reinit driver
+    display_changed = new_display_cfg != _resolved_display_config
+    if display_changed:
+        try:
+            old_lcd = lcd
+            new_lcd, new_width, new_height, new_image, new_draw = _init_driver_and_canvas(new_display_cfg)
+            old_lcd.close()
+            width = new_width
+            height = new_height
+            image = new_image
+            draw = new_draw
+            lcd = new_lcd
+            rotation = new_display_cfg.get('rotation', 0)
+            _resolved_display_config = new_display_cfg
+        except Exception as e:
+            print(f"WARNING: config reload driver reinit failed: {e}", file=sys.stderr)
+            return
+
+    # Stop and rejoin old cached-facts workers before reinitializing
+    _stop_cached_facts()
+
+    # Clear all font caches before re-running layout
+    global bigfont, medfont, font, smallfont, tiny
+    _FONTS.clear()
+    _FIT_FONT_CACHE.clear()
+    _NUMERIC_INK_CACHE.clear()
+    # Reset the built-in scale-loaded flag so _get_font() rebuilds the
+    # named scale fonts (giant/huge/.../micro) using the new default_font.
+    global _SCALE_FONTS_LOADED
+    _SCALE_FONTS_LOADED = False
+    # Clear derived caches that key by font path so metrics are recomputed
+    # for the newly loaded font files (avoid mixing old metrics with new fonts).
+    _WIDEST_CHAR_CACHE.clear()
+    _WIDEST_STRING_CACHE.clear()
+    _CLOCK_REFERENCE_CACHE.clear()
+
+    # Swap in the new config and rebuild layout
+    _config = new_config
+    _display_cfg = new_display_cfg
+    _orientation = _config.get('orientation')
+    _resolve_colors(_config)  # re-resolve color overrides from new config
+
+    # Reset default font path in case config specifies different default_font
+    global _FONT_PATH
+    _FONT_PATH = _find_font(_config.get('default_font', 'DejaVuSans.ttf'))
+
+    _init_layout()
+
+    # Reload default font variables (used by some renderers)
+    bigfont   = _get_font('big')
+    medfont   = _get_font('med')
+    font      = _get_font('normal')
+    smallfont = _get_font('small')
+    tiny      = _get_font('tiny')
+
+    # Wake cached-facts worker threads immediately so they fetch any new/changed
+    # URLs from the reloaded config (equivalent to delivering SIGUSR2).
+    try:
+        for ev in _cached_facts_events.values():
+            ev.set()
+        if DEBUG:
+            print("DEBUG: Waking cached-facts workers after config reload")
+    except Exception:
+        # Non-fatal: if no workers exist (preview mode) or other issue, ignore.
+        pass
+
+    print("Config reloaded successfully.")
+
+
+# ---------------------------------------------------------------------------
 # One-time initialization  --  called by main() before the display loop.
 # ---------------------------------------------------------------------------
 def _init() -> None:
@@ -1900,7 +2122,7 @@ def _init() -> None:
     _init() / main() should depend on them being available at import time.
     """
     global _args, DEBUG, DEBUG_LAYOUT
-    global _config, _display_cfg, width, height, rotation
+    global _config, _display_cfg, _resolved_display_config, width, height, rotation
     global image, draw, padding, top, bottom, x
     global lcd, _orientation
     global _FONT_PATH
@@ -1933,46 +2155,25 @@ def _init() -> None:
     except Exception as _ve:
         print(f"WARNING: config validation failed unexpectedly: {_ve}", file=sys.stderr)
 
-    if 'display' not in _config:
-        _profile_path = _find_display_profile(_args.config)
-        if _profile_path:
-            print(f"Loading display profile: {_profile_path}")
-            with open(_profile_path) as _pf:
-                _profile = yaml.safe_load(_pf) or {}
-            if 'display' not in _profile:
-                sys.exit(f"ERROR: display profile '{_profile_path}' has no 'display:' section")
-            _config['display'] = _profile['display']
-        else:
-            sys.exit(
-                "ERROR: no 'display:' section in config and no display profile found.\n"
-                "  Tried: display.yaml alongside config, ~/.config/clockish/display.yaml\n"
-                "  Fix:   run install.sh to set up a display profile, or copy one from\n"
-                "         configs/display/ to ~/.config/clockish/display.yaml"
-            )
+    # Resolve display profile and ensure 'display' section exists
+    try:
+        _config, _display_cfg = _resolve_config(_config, _args)
+    except Exception as e:
+        sys.exit(f"ERROR: {e}")
 
-    # --- Display dimensions and PIL canvas ---------------------------------
-    _display_cfg = _config.get('display', {})
+    _resolved_display_config = _display_cfg
     rotation = _display_cfg.get('rotation', 0)
 
-    # --- Hardware ------------------------------------------------------
-    # Init the driver FIRST: some drivers (e.g. framebuffer) auto-detect
-    # their real width/height from hardware at begin() time, which may
-    # differ from (or be entirely absent from) the config. lcd.dimensions
-    # is the authoritative after this point.
-    lcd = load_driver(_display_cfg).begin()
-    width, height = lcd.dimensions
-
-    image = Image.new("RGB", (width, height))
-    draw  = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, width, height), outline=0, fill=0)
+    # --- Hardware and PIL canvas ---
+    try:
+        lcd, width, height, image, draw = _init_driver_and_canvas(_display_cfg)
+    except Exception as e:
+        sys.exit(f"ERROR: {e}")
 
     padding = 0
     top     = padding
     bottom  = height - padding
     x       = 0
-
-    print(f'Initialized display: {width}x{height} rotation={rotation}, '
-          f'landscape={lcd.is_landscape}, dimensions={lcd.dimensions}')
 
     _orientation = _config.get('orientation')
     if _orientation:
@@ -2007,15 +2208,29 @@ def _init() -> None:
     _init_layout()
 
     # --- Register signal handlers -------------------------------------------
-    # SIGUSR1: wake all cached-facts worker threads for an immediate refetch
-    # (gracefully ignored on Windows, which has no SIGUSR1).
+    # SIGUSR1: trigger a full config reload
+    # SIGUSR2: wake all cached-facts worker threads for an immediate refetch
+    # (gracefully ignored on Windows, which has no SIGUSR1/SIGUSR2).
     try:
-        signal.signal(signal.SIGUSR1, _handle_sigusr1)
+        signal.signal(signal.SIGUSR1, _handle_sigusr1_reload)
         if DEBUG:
-            print("SIGUSR1 signal handler registered for cached-facts refetch")
+            print("SIGUSR1 signal handler registered for config reload")
     except (AttributeError, ValueError):
         # Windows doesn't have SIGUSR1; silently continue
         pass
+    try:
+        signal.signal(signal.SIGUSR2, _handle_sigusr2_cached_facts)
+        if DEBUG:
+            print("SIGUSR2 signal handler registered for cached-facts refetch")
+    except (AttributeError, ValueError):
+        # Windows doesn't have SIGUSR2; silently continue
+        pass
+
+    # --- Start config reload watcher thread ---
+    reload_cfg = _config.get('reload', {})
+    poll_interval = reload_cfg.get('poll_interval', '10s')
+    poll_interval_secs = _parse_interval(poll_interval)
+    _start_reload_watcher(_args.config or _DEFAULT_CONFIG, poll_interval_secs)
 
 
 # ---------------------------------------------------------------------------
@@ -2042,6 +2257,11 @@ def main():
             DEBUG_LAYOUT = False
 
         while True:
+            # Check for config reload request (from watcher or signal handler)
+            if _reload_event.is_set():
+                _reload_event.clear()
+                _attempt_config_reload()
+
             show_rows()
             # Sleep until the next whole second boundary.
             now_mono = time.monotonic()
@@ -2052,6 +2272,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        # Stop reload watcher and cached-facts workers
+        _reload_watcher_stop.set()
+        _stop_cached_facts()
         # Do not blank the display on exit  --  lets you see where it stopped.
         # GPIO.cleanup() is not needed  --  rpi-lgpio facade handles it.
         lcd.close()
