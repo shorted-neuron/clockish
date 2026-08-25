@@ -16,6 +16,7 @@ display:
   width:    480
   height:   320
   rotation: 180       # 180 = LOWER_RIGHT origin (landscape on screen)
+  clear_on_exit: false
 
   # Optional overrides (defaults shown):
   # sku:          MPI3501   # MPI3501 (RGB666) | MHS3528 (RGB565)

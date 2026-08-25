@@ -79,6 +79,13 @@ def load_driver(display_cfg: dict) -> DisplayDriver:
     import importlib
     module = importlib.import_module(module_name)
     cls = getattr(module, class_name)
+    # If the display config did not explicitly set 'clear_on_exit', use the
+    # driver's class-level default (DEFAULT_CLEAR_ON_EXIT) when present.
+    if 'clear_on_exit' not in display_cfg:
+        try:
+            display_cfg['clear_on_exit'] = bool(getattr(cls, 'DEFAULT_CLEAR_ON_EXIT', False))
+        except Exception:
+            display_cfg['clear_on_exit'] = False
     return cls(display_cfg)
 
 

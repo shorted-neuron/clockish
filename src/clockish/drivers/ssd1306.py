@@ -63,6 +63,10 @@ ssd1306_mod = None
 class SSD1306Driver(DisplayDriver):
     """Concrete :class:`~clockish.drivers.base.DisplayDriver` for SSD1306 OLED panels."""
 
+    # Default to clearing the OLED on process exit unless the user explicitly
+    # sets `display.clear_on_exit: false` in their profile.
+    DEFAULT_CLEAR_ON_EXIT: bool = True
+
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._lcd = None
@@ -113,6 +117,26 @@ class SSD1306Driver(DisplayDriver):
                 pass
         self._i2c = None
         self._lcd = None
+
+    def clear(self) -> None:
+        """Clear the OLED display (black)."""
+        if self._lcd is None:
+            return
+        try:
+            # Adafruit SSD1306: fill(0) then show() clears the display
+            if hasattr(self._lcd, 'fill'):
+                self._lcd.fill(0)
+            else:
+                # Fallback: send an all-black PIL image
+                img = Image.new('1', (self._width, self._height), 0)
+                try:
+                    self._lcd.image(img)
+                except Exception:
+                    pass
+            self._lcd.show()
+        except Exception:
+            # Best-effort: ignore any errors during shutdown
+            pass
 
     @property
     def dimensions(self) -> tuple[int, int]:

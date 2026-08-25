@@ -19,6 +19,14 @@ from PIL import Image
 class DisplayDriver(ABC):
     """Abstract interface that every display backend must satisfy.
 
+    Drivers MAY set the class attribute ``DEFAULT_CLEAR_ON_EXIT`` to True to
+    indicate that, if the display's config does not explicitly set
+    ``clear_on_exit:`` in the display profile, the driver should default to
+    clearing the panel when clockish exits.  The base class default is False.
+    """
+    DEFAULT_CLEAR_ON_EXIT: bool = False
+    """Abstract interface that every display backend must satisfy.
+
     Life-cycle
     ----------
     1. Instantiate with the ``display`` config dict:
@@ -70,6 +78,16 @@ class DisplayDriver(ABC):
 
         Called once on clean shutdown.  No-op by default.
         """
+        return
+
+    def clear(self) -> None:
+        """Clear the display's contents (driver-specific).  No-op by default.
+
+        Drivers that support an efficient hardware clear (e.g., SSD1306's
+        ``fill(0); show()``) should override this to implement a proper blank
+        screen on exit.
+        """
+        return
 
     # ------------------------------------------------------------------
     # Derived properties

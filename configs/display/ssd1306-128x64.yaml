@@ -10,7 +10,8 @@ display:
   width:        128
   height:       64
   rotation:     0
-  i2c_addr:     0x3C
+  clear_on_exit: true  # this is an oled, so prevent burn in by clearing on exit
+  # i2c_addr:     0x3C  # optional, default: 0x3C is most common
   # Optional pin overrides (default: board.SCL / board.SDA)
   # scl_pin:     ~
   # sda_pin:     ~
