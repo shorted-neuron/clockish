@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import atexit
 import datetime
 import functools
 import json
@@ -19,7 +20,6 @@ import urllib.error
 import urllib.request
 import zoneinfo  # before yaml
 from contextlib import contextmanager  # before yaml
-import atexit
 
 import yaml
 
