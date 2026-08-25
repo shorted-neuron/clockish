@@ -1,0 +1,41 @@
+---
+# tiny.yaml  --  minimal 128x64 OLED layout
+# ---------------------------------------------------------------------------
+# Intended for a 128x64 monochrome SSD1306 panel with the display profile:
+#   configs/display/ssd1306-128x64.yaml
+# ---------------------------------------------------------------------------
+
+orientation: landscape
+preview_size: 128x64
+
+rows:
+  - name: time-row
+    height: 40%
+    panels:
+      - type: clock
+        time_format: 24hs
+        label: ""
+        justify: center
+        color: white
+        font_size: auto
+
+  - name: ip-row
+    height: 30%
+    panels:
+      - type: fact
+        source: ip
+        color: white
+        width: 75%
+        font_size: auto
+
+  - name: net-row
+    height: 30%
+    panels:
+      - type: wifi_graphic
+        width: 25%
+        color: white
+        background: black
+      - type: date
+        date_format: "%a %b %-d"
+        color: grey
+        font_size: auto

@@ -37,6 +37,7 @@ _DRIVER_REGISTRY: dict[str, tuple[str, str]] = {
     "ili9486":     ("clockish.drivers.ili9486",     "ILI9486Driver"),
     "st7789":      ("clockish.drivers.st7789",      "ST7789Driver"),
     "framebuffer": ("clockish.drivers.framebuffer", "FramebufferDriver"),
+    "ssd1306":     ("clockish.drivers.ssd1306",     "SSD1306Driver"),
 }
 
 

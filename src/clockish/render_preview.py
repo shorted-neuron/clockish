@@ -105,6 +105,31 @@ sys.modules["pyili9486"]                        = _pyili_mod
 sys.modules["pyili9486.gpio"]                   = _pyili_gpio_mod
 sys.modules["pyili9486.gpio.rpilgpio_facade"]   = _pyili_gpio_facade_mod
 
+# --- Adafruit SSD1306 / Blinka stub ---
+_board_mod = types.ModuleType("board")
+_board_mod.SCL = None
+_board_mod.SDA = None
+_busio_mod = types.ModuleType("busio")
+_busio_mod.I2C = lambda *a, **kw: None
+
+class _SSD1306Stub:
+    def __init__(self, *a, **kw):
+        self.width = int(a[0]) if len(a) > 0 else 128
+        self.height = int(a[1]) if len(a) > 1 else 64
+    def image(self, *a, **kw):
+        pass
+    def show(self):
+        pass
+    def fill(self, *a, **kw):
+        pass
+
+_ssd1306_mod = types.ModuleType("adafruit_ssd1306")
+_ssd1306_mod.SSD1306_I2C = _SSD1306Stub
+
+sys.modules["board"] = _board_mod
+sys.modules["busio"] = _busio_mod
+sys.modules["adafruit_ssd1306"] = _ssd1306_mod
+
 # --- yaml stub (only if not installed) ---
 try:
     import yaml  # noqa: F401

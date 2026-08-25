@@ -1,0 +1,16 @@
+---
+# ssd1306  --  128x64 1-bit tiny OLED display
+# ---------------------------------------------------------------------------
+# Use this profile with a monochrome 128x64 SSD1306 panel, e.g.:
+#   clockish --display configs/display/ssd1306-128x64.yaml configs/tiny.yaml
+# ---------------------------------------------------------------------------
+
+display:
+  driver:       ssd1306
+  width:        128
+  height:       64
+  rotation:     0
+  i2c_addr:     0x3C
+  # Optional pin overrides (default: board.SCL / board.SDA)
+  # scl_pin:     ~
+  # sda_pin:     ~
