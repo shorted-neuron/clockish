@@ -388,7 +388,7 @@ fi
 if [[ "$IS_RPI" == true ]]; then
     $INSTALL_ILI9486 && PIP_PACKAGES+=("pyili9486>=1.0.0")
     $INSTALL_ST7789  && PIP_PACKAGES+=("st7789>=1.0.0" "gpiod>=2.0" "gpiodevice>=0.0.4")
-    $INSTALL_SSD1306 && PIP_PACKAGES+=("adafruit-blinka>=8.0" "adafruit-circuitpython-ssd1306>=5.0")
+    $INSTALL_SSD1306 && PIP_PACKAGES+=("adafruit-blinka>=8.0" "adafruit-circuitpython-ssd1306>=2.12.24")
 fi
 
 info "Installing pip packages..."
