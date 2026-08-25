@@ -78,7 +78,11 @@ class SSD1306Driver(DisplayDriver):
         _try_import()
         cfg = self._cfg
 
-        addr = int(cfg.get("i2c_addr", 0x3C), 0) if isinstance(cfg.get("i2c_addr"), str) else int(cfg.get("i2c_addr", 0x3C))
+        raw_addr = cfg.get("i2c_addr", 0x3C)
+        if isinstance(raw_addr, str):
+            addr = int(raw_addr, 0)
+        else:
+            addr = int(raw_addr)
         scl = cfg.get("scl_pin", None)
         sda = cfg.get("sda_pin", None)
 
