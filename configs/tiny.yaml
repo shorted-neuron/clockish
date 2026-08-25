@@ -24,8 +24,8 @@ rows:
     panels:
       - type: fact
         source: ip
-        color: white
-        width: 75%
+        background: white
+        color: black
         font_size: auto
 
   - name: net-row
