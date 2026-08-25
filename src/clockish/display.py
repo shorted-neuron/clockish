@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import atexit
 import datetime
 import functools
 import json
@@ -125,6 +126,9 @@ _cached_facts_stop_events: dict = {}
 #: name -> threading.Thread  --  daemon workers; kept around for debugging /
 #: introspection only, never joined (process exit kills them).
 _cached_facts_threads: dict = {}
+
+# Guard to avoid running exit cleanup multiple times (signal + atexit + finally)
+_exiting = False
 
 # config reload: background file watcher + main-thread reload orchestration.
 _reload_event: threading.Event = threading.Event()  # set by watcher or signal handler
@@ -2113,6 +2117,55 @@ def _attempt_config_reload() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Cleanup utilities  --  try to clear and close the display on exit
+# ---------------------------------------------------------------------------
+
+def _cleanup() -> None:
+    """Best-effort cleanup: stop background threads, optionally clear the
+    display (honouring display.clear_on_exit), then close the driver.
+
+    Guarded to run only once even if invoked from multiple exit hooks.
+    """
+    global _exiting, lcd
+    if _exiting:
+        return
+    _exiting = True
+
+    try:
+        # Stop reload watcher and cached-facts workers
+        _reload_watcher_stop.set()
+        _stop_cached_facts()
+    except Exception:
+        pass
+
+    try:
+        should_clear = bool(_resolved_display_config.get('clear_on_exit', False))
+    except Exception:
+        should_clear = False
+
+    if should_clear and lcd is not None:
+        try:
+            # Prefer driver-provided clear() hook; fallback to blank() if missing
+            if hasattr(lcd, 'clear'):
+                lcd.clear()
+            else:
+                # Draw a black image and push it
+                draw.rectangle((0, 0, width, height), fill=0)
+                try:
+                    lcd.display(image)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    try:
+        if lcd is not None:
+            lcd.close()
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # One-time initialization  --  called by main() before the display loop.
 # ---------------------------------------------------------------------------
 def _init() -> None:
@@ -2232,6 +2285,34 @@ def _init() -> None:
     poll_interval_secs = _parse_interval(poll_interval)
     _start_reload_watcher(_args.config or _DEFAULT_CONFIG, poll_interval_secs)
 
+    # Register process-exit cleanup handlers: atexit and common termination signals.
+    try:
+        atexit.register(_cleanup)
+    except Exception:
+        pass
+
+    def _signal_terminate(signum, frame):
+        """Signal handler that attempts a best-effort cleanup then exits."""
+        try:
+            _cleanup()
+        finally:
+            # Re-raise KeyboardInterrupt equivalent for SIGINT, otherwise exit.
+            try:
+                sys.exit(0)
+            except SystemExit:
+                raise
+
+    # SIGTERM / SIGHUP / SIGINT: try to catch and run cleanup before exiting.
+    for sig_name in ("SIGTERM", "SIGHUP", "SIGINT"):
+        try:
+            sig = getattr(signal, sig_name)
+            signal.signal(sig, _signal_terminate)
+            if DEBUG:
+                print(f"Registered signal handler for {sig_name}")
+        except (AttributeError, ValueError):
+            # Not available on this platform; skip
+            pass
+
 
 # ---------------------------------------------------------------------------
 # Entry point  --  called by the `clockish` console script and by __main__.py
@@ -2272,12 +2353,16 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        # Stop reload watcher and cached-facts workers
-        _reload_watcher_stop.set()
-        _stop_cached_facts()
-        # Do not blank the display on exit  --  lets you see where it stopped.
-        # GPIO.cleanup() is not needed  --  rpi-lgpio facade handles it.
-        lcd.close()
+        # Best-effort cleanup (idempotent); clears display if configured.
+        try:
+            _cleanup()
+        except Exception:
+            # If cleanup itself fails, still attempt a final close
+            try:
+                if lcd is not None:
+                    lcd.close()
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------

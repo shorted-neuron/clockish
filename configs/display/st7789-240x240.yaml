@@ -16,12 +16,14 @@ display:
   width:        240
   height:       240
   rotation:     0           # ST7789 square panels support: 0, 90, 180, 270
+  clear_on_exit: false
 
   spi_port:     0
   spi_cs:       0           # CE0
   dc_pin:       25          # BCM GPIO 25
   rst_pin:      ~           # not connected on most breakout boards
   backlight_pin: 22         # BCM GPIO 22 (D22)
+  # backlight_pin: 6         # BCM GPIO 22 (D22)
   spi_speed_hz: 64000000
   invert:       true        # required by most ST7789 panels
 

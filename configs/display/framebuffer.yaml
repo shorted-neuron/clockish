@@ -33,3 +33,4 @@ display:
   driver:   framebuffer
   device:   /dev/fb0
   rotation: 0
+  clear_on_exit: false

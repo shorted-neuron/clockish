@@ -120,6 +120,7 @@ APT_PACKAGES=(
     tmux
     chrony                # NTP (get_ntp_upstream_count() calls chronyc)
     bind9-dnsutils
+    i2c-tools
 )
 
 MISSING_APT=()
@@ -227,25 +228,29 @@ echo "  Which display driver(s) would you like to install?"
 echo "    1) ili9486       --  ILI9486 SPI TFT        (MPI3501 / MHS3528 3.5\" RPi displays)"
 echo "    2) st7789        --  ST7789 SPI TFT         (Adafruit 240x135, Pimoroni 240x240, etc)"
 echo "    3) framebuffer   --  Linux /dev/fb0         (DSI ribbon-cable, HDMI  --  no extra packages)"
-echo "    4) all           --  install all drivers"
-echo "    5) none          --  skip (configure manually later)"
+echo "    4) ssd1306       --  SSD1306 I2C OLED      (128x64, 128x32 monochrome)"
+echo "    5) all           --  install all drivers"
+echo "    6) none          --  skip (configure manually later)"
 echo ""
-read -r -p "  Enter choice [1/2/3/4/5]: " _DRIVER_CHOICE
+read -r -p "  Enter choice [1/2/3/4/5/6]: " _DRIVER_CHOICE
 
 INSTALL_ILI9486=false
 INSTALL_ST7789=false
 INSTALL_FB=false
+INSTALL_SSD1306=false
 case "$_DRIVER_CHOICE" in
     1) INSTALL_ILI9486=true ;;
     2) INSTALL_ST7789=true  ;;
     3) INSTALL_FB=true      ;;
-    4) INSTALL_ILI9486=true ; INSTALL_ST7789=true ; INSTALL_FB=true ;;
+    4) INSTALL_SSD1306=true ;;
+    5) INSTALL_ILI9486=true ; INSTALL_ST7789=true ; INSTALL_FB=true ; INSTALL_SSD1306=true ;;
     *) info "Skipping display driver install." ;;
 esac
 
 $INSTALL_ILI9486 && ok "Will install: ili9486 driver     (pyili9486)"
 $INSTALL_ST7789  && ok "Will install: st7789 driver      (st7789 + gpiod + gpiodevice)"
 $INSTALL_FB      && ok "Will install: framebuffer driver (no extra packages  --  uses /dev/fb0)"
+$INSTALL_SSD1306 && ok "Will install: ssd1306 driver     (adafruit-blinka + adafruit-circuitpython-ssd1306)"
 
 # ---------------------------------------------------------------------------
 # Display profile selection
@@ -259,14 +264,19 @@ if $INSTALL_ILI9486 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
         "ILI9486  480x320 landscape-canvas, landscape on screen (big-red, nixie, dseg) |configs/display/ili9486-landscape.yaml"
     )
 fi
-if $INSTALL_ST7789 || [[ "$_DRIVER_CHOICE" == "4" ]]; then
+if $INSTALL_ST7789 || [[ "$_DRIVER_CHOICE" == "5" ]]; then
     _PROFILES+=(
         "ST7789   240x135 landscape  (Adafruit 1.14\" TFT #4383)                       |configs/display/st7789-240x135.yaml"
     )
 fi
-if $INSTALL_FB || [[ "$_DRIVER_CHOICE" == "4" ]]; then
+if $INSTALL_FB || [[ "$_DRIVER_CHOICE" == "5" ]]; then
     _PROFILES+=(
         "Framebuffer  auto-detected resolution  (DSI/HDMI, /dev/fb0)                  |configs/display/framebuffer.yaml"
+    )
+fi
+if $INSTALL_SSD1306 || [[ "$_DRIVER_CHOICE" == "5" ]]; then
+    _PROFILES+=(
+        "SSD1306  128x64 monochrome OLED  (Adafruit/Generic 128x64)                    |configs/display/ssd1306-128x64.yaml"
     )
 fi
 
@@ -378,6 +388,7 @@ fi
 if [[ "$IS_RPI" == true ]]; then
     $INSTALL_ILI9486 && PIP_PACKAGES+=("pyili9486>=1.0.0")
     $INSTALL_ST7789  && PIP_PACKAGES+=("st7789>=1.0.0" "gpiod>=2.0" "gpiodevice>=0.0.4")
+    $INSTALL_SSD1306 && PIP_PACKAGES+=("adafruit-blinka>=8.0" "adafruit-circuitpython-ssd1306>=2.12.24")
 fi
 
 info "Installing pip packages..."
@@ -391,7 +402,14 @@ done
 # Include [st7789] extra when that driver was selected.
 info "Installing clockish package (pip install -e .) ..."
 _CLOCKISH_TARGET="$SCRIPT_DIR"
-$INSTALL_ST7789 && _CLOCKISH_TARGET="${SCRIPT_DIR}[st7789]"
+# Build extras list for selected drivers so pip installs optional dependencies when requested.
+_EXTRAS=()
+$INSTALL_ST7789 && _EXTRAS+=(st7789)
+$INSTALL_SSD1306 && _EXTRAS+=(ssd1306)
+if [[ ${#_EXTRAS[@]} -gt 0 ]]; then
+    IFS=, ; _EXTRA_STR="${_EXTRAS[*]}" ; unset IFS
+    _CLOCKISH_TARGET="${SCRIPT_DIR}[$_EXTRA_STR]"
+fi
 "$VENV_PY" -m pip install -e "$_CLOCKISH_TARGET" $PIP_Q
 ok "clockish package installed  --  entry point: $VENV_DIR/bin/clockish"
 

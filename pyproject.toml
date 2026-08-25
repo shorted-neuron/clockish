@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 # =============================================================================
 [project]
 name = "clockish"
-version = "26.8.2"
+version = "26.8.3"
 description = "Clockish is a customizable _whatever_ display for Raspberry Pi with a PIL compatible display driver."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -73,6 +73,14 @@ st7789 = [
     "gpiod>=2.0; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
     "gpiodevice>=0.0.4; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
 ]
+
+# SSD1306 monochrome OLEDs (Adafruit Blinka + CircuitPython SSD1306 driver)
+# Install: pip install clockish[ssd1306]
+ssd1306 = [
+    "adafruit-blinka>=8.0; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
+    "adafruit-circuitpython-ssd1306>=2.12.24; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
+]
+
 dev = [
     "pytest>=7",
     "pytest-cov",

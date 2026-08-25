@@ -11,6 +11,7 @@ display:
   width:        240
   height:       135
   rotation:     0           # ST7789 non-square panels: use 0 (not 90)
+  clear_on_exit: false
 
   spi_port:     0
   spi_cs:       0           # CE0
