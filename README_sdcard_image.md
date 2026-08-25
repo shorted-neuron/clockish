@@ -30,3 +30,28 @@ After image and initial boot, did these things:
 5. `git clone https://github.com/shorted-neuron/clockish`
 
 6. `cd clockish ; bash install.sh --verbose`
+
+7. added independent one-shot service regenerate-sshd-keys.service
+
+8. removed ssh host keys and machine ids 
+  `bash /root/image-prep.sh `
+
+### improvements 20260803
+- added 1.2GB swap on partition3, see fstab
+- `sudo mount -o remount,size=1G /tmp`
+- added sudoers
+- updated clockish to current 26.7.8
+- all system patches/packages
+- added authorized keys from devoops, rpi-desktop
+- `sudo loginctl enable-linger`
+- added udev rule to help with cursor blink
+```
+  sudo vi /etc/udev/rules.d/99-tty0-perms.rules
+  KERNEL=="tty0", GROUP="video", MODE="0660"
+```
+
+### improvements 20260825
+- added i2c-tools
+- tested with little ssd1306 oled i2c displays
+- updated clockish to current 26.8.2
+- all system patches/packages
