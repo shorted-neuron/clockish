@@ -120,6 +120,8 @@ KNOWN_FACT_SOURCES: frozenset[str] = frozenset({
     'ntp_status', 'ntp_upstream', 'ntp_all',
     'wireguard',
     'wifi_status', 'wifi_ssid', 'wifi_signal', 'wifi_quality', 'wifi_all',
+    # new built-in facts
+    'system_location', 'daytime', 'nighttime',
 })
 
 #: Fetcher ``type:`` values recognised for ``cached-facts:`` entries.
