@@ -5,15 +5,6 @@ preview_size: 480x320
 # location: auto  # alternative: use auto to get location from ipwho.is
 location:
   airport: kege
-#  # explicit fields provided so previews don't need reverse geocoding
-#  city: Centennial
-#  region: Colorado
-#  region_code: CO
-#  country: United States
-#  country_code: US
-#  postal: 80112
-#  lat: 39.5701186
-#  lon: -104.8492931
 
 rows:
   - name: demo-text
