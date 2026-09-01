@@ -842,16 +842,22 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                     ),
                 )
         else:
-            # For structured location, warn per-key if missing
+            # Check if location has airport/icao/iata code that will be resolved at runtime
+            has_airport_code = (isinstance(loc_cfg, dict) and
+                               (loc_cfg.get('airport') or loc_cfg.get('icao') or loc_cfg.get('iata')))
+
+            # For structured location, warn per-key if missing (unless airport will resolve it)
             for k, paths in ref_key_to_paths.items():
                 if _key_missing_in_loc(k):
-                    warn(
-                        '(root)',
-                        (
-                            f"fact panels {', '.join(paths)} reference 'location.{k}' "
-                            "but top-level 'location' mapping is missing this key or it is empty"
-                        ),
-                    )
+                    # Skip warning if airport code present (runtime will fetch these fields)
+                    if not has_airport_code:
+                        warn(
+                            '(root)',
+                            (
+                                f"fact panels {', '.join(paths)} reference 'location.{k}' "
+                                "but top-level 'location' mapping is missing this key or it is empty"
+                            ),
+                        )
 
             # For panels using the whole location dict, ensure at least city or lat/lon
             if composite_panel_paths:
@@ -859,20 +865,24 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                 missing_city = _key_missing_in_loc('city')
                 missing_latlon = _key_missing_in_loc('lat') or _key_missing_in_loc('lon')
                 if missing_city and missing_latlon:
-                    warn(
-                        '(root)',
-                        (
-                            f"fact panels {', '.join(composite_panel_paths)} expect 'location' to contain "
-                            "at least 'city' or both 'lat' and 'lon', but none are present"
-                        ),
-                    )
+                    # Skip if airport code will provide coords
+                    if not has_airport_code:
+                        warn(
+                            '(root)',
+                            (
+                                f"fact panels {', '.join(composite_panel_paths)} expect 'location' to contain "
+                                "at least 'city' or both 'lat' and 'lon', but none are present"
+                            ),
+                        )
 
             # Additionally, warn if the top-level location mapping is missing many
             # of the MAIN_LOC_KEYS (helpful for users using static examples)
-            missing_main = [k for k in MAIN_LOC_KEYS if _key_missing_in_loc(k)]
-            if len(missing_main) >= len(MAIN_LOC_KEYS) // 2 and len(missing_main) > 0:
-                warn(
-                    '(root)',
+            # Skip if airport code present (will resolve fields)
+            if not has_airport_code:
+                missing_main = [k for k in MAIN_LOC_KEYS if _key_missing_in_loc(k)]
+                if len(missing_main) >= len(MAIN_LOC_KEYS) // 2 and len(missing_main) > 0:
+                    warn(
+                        '(root)',
                     (
                         "top-level 'location' mapping is missing many expected keys: "
                         f"{', '.join(missing_main)}; runtime may show blanks in previews/labels"
