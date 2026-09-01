@@ -1,0 +1,146 @@
+---
+orientation: landscape
+preview_size: 480x320
+
+# location: auto  # alternative: use auto to get location from ipwho.is
+location:
+  airport: kege
+#  # explicit fields provided so previews don't need reverse geocoding
+#  city: Centennial
+#  region: Colorado
+#  region_code: CO
+#  country: United States
+#  country_code: US
+#  postal: 80112
+#  lat: 39.5701186
+#  lon: -104.8492931
+
+rows:
+  - name: demo-text
+    height: 10%
+    background: blue
+    panels:
+      - type: text
+        label: "location-auto demo"
+        font_size: small
+        justify: left
+      - type: fact
+        source: version
+        label: "clockish v"
+        font_size: small
+        justify: right
+  - name: location-city
+    height: 5%
+    background: darkgrey
+    panels:
+      - type: fact
+        source: location.city
+        json_path: city
+        label: "City: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-state
+    height: 5%
+    background: black
+    panels:
+      - type: fact
+        source: location.region
+        label: "region/state: "
+        color: white
+        font_size: 12px
+        justify: left
+      - type: fact
+        source: location.region_code
+        label: "region_code: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-country
+    height: 5%
+    background: grey
+    panels:
+      - type: fact
+        source: location.country
+        label: "Country: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-city-state-country
+    height: 5%
+    background: brown
+    panels:
+      - type: fact
+        # NOTE: how to access multiple fields from a single source?
+        # ideal output: "city,state,country: Denver,Colorado,United States"
+        source: location
+        label: "city,state,country: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-city-ST-CO
+    height: 5%
+    background: rust
+    panels:
+      - type: fact
+        # NOTE: how to access multiple fields from a single source?
+        # ideal output: "city,ST,CO: Denver,CU,US"
+        source: location
+        label: "city,ST,CO: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-zip
+    height: 5%
+    background: indigo
+    panels:
+      - type: fact
+        source: location.postal
+        label: "Postal code: "
+        font_size: 12px
+        justify: left
+
+  - name: location-coordinates
+    height: 20%
+    background: forestgreen
+    panels:
+      - type: fact
+        source: location.latitude
+        label: "Lat: "
+        color: white
+        font_size: 12px
+        justify: left
+      - type: fact
+        source: location.longitude
+        label: "Lon: "
+        color: white
+        font_size: 12px
+        justify: left
+
+  - name: day-night
+    height: 5%
+    background: black
+    panels:
+      - type: fact
+        source: daytime
+        label: "Day: "
+        color: yellow
+        font_size: 12px
+        justify: left
+      - type: fact
+        source: nighttime
+        label: "Night: "
+        color: skyblue
+        font_size: 12px
+        justify: left
+
+  - name: local-clock
+    height: 10%
+    background: dimred
+    panels:
+      - type: clock
+        timezone: local
+        time_format: 24hs
+        color: brown
+        font_size: auto
+        justify: left

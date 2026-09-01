@@ -459,6 +459,12 @@ else
         cp "$DEFAULT_CFG" "$USER_CFG"
         ok "Default config copied to $USER_CFG"
         info "  Edit it to customise your layout: ./edit-clockish-config.sh"
+        # Run interactive location setup to populate ~/.config/clockish/location.yaml
+        if command -v "$VENV_PY" >/dev/null 2>&1; then
+            section "Location setup"
+            echo "Launching location setup helper (interactive)."
+            "$VENV_PY" "$SCRIPT_DIR/scripts/setup_location.py" || warn "Location setup failed or was cancelled."
+        fi
     else
         warn "Default config not found at $DEFAULT_CFG  --  skipping user config copy."
     fi

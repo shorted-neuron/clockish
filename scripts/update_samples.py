@@ -78,6 +78,29 @@ def main():
         json.dump(om, fh, indent=2, ensure_ascii=False)
     print('Wrote', om_path)
 
+    # Fetch airport samples from FreeAirportDB API for KEGE (ICAO) and DEN (IATA).
+    # Write to deterministic filenames for tests.
+    API_BASE = 'https://api.freeairportdb.com/v1'
+    airport_requests = [
+        ('icao', 'KEGE', f"{API_BASE}/airports/KEGE"),
+        ('iata', 'DEN', f"{API_BASE}/airports/DEN"),
+    ]
+
+    for kind, code, url in airport_requests:
+        out_name = f'airport-lookup-{kind}-{code}.json'
+        out_path = os.path.join(samples_dir, out_name)
+        try:
+            print('Fetching', url)
+            data = fetch_json(url)
+        except Exception as exc:
+            print('Failed to fetch', url, ':', exc)
+            continue
+
+        # Write raw JSON response as-is
+        with open(out_path, 'w', encoding='utf-8') as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+        print('Wrote', out_path)
+
 
 if __name__ == '__main__':
     main()

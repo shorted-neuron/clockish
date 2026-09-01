@@ -3,7 +3,6 @@
 
 import argparse
 import atexit
-import csv
 import datetime
 import functools
 import json
@@ -953,24 +952,16 @@ def _init_cached_facts(config: dict) -> None:
 # System location helpers
 # ---------------------------------------------------------------------------
 
-_SYSTEM_LOCATION_CACHE_PATH = os.path.expanduser('~/.config/clockish/system_location.json')
 _LOCATION_YAML_PATH = os.path.expanduser('~/.config/clockish/location.yaml')
-_AIRPORTS_CSV_URL = 'https://ourairports.com/data/airports.csv'
-_AIRPORTS_CACHE_PATH = os.path.expanduser('~/.config/clockish/airports_cache.json')
+_FREEAIRPORTDB_BASE = 'https://api.freeairportdb.com/v1'
 
 
 def _read_system_location_cache() -> dict | None:
-    # Prefer human-editable YAML location file, fall back to legacy JSON cache.
+    # Prefer human-editable YAML location file.
     try:
         if os.path.isfile(_LOCATION_YAML_PATH):
             with open(_LOCATION_YAML_PATH) as f:
                 return yaml.safe_load(f) or None
-    except Exception:
-        pass
-    try:
-        if os.path.isfile(_SYSTEM_LOCATION_CACHE_PATH):
-            with open(_SYSTEM_LOCATION_CACHE_PATH) as f:
-                return json.load(f)
     except Exception:
         pass
     return None
@@ -1007,9 +998,9 @@ def _normalize_location_dict(d: dict) -> dict:
 def _warn_missing_location_fields(d: dict) -> None:
     """Log a warning if any main location fields are missing (non-fatal).
 
-    Main fields: city, region, region_code, country, country_code, postal, lat, lon
+    Main fields: city, region, region_code, country, country_code, lat, lon
     """
-    required = ['city', 'region', 'region_code', 'country', 'country_code', 'postal', 'lat', 'lon']
+    required = ['city', 'region', 'region_code', 'country', 'country_code', 'lat', 'lon']
     missing = []
     for k in required:
         v = d.get(k)
@@ -1033,14 +1024,9 @@ def _write_system_location_cache(d: dict) -> None:
         os.makedirs(os.path.dirname(_LOCATION_YAML_PATH), exist_ok=True)
         with open(_LOCATION_YAML_PATH, 'w') as f:
             yaml.safe_dump(norm, f)
-        # Also write legacy JSON for backward compatibility
-        try:
-            with open(_SYSTEM_LOCATION_CACHE_PATH, 'w') as jf:
-                json.dump(norm, jf, indent=2)
-        except Exception:
-            pass
+        # No legacy JSON write; keep only the human-editable YAML at ~/.config/clockish/location.yaml
         if DEBUG:
-            print(f"DEBUG: wrote system_location cache to {_LOCATION_YAML_PATH} (and {_SYSTEM_LOCATION_CACHE_PATH})")
+            print(f"DEBUG: wrote system_location cache to {_LOCATION_YAML_PATH}")
     except Exception as e:
         _log_warning(f"failed to write system_location cache: {e}")
 
@@ -1094,72 +1080,67 @@ def _fetch_ipwho_coords(timeout: int = 5, ip_override: str | None = None) -> dic
         return None
 
 
-def _fetch_airports_csv_and_cache(timeout: int = 30) -> dict:
-    """Download OurAirports CSV, parse, and cache a mapping for ICAO/IATA lookups.
+def _lookup_airport_code(code: str, timeout: int = 10) -> dict | None:
+    """Lookup an airport by ICAO/IATA using FreeAirportDB API with local cache.
 
-    Returns dict: {code: {"ident":..., "name":..., "lat":..., "lon":..., "country":...}}
+    Returns a normalized mapping with keys similar to previous OurAirports-based
+    entries: ident, icao, iata, name, city, country, country_code, region,
+    region_code, lat, lon, elevation, timezone, source
     """
-    try:
-        text, status = _fetch_url_raw(_AIRPORTS_CSV_URL, timeout, True)
-        if text is None:
-            raise RuntimeError('failed to fetch airports CSV')
-        # Parse CSV
-        reader = csv.DictReader(text.splitlines())
-        mapping = {}
-        for row in reader:
-            # OurAirports CSV uses 'ident' for ICAO and 'iata_code' for IATA.
-            # Latitude/longitude are provided as latitude_deg/longitude_deg.
-            icao = (row.get('ident') or '').strip().upper()
-            iata = (row.get('iata_code') or '').strip().upper()
-            try:
-                lat = float(row.get('latitude_deg') or row.get('latitude') or 0)
-                lon = float(row.get('longitude_deg') or row.get('longitude') or 0)
-            except Exception:
-                continue
-            entry = {
-                'ident': icao,
-                'iata': iata,
-                'name': row.get('name') or row.get('municipality') or '',
-                'city': row.get('municipality') or '',
-                'country': row.get('iso_country') or row.get('country') or '',
-                'lat': lat,
-                'lon': lon,
-            }
-            if icao:
-                mapping[icao] = entry
-            if iata:
-                mapping[iata] = entry
-        # Cache mapping
-        try:
-            os.makedirs(os.path.dirname(_AIRPORTS_CACHE_PATH), exist_ok=True)
-            with open(_AIRPORTS_CACHE_PATH, 'w') as f:
-                json.dump(mapping, f)
-        except Exception:
-            pass
-        return mapping
-    except Exception as e:
-        if DEBUG:
-            print(f"DEBUG: failed to fetch/parse airports CSV: {e}")
-        return {}
-
-
-def _lookup_airport_code(code: str) -> dict | None:
     code = (code or '').strip().upper()
     if not code:
         return None
-    # Try cache first
+
+    url = f"{_FREEAIRPORTDB_BASE}/airports/{code}"
+    if DEBUG:
+        print(f"DEBUG: fetching airport data -> {url}")
+    text, status = _fetch_url_raw(url, timeout, True)
+    if text is None:
+        if DEBUG:
+            print(f"DEBUG: airport lookup failed for {code} (status={status})")
+        return None
+
     try:
-        if os.path.isfile(_AIRPORTS_CACHE_PATH):
-            with open(_AIRPORTS_CACHE_PATH) as f:
-                mapping = json.load(f)
-            entry = mapping.get(code)
-            if entry:
-                return entry
+        payload = json.loads(text)
     except Exception:
-        pass
-    # Fetch CSV and build mapping
-    mapping = _fetch_airports_csv_and_cache()
-    return mapping.get(code)
+        return None
+
+    # The API returns {'data': {...}} on success
+    data = payload.get('data') if isinstance(payload, dict) else None
+    if not data or not isinstance(data, dict):
+        return None
+
+    # Normalize fields to the internal shape
+    try:
+        lat = float(data.get('latitude')) if data.get('latitude') is not None else None
+        lon = float(data.get('longitude')) if data.get('longitude') is not None else None
+    except Exception:
+        lat = None
+        lon = None
+
+    entry = {
+        'ident': data.get('code') or data.get('icao') or data.get('iata') or code,
+        'icao': data.get('icao') or None,
+        'iata': data.get('iata') or None,
+        'name': data.get('name') or None,
+        # Map FreeAirportDB fields to clockish canonical names
+        'city': data.get('municipality') or None,
+        'region': data.get('region_name') or None,
+        'region_code': data.get('region_code') or None,
+        'country': data.get('country_name') or None,
+        'country_code': data.get('country_code') or None,
+        'lat': lat,
+        'lon': lon,
+        # elevation meters and feet
+        'elevation': data.get('elevation') if data.get('elevation') is not None else None,
+        'elevation_ft': data.get('elevation_ft') if data.get('elevation_ft') is not None else None,
+        # timezone mapping: normalize to 'timezone' key used elsewhere
+        'timezone': data.get('time_zone') or None,
+        'source': 'freeairportdb',
+    }
+
+    # No persistent cache: return normalized entry directly.
+    return entry
 
 
 def _geocode_open_meteo(name: str, timeout: int = 5) -> dict | None:
@@ -1216,12 +1197,13 @@ def _init_system_location(config: dict) -> None:
     """Populate _SYSTEM_LOCATION from config override, cache, or GeoIP.
 
     New behavior:
-      - Recognize top-level 'location' (preferred) or legacy 'system_location' in the config.
+      - Recognize top-level 'location' in the config.
       - If location == 'auto' (string), use ipwho.is coords directly (no name-based geocode).
       - If location is a lat,lon string or dict with lat/lon, use those coords.
       - If location provides city+region+country but no coords, attempt Open-Meteo geocode as fallback.
-      - If location provides 'airport' code, resolve via OurAirports CSV (cached) to coords.
-      - Cache final resolved dict in ~/.config/clockish/location.yaml (and legacy JSON for compat).
+      - If location provides an 'airport' code, resolve it via the FreeAirportDB HTTP API to obtain coords and metadata.
+      - Preview mode forces fresh airport lookups so previews don't use stale data.
+      - Cache final resolved dict in ~/.config/clockish/location.yaml.
     """
     global _SYSTEM_LOCATION
     # Accept only top-level 'location' key in config (legacy 'system_location' support removed)
@@ -1354,6 +1336,13 @@ def _init_system_location(config: dict) -> None:
                     'city': ap.get('city') or ap.get('name') or '',
                     'lat': lat,
                     'lon': lon,
+                    'region': ap.get('region') or None,
+                    'region_code': ap.get('region_code') or None,
+                    'country': ap.get('country') or None,
+                    'country_code': ap.get('country_code') or None,
+                    'elevation': ap.get('elevation') or None,
+                    'elevation_ft': ap.get('elevation_ft') or None,
+                    'timezone': ap.get('timezone') or None,
                     'source': 'airport',
                 }
                 # Per policy: do not perform reverse geocoding. Rely on airport data or user-supplied structured fields.
@@ -1409,7 +1398,13 @@ def _init_system_location(config: dict) -> None:
                     'city': ap.get('city') or ap.get('name') or '',
                     'lat': lat,
                     'lon': lon,
+                    'region': ap.get('region') or None,
+                    'region_code': ap.get('region_code') or None,
                     'country': ap.get('country') or None,
+                    'country_code': ap.get('country_code') or None,
+                    'elevation': ap.get('elevation') or None,
+                    'elevation_ft': ap.get('elevation_ft') or None,
+                    'timezone': ap.get('timezone') or None,
                     'source': 'airport',
                 }
                 # Overlay possible user fields
@@ -2154,7 +2149,7 @@ def _init_layout() -> None:
     # Start/reset cached-facts background threads (or, in preview mode, do a
     # synchronous one-shot fetch) -- see _init_cached_facts().
     _init_cached_facts(_config)
-    # Initialize system location (caches to ~/.config/clockish/system_location.json).
+    # Initialize system location (caches to ~/.config/clockish/location.yaml).
     # Runs at startup and on config reload so callers get immediate availability.
     _init_system_location(_config)
 
