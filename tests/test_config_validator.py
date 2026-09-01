@@ -465,7 +465,8 @@ class TestLocation:
 
     def test_dotted_location_source_no_warning(self) -> None:
         """Dotted location.* sources should not produce unknown-source warnings."""
-        for source in ['location.city', 'location.region', 'location.country', 'location.postal', 'location.latitude', 'location.longitude']:
+        for source in ['location.city', 'location.region', 'location.country',
+                       'location.postal', 'location.latitude', 'location.longitude']:
             cfg = _minimal_config(rows=[{
                 'name': 'r', 'height': 40,
                 'panels': [{'type': 'fact', 'source': source}],
@@ -497,7 +498,9 @@ class TestLocation:
         }
         result = validate_config_dict(cfg)
         # Should not warn about unknown top-level key
-        unknown_key_warns = [i for i in result.warnings if 'unknown top-level key' in i.message and 'location' in i.message]
+        # TODO - not very readable
+        unknown_key_warns = [i for i in result.warnings if
+                             'unknown top-level key' in i.message and 'location' in i.message]
         assert not unknown_key_warns, f"location should be a known top-level key: {unknown_key_warns}"
 
     def test_location_airport_key_valid(self) -> None:
