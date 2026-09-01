@@ -196,7 +196,7 @@ _KNOWN_ROW_KEYS: frozenset[str] = frozenset({
 
 #: Valid top-level config keys.
 _KNOWN_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
-    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size', 'cached-facts', 'reload',
+    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size', 'cached-facts', 'reload', 'location',
 })
 
 #: Format for preview_size: "WxH", e.g. "240x135". Preview-tool only; ignored by production.
@@ -678,18 +678,28 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                             "or 'json_path' (use exactly one)",
                         )
                 else:
-                    if source not in KNOWN_FACT_SOURCES:
+                    # Check if source is a valid built-in or a dotted location.* variant
+                    is_valid_source = source in KNOWN_FACT_SOURCES
+                    if not is_valid_source and isinstance(source, str):
+                        # Check for dotted location.* sources (e.g. 'location.city')
+                        if source.startswith('location.'):
+                            is_valid_source = True
+
+                    if not is_valid_source:
                         warn(
                             ploc,
                             f"unrecognised fact source '{source}' "
                             f"(known sources: {', '.join(sorted(KNOWN_FACT_SOURCES))}, "
-                            f"or 'cached-facts.<name>')",
+                            f"or 'cached-facts.<name>', or 'location.<field>')",
                         )
-                    if has_pattern or has_json_path:
+
+                    # json_path is only invalid on non-location built-in sources
+                    # (location source supports json_path for field extraction)
+                    if (has_pattern or has_json_path) and source != 'location':
                         warn(
                             ploc,
                             "'pattern'/'json_path' only apply to "
-                            "'source: cached-facts.<name>' -- ignored otherwise",
+                            "'source: cached-facts.<name>' or 'source: location' -- ignored otherwise",
                         )
 
                     # Track references to top-level 'location' fields so we can

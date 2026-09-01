@@ -458,6 +458,60 @@ class TestFactSource:
 
 
 # ---------------------------------------------------------------------------
+# Location sources and top-level location config
+# ---------------------------------------------------------------------------
+
+class TestLocation:
+
+    def test_dotted_location_source_no_warning(self) -> None:
+        """Dotted location.* sources should not produce unknown-source warnings."""
+        for source in ['location.city', 'location.region', 'location.country', 'location.postal', 'location.latitude', 'location.longitude']:
+            cfg = _minimal_config(rows=[{
+                'name': 'r', 'height': 40,
+                'panels': [{'type': 'fact', 'source': source}],
+            }])
+            result = validate_config_dict(cfg)
+            assert not result.has_errors, \
+                f"location source '{source}' should not produce errors but got: {result.errors}"
+            # No unknown-source warning
+            src_warns = [i for i in result.warnings if 'unrecognised fact source' in i.message]
+            assert not src_warns, f"Known location source '{source}' triggered unrecognised warning: {src_warns}"
+
+    def test_location_with_json_path_no_false_warning(self) -> None:
+        """source: location + json_path: city should not warn about unsupported json_path."""
+        cfg = _minimal_config(rows=[{
+            'name': 'r', 'height': 40,
+            'panels': [{'type': 'fact', 'source': 'location', 'json_path': 'city'}],
+        }])
+        result = validate_config_dict(cfg)
+        # Should not warn about json_path being invalid on location source
+        json_path_warns = [i for i in result.warnings if 'json_path' in i.message and 'ignored' in i.message]
+        assert not json_path_warns, f"location source should support json_path but got warnings: {json_path_warns}"
+
+    def test_top_level_location_key_not_unknown(self) -> None:
+        """Top-level 'location' key should not trigger unknown-key warning."""
+        cfg = {
+            'orientation': 'landscape',
+            'rows': [{'name': 'r', 'height': 40, 'panels': []}],
+            'location': {'city': 'Denver', 'region': 'Colorado'},
+        }
+        result = validate_config_dict(cfg)
+        # Should not warn about unknown top-level key
+        unknown_key_warns = [i for i in result.warnings if 'unknown top-level key' in i.message and 'location' in i.message]
+        assert not unknown_key_warns, f"location should be a known top-level key: {unknown_key_warns}"
+
+    def test_location_airport_key_valid(self) -> None:
+        """Top-level 'location' with 'airport' key should be valid."""
+        cfg = {
+            'orientation': 'landscape',
+            'rows': [{'name': 'r', 'height': 40, 'panels': [{'type': 'text', 'label': 'test'}]}],
+            'location': {'airport': 'KEGE'},
+        }
+        result = validate_config_dict(cfg)
+        assert not result.has_errors, f"location with airport key should not error: {result.errors}"
+
+
+# ---------------------------------------------------------------------------
 # Row with no panels (blank spacer rows)
 # ---------------------------------------------------------------------------
 
