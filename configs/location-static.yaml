@@ -3,9 +3,12 @@ orientation: landscape
 preview_size: 480x320
 
 # location: auto  # alternative: use auto to get location from ipwho.is
+#
+# location:
+#  airport: kapa. # alternative: use a four character ICAO or 3 character IATA airport code
+
 location:
-  airport: kapa
-  # explicit fields provided so previews don't need reverse geocoding
+  # or, explicit fields can be provided for privacy or to minimize network API calls
   city: Centennial
   region: Colorado
   region_code: CO
