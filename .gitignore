@@ -37,8 +37,10 @@ htmlcov/
 !.idea/.gitignore
 !.idea/modules.xml
 !.idea/vcs.xml
-!.idea/*.iml
 !.idea/inspectionProfiles/
+
+# .iml holds a machine-local interpreter reference; churns across dev machines
+.idea/*.iml
 
 # ── OS cruft ──────────────────────────────────────────────────────────────────
 .DS_Store
