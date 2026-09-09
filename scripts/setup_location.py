@@ -63,24 +63,33 @@ def show_location_yaml(loc: dict) -> None:
     print(output)
 
 
+def _summarize_location(loc) -> str:
+    """One-line human summary of a location dict/value for the keep-or-reconfigure prompt."""
+    if loc == 'disabled' or loc is None:
+        return 'disabled'
+    if not isinstance(loc, dict):
+        return str(loc)
+    bits = [loc.get(k) for k in ('city', 'region', 'country') if loc.get(k)]
+    lat, lon = loc.get('lat'), loc.get('lon')
+    if lat is not None and lon is not None:
+        bits.append(f'({lat}, {lon})')
+    src = loc.get('source')
+    label = ', '.join(str(b) for b in bits) if bits else '(no details)'
+    return f'{label} [source: {src}]' if src else label
+
+
 def show_existing():
     if os.path.isfile(YAML_PATH):
-        print('Existing location config:\n---\n')
         try:
             with open(YAML_PATH) as f:
                 data = yaml.safe_load(f)
-                if isinstance(data, dict):
-                    # Handle both old format (plain dict) and new format (wrapped in 'location')
-                    if 'location' in data:
-                        show_location_yaml(data['location'])
-                    else:
-                        # Old format: file stored plain dict, show with location: wrapper
-                        show_location_yaml(data)
-                else:
-                    # Not a dict, print raw
-                    print(data)
+            loc = data.get('location', data) if isinstance(data, dict) else data
         except Exception as e:
             print('  (failed to read existing config:', e, ')')
+            return True
+        print(f'Your location is currently: {_summarize_location(loc)}')
+        print('---')
+        show_location_yaml(loc if isinstance(loc, dict) else {'location': loc})
         return True
     return False
 
@@ -213,7 +222,7 @@ def main():
     # Non-interactive path
     if args.auto or args.airport or args.coords or args.structured or args.disabled:
         if show_existing() and not args.yes:
-            if not prompt_yesno('Reconfigure location?', default=False):
+            if prompt_yesno('Keep this location? (answer n to reconfigure)', default=True):
                 print('Keeping existing location. Exiting.')
                 return
         loc = None
@@ -309,35 +318,37 @@ def main():
     print('Clockish location setup')
     print('------------------------')
     if show_existing():
-        if not prompt_yesno('Reconfigure location?', default=False):
+        if prompt_yesno('Keep this location? (answer n to reconfigure)', default=True):
             print('Keeping existing location. Exiting.')
             return
-    print('\nChoose setup method:')
-    print('  1) GeoIP (auto) - use ipwho.is to infer city and coords')
-    print('  2) Airport code - resolve via FreeAirportDB (ICAO/IATA)')
-    print('  3) Coordinates - enter lat,lon directly')
-    print('  4) Structured - enter city,region,country and attempt geocode')
-    print('  5) Disabled - keep location disabled')
+    def print_menu():
+        print('\nChoose setup method:')
+        print('  1) GeoIP (auto) - use ipwho.is to infer city and coords')
+        print('  2) Airport code - resolve via FreeAirportDB (ICAO/IATA)')
+        print('  3) Coordinates - enter lat,lon directly')
+        print('  4) Structured - enter city,region,country and attempt geocode')
+        print('  5) Disabled - keep location disabled')
 
-    choice = input('Enter choice [1-5]: ').strip()
+    handlers = {'1': do_geoip, '2': do_airport, '3': do_coords, '4': do_structured}
     loc = None
-    if choice == '1':
-        loc = do_geoip()
-    elif choice == '2':
-        loc = do_airport()
-    elif choice == '3':
-        loc = do_coords()
-    elif choice == '4':
-        loc = do_structured()
-    elif choice == '5':
-        loc = 'disabled'
-    else:
-        print('Invalid choice')
-        return
-
-    if loc is None:
-        print('Setup failed or cancelled.')
-        return
+    print_menu()
+    while True:
+        choice = input('Enter choice [1-5]: ').strip()
+        if choice == '5':
+            loc = 'disabled'
+            break
+        handler = handlers.get(choice)
+        if handler is None:
+            print('Invalid choice')
+            continue
+        loc = handler()
+        if loc is not None:
+            break
+        # handler printed its own error; offer another go
+        if not prompt_yesno('\nLookup failed. Try again?', default=True):
+            print('Setup cancelled.')
+            return
+        print_menu()
 
     if loc == 'disabled':
         write_location({'location': 'disabled'})

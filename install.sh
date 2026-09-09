@@ -186,24 +186,34 @@ if [[ "$IS_RPI" == true ]]; then
         fi
     fi
 
-    # SPI group membership check
-    if ! groups | grep -qw "spi"; then
-        warn "User '$USER' is not in the 'spi' group."
-        info "Adding $USER to spi group..."
-        sudo usermod -aG spi "$USER"
+    # SPI group membership check -- 'spi' on Raspberry Pi OS, 'dialout' on Ubuntu (no 'spi' group)
+    if getent group spi >/dev/null 2>&1; then
+        SPI_GROUP="spi"
+    else
+        SPI_GROUP="dialout"
+    fi
+    if ! groups | grep -qw "$SPI_GROUP"; then
+        warn "User '$USER' is not in the '$SPI_GROUP' group."
+        info "Adding $USER to $SPI_GROUP group..."
+        sudo usermod -aG "$SPI_GROUP" "$USER"
         warn "Group change requires logout/login (or reboot) to take effect."
     else
-        ok "User '$USER' is in the 'spi' group."
+        ok "User '$USER' is in the '$SPI_GROUP' group."
     fi
 
-    # GPIO group membership check
-    if ! groups | grep -qw "gpio"; then
-        warn "User '$USER' is not in the 'gpio' group."
-        info "Adding $USER to gpio group..."
-        sudo usermod -aG gpio "$USER"
+    # GPIO group membership check -- 'gpio' on Raspberry Pi OS, 'dialout' on Ubuntu (no 'gpio' group)
+    if getent group gpio >/dev/null 2>&1; then
+        GPIO_GROUP="gpio"
+    else
+        GPIO_GROUP="dialout"
+    fi
+    if ! groups | grep -qw "$GPIO_GROUP"; then
+        warn "User '$USER' is not in the '$GPIO_GROUP' group."
+        info "Adding $USER to $GPIO_GROUP group..."
+        sudo usermod -aG "$GPIO_GROUP" "$USER"
         warn "Group change requires logout/login (or reboot) to take effect."
     else
-        ok "User '$USER' is in the 'gpio' group."
+        ok "User '$USER' is in the '$GPIO_GROUP' group."
     fi
 
     # video group membership check (needed for /dev/fb0 framebuffer access)
@@ -459,15 +469,16 @@ else
         cp "$DEFAULT_CFG" "$USER_CFG"
         ok "Default config copied to $USER_CFG"
         info "  Edit it to customise your layout: ./edit-clockish-config.sh"
-        # Run interactive location setup to populate ~/.config/clockish/location.yaml
-        if command -v "$VENV_PY" >/dev/null 2>&1; then
-            section "Location setup"
-            echo "Launching location setup helper (interactive)."
-            "$VENV_PY" "$SCRIPT_DIR/scripts/setup_location.py" || warn "Location setup failed or was cancelled."
-        fi
     else
         warn "Default config not found at $DEFAULT_CFG  --  skipping user config copy."
     fi
+fi
+
+# Interactive location setup  --  runs every install; the helper shows the
+# current location (if any) and offers keep-or-reconfigure.
+if command -v "$VENV_PY" >/dev/null 2>&1; then
+    section "Location setup"
+    "$VENV_PY" "$SCRIPT_DIR/scripts/setup_location.py" || warn "Location setup failed or was cancelled."
 fi
 
 # Install the display profile to the user config directory.
