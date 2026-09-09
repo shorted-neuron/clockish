@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zoneinfo  # before yaml
 from contextlib import contextmanager  # before yaml
@@ -126,6 +127,15 @@ _cached_facts_stop_events: dict = {}
 #: name -> threading.Thread  --  daemon workers; kept around for debugging /
 #: introspection only, never joined (process exit kills them).
 _cached_facts_threads: dict = {}
+
+# system location cache (populated by _init_system_location)
+_SYSTEM_LOCATION: dict | None = None
+
+# Sun times cache + worker control
+_SUN_TIMES: dict = {}  # date_str -> {'sunrise': aware_dt, 'sunset': aware_dt, 'fetched_at': dt}
+_sun_times_event: threading.Event = threading.Event()
+_sun_times_stop_event: threading.Event = threading.Event()
+_sun_times_thread: threading.Thread | None = None
 
 # Guard to avoid running exit cleanup multiple times (signal + atexit + finally)
 _exiting = False
@@ -642,6 +652,10 @@ def _get_fact(source: str, options: dict | None = None) -> str:
         'wifi_signal':  lambda: get_wifi_info()[2],
         'wifi_quality': lambda: get_wifi_info()[3],
         'wifi_all':     lambda: "  ".join(get_wifi_info()),
+        # system location + day/night facts
+        'location':       get_system_location,
+        'daytime':        get_daytime,
+        'nighttime':      get_nighttime,
     }
     return registry.get(source, lambda: source)()
 
@@ -667,6 +681,9 @@ _FACT_DEFAULT_LABELS: dict[str, str] = {
     'wifi_signal':  'signal ',
     'wifi_quality': 'quality ',
     'wifi_all':     'wifi ',
+    'location': 'loc ',
+    'daytime':        '',
+    'nighttime':      '',
 }
 
 
@@ -904,6 +921,19 @@ def _init_cached_facts(config: dict) -> None:
             if preview_response:
                 _cached_facts_cache[name] = {'raw': preview_response, 'ok': True}
             else:
+                # Try local test-samples as preview mock (tests/samples/<name>.raw.json)
+                repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..'))
+                sample_path = os.path.join(repo_root, 'tests', 'samples', f"{name}.raw.json")
+                try:
+                    if os.path.isfile(sample_path):
+                        with open(sample_path) as sf:
+                            _cached_facts_cache[name] = {'raw': sf.read(), 'ok': True}
+                        if DEBUG:
+                            print(f"DEBUG: using test-sample for cached-facts '{name}' -> {sample_path}")
+                        continue
+                except Exception:
+                    pass
+                # Fallback: do a real fetch once for preview
                 text, _status = _fetch_url_raw(url, timeout, verify_ssl)
                 _cached_facts_cache[name] = {'raw': text, 'ok': text is not None}
             continue  # one-shot render -- no background thread needed
@@ -917,6 +947,725 @@ def _init_cached_facts(config: dict) -> None:
         )
         _cached_facts_threads[name] = t
         t.start()
+
+# ---------------------------------------------------------------------------
+# System location helpers
+# ---------------------------------------------------------------------------
+
+_LOCATION_YAML_PATH = os.path.expanduser('~/.config/clockish/location.yaml')
+_FREEAIRPORTDB_BASE = 'https://api.freeairportdb.com/v1'
+
+
+def _read_system_location_cache() -> dict | None:
+    # Prefer human-editable YAML location file.
+    try:
+        if os.path.isfile(_LOCATION_YAML_PATH):
+            with open(_LOCATION_YAML_PATH) as f:
+                return yaml.safe_load(f) or None
+    except Exception:
+        pass
+    return None
+
+
+def _normalize_location_dict(d: dict) -> dict:
+    """Return a copy of location dict with canonical keys and synonyms.
+
+    Ensures both 'lat'/'lon' and 'latitude'/'longitude' exist, and fills
+    common keys like region_code/country_code/postal where possible.
+    """
+    out = dict(d or {})
+    # lat/lon synonyms
+    if 'lat' in out and 'latitude' not in out:
+        out['latitude'] = out['lat']
+    if 'lon' in out and 'longitude' not in out:
+        out['longitude'] = out['lon']
+    if 'latitude' in out and 'lat' not in out:
+        out['lat'] = out['latitude']
+    if 'longitude' in out and 'lon' not in out:
+        out['lon'] = out['longitude']
+    # region synonyms
+    if 'region' in out and 'region_code' not in out:
+        # sometimes region code unavailable; keep as-is
+        out.setdefault('region_code', out.get('region_code'))
+    # country synonyms
+    if 'country' in out and 'country_code' not in out:
+        out.setdefault('country_code', out.get('country_code'))
+    # postal
+    out.setdefault('postal', out.get('postal'))
+    return out
+
+
+def _warn_missing_location_fields(d: dict) -> None:
+    """Log a warning if any main location fields are missing (non-fatal).
+
+    Main fields: city, region, region_code, country, country_code, lat, lon
+    """
+    required = ['city', 'region', 'region_code', 'country', 'country_code', 'lat', 'lon']
+    missing = []
+    for k in required:
+        v = d.get(k)
+        if v is None or (isinstance(v, str) and v.strip() == ''):
+            missing.append(k)
+    if missing:
+        _log_warning(f"location missing fields: {', '.join(missing)} -- panels may show defaults")
+
+
+def _write_system_location_cache(d: dict) -> None:
+    try:
+        norm = _normalize_location_dict(d)
+        # Update global in-memory copy so renderers see canonical keys
+        global _SYSTEM_LOCATION
+        _SYSTEM_LOCATION = norm
+        # warn about missing main fields (non-fatal)
+        try:
+            _warn_missing_location_fields(norm)
+        except Exception:
+            pass
+        os.makedirs(os.path.dirname(_LOCATION_YAML_PATH), exist_ok=True)
+        with open(_LOCATION_YAML_PATH, 'w') as f:
+            yaml.safe_dump(norm, f)
+        # No legacy JSON write; keep only the human-editable YAML at ~/.config/clockish/location.yaml
+        if DEBUG:
+            print(f"DEBUG: wrote system_location cache to {_LOCATION_YAML_PATH}")
+    except Exception as e:
+        _log_warning(f"failed to write system_location cache: {e}")
+
+
+def _fetch_ipwho_coords(timeout: int = 5, ip_override: str | None = None) -> dict | None:
+    """Fetch rough city + coords from ipwho.is (privacy-friendly GeoIP).
+
+    If ip_override is provided, call https://ipwho.is/{ip_override} (used
+    by preview mode to request a stable sample IP like 6.0.0.0).
+    """
+    url = 'https://ipwho.is/' if not ip_override else f'https://ipwho.is/{ip_override}'
+    if DEBUG:
+        print(f"DEBUG: geoip call -> {url}")
+    text, status = _fetch_url_raw(url, timeout, True)
+    if text is None:
+        if DEBUG:
+            print(f"DEBUG: geoip call failed for {url} (status={status})")
+        return None
+    try:
+        data = json.loads(text)
+        # ipwho.is returns success boolean under 'success' sometimes; guard keys
+        city = data.get('city') or data.get('region') or data.get('country')
+        lat = data.get('latitude') or data.get('lat')
+        lon = data.get('longitude') or data.get('lon')
+        if lat is None or lon is None:
+            if DEBUG:
+                print(f"DEBUG: geoip response for {url} missing lat/lon: {data}")
+            return None
+        result = {
+            'city': city or '',
+            'lat': float(lat),
+            'lon': float(lon),
+            'source': 'ipwho',
+            'raw': data,
+            # normalize common fields for downstream use
+            'region': data.get('region') or data.get('region_name') or None,
+            'region_code': data.get('region_code') or data.get('region_code') or None,
+            'country': data.get('country') or None,
+            'country_code': data.get('country_code') or data.get('country_iso2') or None,
+            'postal': data.get('postal') or data.get('zip') or None,
+        }
+        if DEBUG:
+            print(
+                f"DEBUG: geoip resolved city={result['city']} lat={result['lat']:.6f} "
+                f"lon={result['lon']:.6f} via {url}"
+            )
+        return result
+    except Exception as e:
+        if DEBUG:
+            print(f"DEBUG: geoip parse error for {url}: {e} :: {text[:250]}")
+        return None
+
+
+def _lookup_airport_code(code: str, timeout: int = 10) -> dict | None:
+    """Lookup an airport by ICAO/IATA using FreeAirportDB API with local cache.
+
+    Returns a normalized mapping with keys similar to previous OurAirports-based
+    entries: ident, icao, iata, name, city, country, country_code, region,
+    region_code, lat, lon, elevation, timezone, source
+    """
+    code = (code or '').strip().upper()
+    if not code:
+        return None
+
+    url = f"{_FREEAIRPORTDB_BASE}/airports/{code}"
+    if DEBUG:
+        print(f"DEBUG: fetching airport data -> {url}")
+    text, status = _fetch_url_raw(url, timeout, True)
+    if text is None:
+        if DEBUG:
+            print(f"DEBUG: airport lookup failed for {code} (status={status})")
+        return None
+
+    try:
+        payload = json.loads(text)
+    except Exception:
+        return None
+
+    # The API returns {'data': {...}} on success
+    data = payload.get('data') if isinstance(payload, dict) else None
+    if not data or not isinstance(data, dict):
+        return None
+
+    # Normalize fields to the internal shape
+    try:
+        lat = float(data.get('latitude')) if data.get('latitude') is not None else None
+        lon = float(data.get('longitude')) if data.get('longitude') is not None else None
+    except Exception:
+        lat = None
+        lon = None
+
+    entry = {
+        'ident': data.get('code') or data.get('icao') or data.get('iata') or code,
+        'icao': data.get('icao') or None,
+        'iata': data.get('iata') or None,
+        'name': data.get('name') or None,
+        # Map FreeAirportDB fields to clockish canonical names
+        'city': data.get('municipality') or None,
+        'region': data.get('region_name') or None,
+        'region_code': data.get('region_code') or None,
+        'country': data.get('country_name') or None,
+        'country_code': data.get('country_code') or None,
+        'lat': lat,
+        'lon': lon,
+        # elevation meters and feet
+        'elevation': data.get('elevation') if data.get('elevation') is not None else None,
+        'elevation_ft': data.get('elevation_ft') if data.get('elevation_ft') is not None else None,
+        # timezone mapping: normalize to 'timezone' key used elsewhere
+        'timezone': data.get('time_zone') or None,
+        'source': 'freeairportdb',
+    }
+
+    # No persistent cache: return normalized entry directly.
+    return entry
+
+
+def _geocode_open_meteo(name: str, timeout: int = 5) -> dict | None:
+    """Resolve a place name to coords via Open-Meteo Geocoding (privacy-friendly)."""
+    if not name:
+        if DEBUG:
+            print('DEBUG: geocode skipped: empty city name')
+        return None
+    q = urllib.parse.quote(name)
+    url = f"https://geocoding-api.open-meteo.com/v1/search?name={q}&count=1&language=en"
+    if DEBUG:
+        print(f"DEBUG: geocode call -> {url}")
+    text, status = _fetch_url_raw(url, timeout, True)
+    if text is None:
+        if DEBUG:
+            print(f"DEBUG: geocode call failed for {url} (status={status})")
+        return None
+    try:
+        data = json.loads(text)
+        results = data.get('results') or []
+        if not results:
+            if DEBUG:
+                print(f"DEBUG: geocode call for '{name}' returned no results")
+            return None
+        r = results[0]
+        result = {
+            'city': r.get('name') or name,
+            'lat': float(r.get('latitude')),
+            'lon': float(r.get('longitude')),
+            'country': r.get('country') or '',
+            'country_code': r.get('country_code') or None,
+            'region': r.get('admin1') or r.get('admin1'),
+            'postcodes': r.get('postcodes') or [],
+            'source': 'open-meteo',
+        }
+        # pick a sensible postal if available
+        if result['postcodes']:
+            result['postal'] = result['postcodes'][0]
+        if DEBUG:
+            print(
+                f"DEBUG: geocode resolved city={result['city']} lat={result['lat']:.6f} "
+                f"lon={result['lon']:.6f} country={result.get('country')} via {url}"
+            )
+        return result
+    except Exception as e:
+        if DEBUG:
+            print(f"DEBUG: geocode parse error for {url}: {e} :: {text[:250]}")
+        return None
+
+
+
+
+def _init_system_location(config: dict) -> None:
+    """Populate _SYSTEM_LOCATION from config override, cache, or GeoIP.
+
+    New behavior:
+      - Recognize top-level 'location' in the config.
+      - If location == 'auto' (string), use ipwho.is coords directly (no name-based geocode).
+      - If location is a lat,lon string or dict with lat/lon, use those coords.
+      - If location provides city+region+country but no coords, attempt Open-Meteo geocode as fallback.
+      - If location provides an 'airport' code, resolve it via the FreeAirportDB HTTP API to obtain coords and metadata.
+      - Preview mode forces fresh airport lookups so previews don't use stale data.
+      - Cache final resolved dict in ~/.config/clockish/location.yaml.
+    """
+    global _SYSTEM_LOCATION
+    # Accept only top-level 'location' key in config (legacy 'system_location' support removed)
+    cfg_override = None
+    if isinstance(config, dict):
+        cfg_override = config.get('location')
+
+    # 1) explicit override handling
+    # Preview-mode special case: if no location provided or empty string, use stable sample IP
+    if _PREVIEW_MODE and (cfg_override is None or (isinstance(cfg_override, str) and cfg_override.strip() == '')):
+        if DEBUG:
+            print('DEBUG: preview mode + no location -> using stable ipwho sample 129.72.188.0')
+        geo = _fetch_ipwho_coords(timeout=5, ip_override='129.72.188.0')
+        if geo:
+            try:
+                _SYSTEM_LOCATION = {
+                    'city': geo.get('city') or '',
+                    'lat': float(geo.get('lat')),
+                    'lon': float(geo.get('lon')),
+                    'region': geo.get('region'),
+                    'region_code': geo.get('region_code'),
+                    'country': geo.get('country'),
+                    'country_code': geo.get('country_code'),
+                    'postal': geo.get('postal'),
+                    'source': 'ipwho',
+                }
+            except Exception:
+                _SYSTEM_LOCATION = None
+            if _SYSTEM_LOCATION:
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                # fetch sun-times synchronously for preview
+                try:
+                    _fetch_and_store_sun_times(_SYSTEM_LOCATION['lat'], _SYSTEM_LOCATION['lon'])
+                except Exception:
+                    pass
+                return
+        _SYSTEM_LOCATION = None
+        return
+
+    if isinstance(cfg_override, str):
+        s = cfg_override.strip()
+        slo = s.lower()
+        # 'auto-preview' uses the stable preview IP when in preview, else behaves like auto
+        if slo == 'auto-preview':
+            if _PREVIEW_MODE:
+                if DEBUG:
+                    print("DEBUG: location 'auto-preview' in preview -> using stable ipwho sample 129.72.188.0")
+                geo = _fetch_ipwho_coords(timeout=5, ip_override='129.72.188.0')
+            else:
+                geo = _fetch_ipwho_coords(timeout=5, ip_override=None)
+            if geo:
+                _SYSTEM_LOCATION = {
+                    'city': geo.get('city') or '',
+                    'lat': float(geo.get('lat')),
+                    'lon': float(geo.get('lon')),
+                    'region': geo.get('region'),
+                    'region_code': geo.get('region_code'),
+                    'country': geo.get('country'),
+                    'country_code': geo.get('country_code'),
+                    'postal': geo.get('postal'),
+                    'source': 'ipwho',
+                }
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                return
+            else:
+                _SYSTEM_LOCATION = None
+                return
+
+        if slo == 'auto':
+            # Force auto GeoIP lookup (same in preview and live)
+            if DEBUG:
+                print('DEBUG: location set to auto in config; using ipwho.is coords')
+            geo = _fetch_ipwho_coords(timeout=5, ip_override=None)
+            if geo:
+                _SYSTEM_LOCATION = {
+                    'city': geo.get('city') or '',
+                    'lat': float(geo.get('lat')),
+                    'lon': float(geo.get('lon')),
+                    'region': geo.get('region'),
+                    'region_code': geo.get('region_code'),
+                    'country': geo.get('country'),
+                    'country_code': geo.get('country_code'),
+                    'postal': geo.get('postal'),
+                    'source': 'ipwho',
+                }
+                # Per policy: no reverse geocoding. Rely on provider fields or user-supplied structured fields.
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                return
+            else:
+                _SYSTEM_LOCATION = None
+                return
+
+    if isinstance(cfg_override, str):
+        # Check for lat,lon literal (e.g., "39.7392,-104.9903")
+        s = cfg_override.strip()
+        if ',' in s:
+            parts = [p.strip() for p in s.split(',')]
+            try:
+                lat = float(parts[0])
+                lon = float(parts[1])
+                _SYSTEM_LOCATION = {'city': '', 'lat': lat, 'lon': lon, 'source': 'config'}
+                # Per policy: no reverse geocoding. If callers want region/country/postal, they must supply them.
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                if DEBUG:
+                    print(f"DEBUG: location parsed from lat/lon string in config: {lat},{lon}")
+                # in preview mode, also fetch sun-times synchronously so panels using daytime/nighttime work
+                if _PREVIEW_MODE:
+                    try:
+                        _fetch_and_store_sun_times(lat, lon)
+                    except Exception:
+                        pass
+                else:
+                    # start background sun-times worker in live mode
+                    try:
+                        _start_sun_times(lat, lon)
+                    except Exception:
+                        pass
+                return
+            except Exception:
+                pass
+        # If string looks like an airport code (3 or 4 alpha chars), resolve it
+        if re.match(r'^[A-Za-z]{3,4}$', s):
+            if DEBUG:
+                print(f"DEBUG: treating location string '{s}' as airport code")
+            ap = _lookup_airport_code(s)
+            if ap:
+                lat = float(ap['lat'])
+                lon = float(ap['lon'])
+                _SYSTEM_LOCATION = {
+                    'city': ap.get('city') or ap.get('name') or '',
+                    'lat': lat,
+                    'lon': lon,
+                    'region': ap.get('region') or None,
+                    'region_code': ap.get('region_code') or None,
+                    'country': ap.get('country') or None,
+                    'country_code': ap.get('country_code') or None,
+                    'elevation': ap.get('elevation') or None,
+                    'elevation_ft': ap.get('elevation_ft') or None,
+                    'timezone': ap.get('timezone') or None,
+                    'source': 'airport',
+                }
+                # Per policy: do not perform reverse geocoding. Rely on airport data or user-supplied structured fields.
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                # preview: fetch sun times once; live: start worker
+                if _PREVIEW_MODE:
+                    try:
+                        _fetch_and_store_sun_times(lat, lon)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        _start_sun_times(lat, lon)
+                    except Exception:
+                        pass
+                return
+
+    if isinstance(cfg_override, dict):
+        # airport code support
+        airport = cfg_override.get('airport') or cfg_override.get('icao') or cfg_override.get('iata')
+        if airport:
+            if DEBUG:
+                print(f"DEBUG: resolving airport code '{airport}' to coords")
+            ap = _lookup_airport_code(airport)
+            if ap:
+                # Prefer user-supplied lat/lon when present; otherwise use airport coords
+                user_lat = None
+                lat_val = cfg_override.get('lat')
+                if isinstance(lat_val, (int, float, str)):
+                    user_lat = lat_val
+                else:
+                    user_lat = cfg_override.get('latitude')
+
+                user_lon = None
+                lon_val = cfg_override.get('lon')
+                if isinstance(lon_val, (int, float, str)):
+                    user_lon = lon_val
+                else:
+                    user_lon = cfg_override.get('longitude')
+                try:
+                    if user_lat is not None and user_lon is not None:
+                        lat = float(user_lat)
+                        lon = float(user_lon)
+                    else:
+                        lat = float(ap['lat'])
+                        lon = float(ap['lon'])
+                except Exception:
+                    lat = float(ap['lat'])
+                    lon = float(ap['lon'])
+
+                # Start from airport data, then overlay user-provided structured fields (user wins)
+                merged = {
+                    'city': ap.get('city') or ap.get('name') or '',
+                    'lat': lat,
+                    'lon': lon,
+                    'region': ap.get('region') or None,
+                    'region_code': ap.get('region_code') or None,
+                    'country': ap.get('country') or None,
+                    'country_code': ap.get('country_code') or None,
+                    'elevation': ap.get('elevation') or None,
+                    'elevation_ft': ap.get('elevation_ft') or None,
+                    'timezone': ap.get('timezone') or None,
+                    'source': 'airport',
+                }
+                # Overlay possible user fields
+                for key in ('city', 'region', 'region_code', 'country', 'country_code', 'postal'):
+                    if key in cfg_override and cfg_override.get(key) not in (None, ''):
+                        merged[key] = cfg_override.get(key)
+                # Also allow user override for lat/lon keys
+                if 'lat' in cfg_override and cfg_override.get('lat') not in (None, ''):
+                    try:
+                        merged['lat'] = float(cfg_override.get('lat'))
+                    except Exception:
+                        pass
+                if 'lon' in cfg_override and cfg_override.get('lon') not in (None, ''):
+                    try:
+                        merged['lon'] = float(cfg_override.get('lon'))
+                    except Exception:
+                        pass
+
+                _SYSTEM_LOCATION = merged
+                # Per policy: do not perform reverse geocoding. Rely on merged data or user-supplied structured fields.
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                # fetch sun-times now (both preview and live perform live sun-times lookups)
+                try:
+                    _fetch_and_store_sun_times(_SYSTEM_LOCATION['lat'], _SYSTEM_LOCATION['lon'])
+                except Exception:
+                    pass
+                # if not preview, also start the background updater
+                if not _PREVIEW_MODE:
+                    try:
+                        _start_sun_times(_SYSTEM_LOCATION['lat'], _SYSTEM_LOCATION['lon'])
+                    except Exception:
+                        pass
+                return
+            # fall through to other handling if lookup failed
+
+        # direct lat/lon provided
+        if 'lat' in cfg_override and 'lon' in cfg_override:
+            try:
+                _SYSTEM_LOCATION = {
+                    'city': cfg_override.get('city') or '',
+                    'lat': float(cfg_override['lat']),
+                    'lon': float(cfg_override['lon']),
+                    'source': 'config',
+                }
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                if DEBUG:
+                    print('DEBUG: system_location loaded from config override (lat/lon)')
+                return
+            except Exception:
+                pass
+
+        # structured place: try to geocode as fallback
+        city = cfg_override.get('city')
+        region = cfg_override.get('region') or cfg_override.get('region_code') or cfg_override.get('state')
+        country = cfg_override.get('country') or cfg_override.get('country_code')
+        if city and region and country:
+            name = f"{city}, {region}, {country}"
+            if DEBUG:
+                print(f"DEBUG: structured location provided; attempting geocode for '{name}'")
+            om = _geocode_open_meteo(name)
+            if om:
+                _SYSTEM_LOCATION = {'city': om.get('city') or city, 'lat': float(om['lat']), 'lon': float(om['lon']),
+                                    'country': om.get('country'), 'source': 'open-meteo'}
+                _write_system_location_cache(_SYSTEM_LOCATION)
+                return
+            # fall through
+
+    # 2) cache
+    cached = _read_system_location_cache()
+    if cached and isinstance(cached, dict) and cached.get('lat') is not None and cached.get('lon') is not None:
+        _SYSTEM_LOCATION = cached
+        if DEBUG:
+            print(f"DEBUG: system_location loaded from cache: {_SYSTEM_LOCATION.get('city')}")
+            print(f" ({_SYSTEM_LOCATION.get('lat')},{_SYSTEM_LOCATION.get('lon')})")
+        return
+
+    # 3) privacy-first default: disabled unless user explicitly set 'auto' or provided a location
+    if DEBUG:
+        print('DEBUG: no location configured or cached; defaulting to DISABLED for privacy')
+    _SYSTEM_LOCATION = {
+        'city': 'disabled',
+        'lat': 0.0,
+        'lon': 0.0,
+        'country': 'disabled',
+        'country_code': '__',
+        'region': 'disabled',
+        'region_code': '__',
+        'postal': '0',
+        'source': 'disabled',
+    }
+    try:
+        _write_system_location_cache(_SYSTEM_LOCATION)
+    except Exception:
+        pass
+    return
+
+
+def get_system_location() -> str:
+    """Return a human-readable location string for fact panels."""
+    if _SYSTEM_LOCATION:
+        city = _SYSTEM_LOCATION.get('city') or ''
+        country = _SYSTEM_LOCATION.get('country') or ''
+        lat = _SYSTEM_LOCATION.get('lat')
+        lon = _SYSTEM_LOCATION.get('lon')
+        coords = f" ({lat:.4f},{lon:.4f})" if lat is not None and lon is not None else ''
+        if city and country:
+            return f"{city}, {country}{coords}"
+        if city:
+            return f"{city}{coords}"
+        return f"{lat},{lon}" if lat is not None and lon is not None else ''
+    return ''
+
+
+# Sun times fetching / storage
+
+def _fetch_and_store_sun_times(lat: float, lon: float, timeout: int = 10) -> None:
+    """Fetch sunrise/sunset for today and tomorrow via Open-Meteo and store in _SUN_TIMES."""
+    try:
+        today = datetime.date.today()
+        tomorrow = today + datetime.timedelta(days=1)
+        start = today.isoformat()
+        end = tomorrow.isoformat()
+        url = (
+            f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+            f"&daily=sunrise,sunset&start_date={start}&end_date={end}&timezone=auto"
+        )
+        if DEBUG:
+            print(f"DEBUG: sun-times call -> {url}")
+        text, status = _fetch_url_raw(url, timeout, True)
+        if text is None:
+            if DEBUG:
+                print(f"DEBUG: sun-times fetch failed (no response) for {url}")
+            return
+        data = json.loads(text)
+        daily = data.get('daily', {})
+        sunrises = daily.get('sunrise', [])
+        sunsets = daily.get('sunset', [])
+        dates = daily.get('time', [])
+        for d, rs, ss in zip(dates, sunrises, sunsets):
+            try:
+                sr = datetime.datetime.fromisoformat(rs)
+                ss_dt = datetime.datetime.fromisoformat(ss)
+                _SUN_TIMES[d] = {'sunrise': sr, 'sunset': ss_dt, 'fetched_at': datetime.datetime.now()}
+                if DEBUG:
+                    print(f"DEBUG: sun-times for {d}: sunrise={sr.isoformat()} sunset={ss_dt.isoformat()}")
+            except Exception:
+                if DEBUG:
+                    print(f"DEBUG: failed parsing sun-times for {d}: {rs} / {ss}")
+                continue
+        if DEBUG:
+            keys = ','.join(sorted(_SUN_TIMES.keys()))
+            print(f"DEBUG: fetched sun-times for dates: {keys}")
+    except Exception as e:
+        if DEBUG:
+            print(f"DEBUG: sun-times fetch error: {e}")
+
+
+def _sun_times_worker(lat: float, lon: float) -> None:
+    """Background daemon: fetch immediately, then refresh twice per day (00:05, 12:05 local).
+
+    Woken early by _sun_times_event.set() (e.g., on config reload).
+    """
+    event = _sun_times_event
+    stop_event = _sun_times_stop_event
+
+    # Immediate first fetch
+    _fetch_and_store_sun_times(lat, lon)
+
+    while not stop_event.is_set():
+        now = datetime.datetime.now()
+        # schedule times: today 00:05 and 12:05
+        def next_occurrence(hour: int, minute: int) -> datetime.datetime:
+            t = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if t <= now:
+                t = t + datetime.timedelta(days=1)
+            return t
+
+        cand1 = next_occurrence(0, 5)
+        cand2 = next_occurrence(12, 5)
+        # pick the earliest of the two
+        next_t = cand1 if cand1 < cand2 else cand2
+        wait_s = (next_t - now).total_seconds()
+        # Wait but wake early if needed
+        if event.wait(timeout=wait_s):
+            # woke early (config reload) -> clear and loop to fetch immediately
+            event.clear()
+            _fetch_and_store_sun_times(lat, lon)
+            continue
+        # timeout expired -> time to fetch
+        _fetch_and_store_sun_times(lat, lon)
+
+
+def _start_sun_times(lat: float, lon: float) -> None:
+    global _sun_times_thread, _sun_times_stop_event, _sun_times_event
+    # Stop existing
+    _stop_sun_times()
+    _sun_times_stop_event.clear()
+    _sun_times_event.clear()
+    t = threading.Thread(target=_sun_times_worker, args=(lat, lon), daemon=True)
+    _sun_times_thread = t
+    t.start()
+
+
+def _stop_sun_times() -> None:
+    global _sun_times_thread, _sun_times_stop_event, _sun_times_event
+    try:
+        _sun_times_stop_event.set()
+        _sun_times_event.set()  # wake to let it exit quickly
+        if _sun_times_thread is not None:
+            _sun_times_thread.join(timeout=5)
+    except Exception:
+        pass
+    _sun_times_thread = None
+
+
+# Simple static daytime/nighttime defaults (will be replaced by sun-times integration later)
+def _is_daytime_static(now: datetime.datetime | None = None) -> bool:
+    n = now or datetime.datetime.now()
+    hhmmss = int(n.strftime('%H%M%S'))
+    # daytime: 07:00:00 - 18:59:59
+    return 70000 <= hhmmss <= 185959
+
+
+def get_daytime() -> str:
+    """Return 'true'/'false' based on fetched sun-times if available, else static rule."""
+    now = datetime.datetime.now()
+    today = now.date().isoformat()
+    entry = _SUN_TIMES.get(today)
+    if entry:
+        try:
+            sr = entry.get('sunrise')
+            ss = entry.get('sunset')
+            if sr is not None and ss is not None:
+                # normalize now to sunrise's tzinfo if aware
+                if getattr(sr, 'tzinfo', None) is not None:
+                    now_a = datetime.datetime.now(tz=sr.tzinfo)
+                else:
+                    now_a = now
+                result = 'true' if sr <= now_a < ss else 'false'
+                if DEBUG:
+                    msg = (
+                        f"DEBUG: day/night from sun-times: now={now_a.isoformat()} "
+                        f"sunrise={sr.isoformat()} "
+                        f"sunset={ss.isoformat()} => daytime={result}"
+                    )
+                    print(msg)
+                return result
+        except Exception:
+            pass
+    fallback = 'true' if _is_daytime_static(now) else 'false'
+    if DEBUG:
+        print(f"DEBUG: day/night fallback to static rule: now={now.isoformat()} => daytime={fallback}")
+    return fallback
+
+
+def get_nighttime() -> str:
+    dt = get_daytime()
+    result = 'false' if dt == 'true' else 'true'
+    if DEBUG:
+        print(f"DEBUG: nighttime={result} (derived from daytime={dt})")
+    return result
 
 
 def _handle_sigusr1_reload(signum, frame):
@@ -1400,6 +2149,9 @@ def _init_layout() -> None:
     # Start/reset cached-facts background threads (or, in preview mode, do a
     # synchronous one-shot fetch) -- see _init_cached_facts().
     _init_cached_facts(_config)
+    # Initialize system location (caches to ~/.config/clockish/location.yaml).
+    # Runs at startup and on config reload so callers get immediate availability.
+    _init_system_location(_config)
 
 
 
@@ -1597,11 +2349,42 @@ def _render_fact_panel(p: dict, px: int, py: int, pw: int, ph: int,
                 extracted = raw
             value = extracted if extracted is not None else ''
     else:
-        # Build options dict for _get_fact (e.g., mem_format for 'mem' source)
-        fact_options = {}
-        if source == 'mem' and 'mem_format' in p:
-            fact_options['mem_format'] = p['mem_format']
-        value = _get_fact(source, options=fact_options)
+        # Support dotted access for structured built-ins like 'system_location.city'
+        # and allow json_path extraction when source == 'system_location'.
+        value = None
+        if isinstance(source, str) and '.' in source:
+            prefix, suffix = source.split('.', 1)
+            if prefix == 'location':
+                if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict):
+                    v = _SYSTEM_LOCATION.get(suffix)
+                    if v is None:
+                        value = ''
+                    elif isinstance(v, float):
+                        value = f"{v:.4f}"
+                    else:
+                        value = str(v)
+                else:
+                    value = ''
+        # If not resolved above, allow json_path on the 'location' / 'system_location' top-level source
+        if value is None and source == 'location' and p.get('json_path'):
+            jp = p.get('json_path')
+            if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict):
+                v = _SYSTEM_LOCATION.get(jp)
+                if v is None:
+                    value = ''
+                elif isinstance(v, float):
+                    value = f"{v:.4f}"
+                else:
+                    value = str(v)
+            else:
+                value = ''
+
+        # Fallback to the existing registry for all other cases
+        if value is None:
+            fact_options = {}
+            if source == 'mem' and 'mem_format' in p:
+                fact_options['mem_format'] = p['mem_format']
+            value = _get_fact(source, options=fact_options)
 
     value  = apply_transforms(value, p.get('transform'), debug=DEBUG)
 
@@ -2113,6 +2896,29 @@ def _attempt_config_reload() -> None:
         # Non-fatal: if no workers exist (preview mode) or other issue, ignore.
         pass
 
+    # Wake sun-times worker (if running) so it fetches immediately on reload.
+    # If no worker exists but we have a system_location, start it.
+    try:
+        if _sun_times_event is not None:
+            _sun_times_event.set()
+            if DEBUG:
+                print("DEBUG: Waking sun-times worker after config reload")
+    except Exception:
+        pass
+
+    # Ensure worker is running if we have a location
+    try:
+        if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict) and _SYSTEM_LOCATION.get('lat') is not None:
+            if _sun_times_thread is None and not _PREVIEW_MODE:
+                try:
+                    _start_sun_times(float(_SYSTEM_LOCATION['lat']), float(_SYSTEM_LOCATION['lon']))
+                    if DEBUG:
+                        print("DEBUG: started sun-times worker after config reload")
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     print("Config reloaded successfully.")
 
 
@@ -2135,6 +2941,8 @@ def _cleanup() -> None:
         # Stop reload watcher and cached-facts workers
         _reload_watcher_stop.set()
         _stop_cached_facts()
+        # Stop sun-times worker
+        _stop_sun_times()
     except Exception:
         pass
 
@@ -2259,6 +3067,17 @@ def _init() -> None:
 
     # --- Layout (calls _resolve_panel_widths; safe here since all fns defined) --
     _init_layout()
+
+    # Initialize system location and sun-times worker (startup immediate fetch)
+    try:
+        _init_system_location(_config)
+        if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict) and _SYSTEM_LOCATION.get('lat') is not None:
+            lat = float(_SYSTEM_LOCATION['lat'])
+            lon = float(_SYSTEM_LOCATION['lon'])
+            if not _PREVIEW_MODE:
+                _start_sun_times(lat, lon)
+    except Exception:
+        pass
 
     # --- Register signal handlers -------------------------------------------
     # SIGUSR1: trigger a full config reload

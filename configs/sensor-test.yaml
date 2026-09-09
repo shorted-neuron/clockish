@@ -1,21 +1,78 @@
 ---
-orientation: square
+orientation: landscape
+preview_size: 480x320
 
 cached-facts:
-  - name: sensor-master
+  - name: sensor-office
     type: url-fact
-    url: http://sensor-master.lan/last-json
-    interval: 1m
+    url: http://sensor-office.lan/last-json
+    interval: 5m
     timeout: 5
-    preview_response: '{"tempF": "71.8"}'
+    preview_response: '{"tempC": "22.11", "tempF": "71.8"}'
+  - name: sensor-backyard
+    type: url-fact
+    url: http://sensor-backyard.lan/last-json
+    interval: 2m
+    timeout: 5
+    preview_response: '{"tempF": "42.3", "tempC": "5.7"}'
 
 rows:
-  - name: sensor-temp
-    height: 100%
+  - name: inside-temp
+    height: 20%
     panels:
       - type: fact
-        source: cached-facts.sensor-master
+        width: 70%
+        source: cached-facts.sensor-office
         json_path: tempF
-        label: "TempF: "
-        color: orange
-        font_size: 50px
+        label: "Inside: "
+        color: brightgreen
+        font_size: normal
+        transform:
+          - round: 0
+          - suffix: "°F"
+      - type: fact
+        source: cached-facts.sensor-office
+        json_path: tempF
+        color: green
+        font_size: normal
+        transform:
+          # Convert F to C with built-in.  see later for example with filters
+          - fahrenheit_to_celsius
+          - format: "{:.0f}"
+          - suffix: "°C"
+  - name: outside-temp
+    height: 20%
+    panels:
+      - type: fact
+        width: 70%
+        source: cached-facts.sensor-backyard
+        json_path: tempC
+        label: "Outside: "
+        color: steelblue
+        font_size: normal
+        transform:
+          # Convert C to F with built-in.  see later for example with filters
+          - celsius_to_fahrenheit
+          - format: "{:.0f}"
+          - suffix: "°F"
+      - type: fact
+        source: cached-facts.sensor-backyard
+        json_path: tempC
+        color: blue
+        font_size: normal
+        transform:
+          - format: "{:.0f}"
+          - suffix: "°C"
+  - name: day-night
+    height: 10%
+    panels:
+      - type: fact
+        source: daytime
+        label: "Day: "
+        color: yellow
+        font_size: small
+      - type: fact
+        source: nighttime
+        label: "Night: "
+        color: skyblue
+        font_size: small

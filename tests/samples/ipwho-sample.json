@@ -1,0 +1,38 @@
+{
+  "ip": "129.72.188.0",
+  "success": true,
+  "type": "IPv4",
+  "continent": "North America",
+  "continent_code": "NA",
+  "country": "United States",
+  "country_code": "US",
+  "region": "Wyoming",
+  "region_code": "WY",
+  "city": "Laramie",
+  "latitude": 41.3113829,
+  "longitude": -105.5909286,
+  "is_eu": false,
+  "postal": "82070",
+  "calling_code": "1",
+  "capital": "Washington D.C.",
+  "borders": "CA,MX",
+  "flag": {
+    "img": "https://cdn.ipwhois.io/flags/us.svg",
+    "emoji": "🇺🇸",
+    "emoji_unicode": "U+1F1FA U+1F1F8"
+  },
+  "connection": {
+    "asn": 2902,
+    "org": "University of Wyoming",
+    "isp": "University of Wyoming",
+    "domain": "uwyo.edu"
+  },
+  "timezone": {
+    "id": "America/Denver",
+    "abbr": "MDT",
+    "is_dst": true,
+    "offset": -21600,
+    "utc": "-06:00"
+  },
+  "readme": "https://ipwhois.io/docs"
+}

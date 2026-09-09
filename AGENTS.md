@@ -14,6 +14,8 @@ Pattern: `[thing] [action] [reason]. [next step].`
 **Git workflow: propose, don't execute**
 - **Never commit**: propose the commit message, user commits
 - **Never push**: user handles all pushes
+- Proposing commit/PR messages is fine, but always check with the human before a commit or opening a PR -- including the message text itself
+- always check before creating new worktree, ask user for worktree/branch names
 - Otherwise check before `git add` / `git commit` / `git push`
 
 Git pager: repo has `core.pager=cat` set locally (`.git/config`) -- git commands

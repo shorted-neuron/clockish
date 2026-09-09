@@ -1,0 +1,21 @@
+{
+  "data": {
+    "code": "KDEN",
+    "iata": "DEN",
+    "icao": "KDEN",
+    "name": "Denver International Airport",
+    "continent_code": "NA",
+    "continent_name": "North America",
+    "region_code": "US-CO",
+    "region_name": "Colorado",
+    "country_code": "US",
+    "country_name": "United States",
+    "municipality": "Denver",
+    "latitude": 39.860027,
+    "longitude": -104.673792,
+    "elevation": 1655.4,
+    "elevation_ft": 5431.1,
+    "time_zone": "America/Denver",
+    "type": "large_airport"
+  }
+}
