@@ -17,6 +17,8 @@ import urllib.request
 
 import yaml
 
+from clockish.config_validator import validate_location_value
+
 HOME = os.path.expanduser('~')
 CFG_DIR = os.path.join(HOME, '.config', 'clockish')
 YAML_PATH = os.path.join(CFG_DIR, 'location.yaml')
@@ -41,12 +43,29 @@ def fetch_json(url: str, timeout: int = 10) -> dict | None:
     return None
 
 
-def write_location(loc: dict) -> None:
+def write_location(loc) -> None:
+    """Write *loc* in the canonical shape: one top-level 'location:' key.
+
+    *loc* is either the scalar 'disabled' (nothing nested under it) or a mapping
+    satisfying validate_location_value(). Mode 0600 -- the file records where
+    the user physically is.
+    """
+    errors = validate_location_value(loc)
+    if errors:
+        print('\nRefusing to write an invalid location:')
+        for err in errors:
+            print('  -', err)
+        raise SystemExit(1)
     os.makedirs(CFG_DIR, exist_ok=True)
-    with open(YAML_PATH, 'w', encoding='utf-8') as fh:
-        yaml.safe_dump(loc, fh, sort_keys=False)
+    fd = os.open(YAML_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+        yaml.safe_dump({'location': loc}, fh, sort_keys=False)
+    try:
+        os.chmod(YAML_PATH, 0o600)  # pre-existing file keeps its old mode otherwise
+    except OSError:
+        pass
     print('\nWrote:')
-    print('  ', YAML_PATH)
+    print('  ', YAML_PATH, '(mode 0600)')
 
 
 def prompt_yesno(prompt: str, default: bool = False) -> bool:
@@ -78,18 +97,46 @@ def _summarize_location(loc) -> str:
     return f'{label} [source: {src}]' if src else label
 
 
+def _read_existing():
+    """Return (location_value, was_flat_shape) from the existing file."""
+    try:
+        with open(YAML_PATH) as f:
+            data = yaml.safe_load(f)
+    except Exception as e:
+        print('  (failed to read existing config:', e, ')')
+        return (None, False)
+    if isinstance(data, dict) and 'location' in data:
+        return (data['location'], False)
+    return (data, isinstance(data, dict))
+
+
+def migrate_if_flat() -> None:
+    """Rewrite a legacy flat-shape file into the canonical nested shape.
+
+    The runtime warns about the flat shape but never rewrites the user's file;
+    this is the migration path that warning points at.
+    """
+    if not os.path.isfile(YAML_PATH):
+        return
+    loc, was_flat = _read_existing()
+    if not was_flat or loc is None:
+        return
+    if validate_location_value(loc):
+        return  # invalid content: leave it alone, the user is about to redo it
+    print(f'\nMigrating {YAML_PATH} to the canonical "location:" shape...')
+    write_location(loc)
+
+
 def show_existing():
     if os.path.isfile(YAML_PATH):
-        try:
-            with open(YAML_PATH) as f:
-                data = yaml.safe_load(f)
-            loc = data.get('location', data) if isinstance(data, dict) else data
-        except Exception as e:
-            print('  (failed to read existing config:', e, ')')
+        loc, was_flat = _read_existing()
+        if loc is None:
             return True
         print(f'Your location is currently: {_summarize_location(loc)}')
+        if was_flat:
+            print('  (legacy flat shape -- will be migrated to "location:" on next write)')
         print('---')
-        show_location_yaml(loc if isinstance(loc, dict) else {'location': loc})
+        show_location_yaml(loc if isinstance(loc, dict) else loc)
         return True
     return False
 
@@ -223,6 +270,7 @@ def main():
     if args.auto or args.airport or args.coords or args.structured or args.disabled:
         if show_existing() and not args.yes:
             if prompt_yesno('Keep this location? (answer n to reconfigure)', default=True):
+                migrate_if_flat()
                 print('Keeping existing location. Exiting.')
                 return
         loc = None
@@ -277,7 +325,7 @@ def main():
             print('Setup failed or cancelled.')
             return
         if loc == 'disabled':
-            write_location({'location': 'disabled'})
+            write_location('disabled')
             print('Location set to disabled.')
             return
         # normalize and write
@@ -319,6 +367,7 @@ def main():
     print('------------------------')
     if show_existing():
         if prompt_yesno('Keep this location? (answer n to reconfigure)', default=True):
+            migrate_if_flat()
             print('Keeping existing location. Exiting.')
             return
     def print_menu():
@@ -351,7 +400,7 @@ def main():
         print_menu()
 
     if loc == 'disabled':
-        write_location({'location': 'disabled'})
+        write_location('disabled')
         print('Location set to disabled.')
         return
 

@@ -127,6 +127,167 @@ KNOWN_FACT_SOURCES: frozenset[str] = frozenset({
 #: Fetcher ``type:`` values recognised for ``cached-facts:`` entries.
 KNOWN_CACHED_FACT_TYPES: frozenset[str] = frozenset({'url-fact'})
 
+#: Scalar ``location:`` values meaning "location is OFF" (no lookups at all).
+#: Duplicated in ``display.py`` as ``_LOCATION_DISABLED_VALUES`` -- same reason
+#: the font-behavior set is duplicated: the validator must not import
+#: ``display.py`` (hardware-driver imports).
+LOCATION_DISABLED_VALUES: frozenset[str] = frozenset({'disabled', 'none', 'off', 'false'})
+
+#: Scalar ``location:`` values that trigger a GeoIP lookup.
+LOCATION_AUTO_VALUES: frozenset[str] = frozenset({'auto', 'auto-preview'})
+
+#: Keys a ``location:`` mapping may contain. Anything else is a typo.
+KNOWN_LOCATION_KEYS: frozenset[str] = frozenset({
+    'airport', 'icao', 'iata',
+    'city', 'region', 'region_code', 'state', 'country', 'country_code', 'postal',
+    'lat', 'lon', 'latitude', 'longitude',
+    'elevation', 'elevation_ft', 'timezone',
+    # written by the runtime into location-cache.yaml, harmless in a user file
+    'source', 'resolved_at',
+})
+
+#: A bare ``lat,lon`` scalar, e.g. "39.7392,-104.9903".
+_LATLON_RE = re.compile(r'^\s*[-+]?\d+(?:\.\d+)?\s*,\s*[-+]?\d+(?:\.\d+)?\s*$')
+
+#: ICAO (4) / IATA (3) airport code.
+_AIRPORT_CODE_RE = re.compile(r'^[A-Za-z]{3,4}$')
+
+
+def _edit_distance_1(a: str, b: str) -> bool:
+    """True if *a* and *b* differ by one substitution, insertion or transposition."""
+    if a == b:
+        return False
+    if len(a) == len(b):
+        diff = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+        if len(diff) == 1:
+            return True
+        if len(diff) == 2:
+            i, j = diff
+            return j == i + 1 and a[i] == b[j] and a[j] == b[i]  # transposition
+        return False
+    if abs(len(a) - len(b)) == 1:
+        short, long = (a, b) if len(a) < len(b) else (b, a)
+        for i in range(len(long)):
+            if long[:i] + long[i + 1:] == short:
+                return True
+    return False
+
+
+def _near_reserved_word(value: str) -> str | None:
+    """Return the reserved ``location:`` keyword *value* looks like a typo of."""
+    for word in sorted(LOCATION_DISABLED_VALUES | LOCATION_AUTO_VALUES):
+        if _edit_distance_1(value, word):
+            return word
+    return None
+
+
+def location_value_warnings(value: object) -> list[str]:
+    """Non-fatal advisories for a valid ``location:`` setting.
+
+    Kept separate from :func:`validate_location_value` so callers that only
+    care about validity (the on-disk read paths) need not filter warnings out.
+    """
+    if not isinstance(value, str):
+        return []
+    s = value.strip()
+    low = s.lower()
+    if low in LOCATION_AUTO_VALUES:
+        return [
+            "location: auto sends your device's public IP to ipwho.is on every "
+            "resolution to derive an approximate city and coordinates. Use "
+            "'location: disabled' or an explicit airport code / lat,lon to avoid it"
+        ]
+    if _AIRPORT_CODE_RE.match(s) and low not in LOCATION_DISABLED_VALUES:
+        return [
+            f"location: '{s}' is treated as an airport code and looked up at "
+            "api.freeairportdb.com. Use a mapping ({airport: " + s.upper() + "}) "
+            "to make that explicit, or 'disabled' if you meant no location"
+        ]
+    return []
+
+
+def validate_location_value(value: object) -> list[str]:
+    """Validate a ``location:`` setting; return a list of error strings.
+
+    Shared by the config validator, ``display.py`` (config / on-disk files) and
+    ``scripts/setup_location.py`` (write path), so one definition of "valid
+    location" governs every entry point. An empty list means valid.
+
+    Accepted forms:
+      * scalar ``disabled`` / ``none`` / ``off`` / ``false`` (or ``False``)
+      * scalar ``auto`` / ``auto-preview``
+      * scalar ``"lat,lon"``
+      * scalar 3-4 letter airport code
+      * mapping carrying an airport code, or ``lat`` + ``lon``, or
+        ``city`` + ``region`` + ``country``
+    """
+    if value is None:
+        return ["location: is empty -- use 'disabled', 'auto', an airport code, "
+                "'lat,lon', or a mapping"]
+
+    if isinstance(value, bool):
+        # 'location: false' is disabled; 'location: true' is meaningless.
+        if value is False:
+            return []
+        return ["location: true is not a valid setting -- use 'auto' to consent "
+                "to a GeoIP lookup, or 'disabled'"]
+
+    if isinstance(value, str):
+        s = value.strip()
+        low = s.lower()
+        if low in LOCATION_DISABLED_VALUES or low in LOCATION_AUTO_VALUES:
+            return []
+        if _LATLON_RE.match(s):
+            return []
+        if _AIRPORT_CODE_RE.match(s):
+            near = _near_reserved_word(low)
+            if near:
+                return [
+                    f"location: '{value}' looks like a typo for '{near}' -- as written it "
+                    f"would be sent to the airport lookup API as code '{s.upper()}'"
+                ]
+            return []
+        return [
+            f"location: '{value}' is not a recognised setting -- expected "
+            "'disabled', 'auto', a 3-4 letter airport code, 'lat,lon', or a mapping"
+        ]
+
+    if isinstance(value, dict):
+        errors: list[str] = []
+        unknown = sorted(k for k in value if k not in KNOWN_LOCATION_KEYS)
+        if unknown:
+            errors.append(
+                f"location: unknown key(s) {', '.join(repr(k) for k in unknown)} "
+                f"(known: {', '.join(sorted(KNOWN_LOCATION_KEYS))})"
+            )
+        has_airport = any(value.get(k) not in (None, '') for k in ('airport', 'icao', 'iata'))
+        has_lat = value.get('lat') is not None or value.get('latitude') is not None
+        has_lon = value.get('lon') is not None or value.get('longitude') is not None
+        has_place = all(
+            value.get(k) not in (None, '')
+            for k in ('city', 'country')
+        ) and (value.get('region') not in (None, '') or value.get('region_code') not in (None, '')
+               or value.get('state') not in (None, ''))
+        if not (has_airport or (has_lat and has_lon) or has_place):
+            errors.append(
+                "location: mapping must contain an airport code (airport/icao/iata), "
+                "or both 'lat' and 'lon', or 'city' + 'region' + 'country'"
+            )
+        elif has_lat != has_lon:
+            errors.append("location: mapping has only one of 'lat'/'lon' -- provide both")
+        for k in ('lat', 'lon', 'latitude', 'longitude'):
+            v = value.get(k)
+            if v is None:
+                continue
+            try:
+                float(v)
+            except (TypeError, ValueError):
+                errors.append(f"location: '{k}' must be numeric, got {v!r}")
+        return errors
+
+    return [f"location: must be a string or mapping, got {type(value).__name__}"]
+
+
 #: All valid attribute keys for a ``cached-facts:`` list entry.
 _CACHED_FACT_ATTRS: frozenset[str] = frozenset({
     'name', 'type', 'url', 'interval', 'timeout', 'verify_ssl', 'preview_response',

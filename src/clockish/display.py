@@ -1038,33 +1038,117 @@ def _location_enabled() -> bool:
         return False
 
 
-def _read_system_location_cache() -> dict | None:
-    # Prefer human-editable YAML location file.
+#: GeoIP-derived cache entries go stale: a device moves, an ISP re-allocates.
+#: Re-resolution needs live consent ('location: auto'), so an expired entry with
+#: no current consent means disabled, not "look it up again".
+_LOCATION_CACHE_TTL_DAYS = 30
+#: Cache 'source' values that came from a GeoIP lookup (subject to the TTL).
+_GEOIP_SOURCES: frozenset[str] = frozenset({'ipwho', 'geoip'})
+#: Warn about a legacy flat-shape user file once per process, not once per read.
+_flat_user_file_warned = False
+
+
+def _load_location_document(path: str) -> tuple[object, bool]:
+    """Read a location YAML file; return (raw_location_value, was_flat_shape).
+
+    Canonical shape is a single top-level 'location:' key. The legacy shape was
+    a bare flat mapping of location fields. Returns (None, False) when the file
+    is absent, empty or unparseable -- never raises.
+    """
     try:
-        if os.path.isfile(_LOCATION_YAML_PATH):
-            with open(_LOCATION_YAML_PATH) as f:
-                return yaml.safe_load(f) or None
-    except Exception:
-        pass
-    return None
+        if not os.path.isfile(path):
+            return (None, False)
+        with open(path) as f:
+            data = yaml.safe_load(f)
+    except Exception as e:
+        _log_warning(f"failed to read {path}: {e}")
+        return (None, False)
+    if data is None:
+        return (None, False)
+    if isinstance(data, dict) and 'location' in data:
+        return (data['location'], False)
+    # Legacy flat shape: the whole document is the location mapping.
+    return (data, isinstance(data, dict))
 
 
 def _read_user_location_setting():
     """Return the raw 'location:' value from the user-owned location.yaml.
 
-    Accepts both the canonical nested shape ({'location': ...}) and the legacy
-    flat mapping. Returns None when the file is absent or unreadable.
+    Accepts the canonical nested shape and the legacy flat mapping. The user's
+    file is NEVER rewritten by the runtime -- it is theirs. A legacy shape earns
+    a one-time warning pointing at clockish-location, which does migrate it.
     """
+    global _flat_user_file_warned
+    value, was_flat = _load_location_document(_LOCATION_YAML_PATH)
+    if was_flat and not _flat_user_file_warned:
+        _flat_user_file_warned = True
+        _log_warning(
+            f"{_LOCATION_YAML_PATH} uses the legacy flat shape; expected a top-level "
+            "'location:' key. Run clockish-location to migrate it"
+        )
+    return value
+
+
+def _location_cache_is_expired(d: dict) -> bool:
+    """True if a GeoIP-derived cache entry has outlived _LOCATION_CACHE_TTL_DAYS."""
+    if d.get('source') not in _GEOIP_SOURCES:
+        return False  # airport / coords / structured entries are deterministic
+    stamp = d.get('resolved_at')
+    if not stamp:
+        return True  # undated GeoIP entry: predates stamping, treat as stale
     try:
-        if not os.path.isfile(_LOCATION_YAML_PATH):
-            return None
-        with open(_LOCATION_YAML_PATH) as f:
-            data = yaml.safe_load(f)
-    except Exception:
+        resolved = datetime.datetime.fromisoformat(str(stamp))
+    except ValueError:
+        return True
+    if resolved.tzinfo is not None:
+        resolved = resolved.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    age = now_utc - resolved
+    return age > datetime.timedelta(days=_LOCATION_CACHE_TTL_DAYS)
+
+
+def _read_system_location_cache() -> dict | None:
+    """Read the runtime cache, migrating legacy shapes and honouring the TTL.
+
+    Returns None (and purges the file) for anything unusable: malformed YAML, a
+    shape the shared validator rejects, or an expired GeoIP entry. Never raises.
+    """
+    value, was_flat = _load_location_document(_LOCATION_CACHE_PATH)
+    if value is None:
         return None
-    if isinstance(data, dict) and 'location' in data:
-        return data['location']
-    return data
+
+    if _location_is_disabled(value):
+        return None
+
+    if not isinstance(value, dict):
+        _log_warning(f"{_LOCATION_CACHE_PATH} holds no usable location; ignoring")
+        _purge_location_cache()
+        return None
+
+    from clockish.config_validator import validate_location_value
+    errors = validate_location_value(value)
+    if errors:
+        _log_warning(f"{_LOCATION_CACHE_PATH} is invalid ({errors[0]}); ignoring")
+        _purge_location_cache()
+        return None
+
+    if _location_cache_is_expired(value):
+        if DEBUG:
+            print(
+                f"DEBUG: location cache expired (>{_LOCATION_CACHE_TTL_DAYS}d, "
+                f"source={value.get('source')}); purging"
+            )
+        _purge_location_cache()
+        return None
+
+    if was_flat:
+        # One-time migration to the canonical nested shape. The cache is ours to
+        # rewrite (unlike the user's file), so do it silently.
+        if DEBUG:
+            print(f"DEBUG: migrating {_LOCATION_CACHE_PATH} to the nested 'location:' shape")
+        _write_location_document(_LOCATION_CACHE_PATH, _normalize_location_dict(value))
+
+    return value
 
 
 def _normalize_location_dict(d: dict) -> dict:
@@ -1110,7 +1194,29 @@ def _warn_missing_location_fields(d: dict) -> None:
         _log_warning(f"location missing fields: {', '.join(missing)} -- panels may show defaults")
 
 
+def _write_location_document(path: str, loc) -> None:
+    """Write *loc* to *path* in the canonical nested shape, mode 0600.
+
+    Canonical shape is a single top-level 'location:' key holding either a
+    mapping or the scalar 'disabled'. 0600 because the file records where the
+    user physically is.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        yaml.safe_dump({'location': loc}, f, sort_keys=False)
+    try:
+        os.chmod(path, 0o600)  # pre-existing file keeps its old mode otherwise
+    except OSError:
+        pass
+
+
 def _write_system_location_cache(d: dict) -> None:
+    """Store a resolved location in memory and in the runtime cache file.
+
+    Writes ONLY location-cache.yaml -- never the user-owned location.yaml, which
+    belongs to the user and is written solely by clockish-location.
+    """
     try:
         norm = _normalize_location_dict(d)
         # Update global in-memory copy so renderers see canonical keys
@@ -1121,12 +1227,15 @@ def _write_system_location_cache(d: dict) -> None:
             _warn_missing_location_fields(norm)
         except Exception:
             pass
-        os.makedirs(os.path.dirname(_LOCATION_YAML_PATH), exist_ok=True)
-        with open(_LOCATION_YAML_PATH, 'w') as f:
-            yaml.safe_dump(norm, f)
-        # No legacy JSON write; keep only the human-editable YAML at ~/.config/clockish/location.yaml
+        # Drop null-valued keys: a cache file full of 'postal: null' is noise.
+        stamped = {k: v for k, v in norm.items() if v is not None}
+        stamped.setdefault('source', 'config')
+        stamped['resolved_at'] = (
+            datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0).isoformat()
+        )
+        _write_location_document(_LOCATION_CACHE_PATH, stamped)
         if DEBUG:
-            print(f"DEBUG: wrote system_location cache to {_LOCATION_YAML_PATH}")
+            print(f"DEBUG: wrote system_location cache to {_LOCATION_CACHE_PATH}")
     except Exception as e:
         _log_warning(f"failed to write system_location cache: {e}")
 
@@ -1306,10 +1415,24 @@ def _init_system_location(config: dict) -> None:
       - Cache final resolved dict in ~/.config/clockish/location.yaml.
     """
     global _SYSTEM_LOCATION
-    # Accept only top-level 'location' key in config (legacy 'system_location' support removed)
+    # Precedence: config 'location:' > user-owned location.yaml > runtime cache >
+    # disabled. The user file's value is treated exactly like a config value, so
+    # 'auto' / an airport code / lat,lon all work from either place.
     cfg_override = None
     if isinstance(config, dict):
         cfg_override = config.get('location')
+    override_origin = 'config'
+    if cfg_override is None:
+        cfg_override = _read_user_location_setting()
+        override_origin = _LOCATION_YAML_PATH
+    if cfg_override is not None:
+        from clockish.config_validator import validate_location_value
+        _loc_errors = validate_location_value(cfg_override)
+        if _loc_errors:
+            for _err in _loc_errors:
+                _log_warning(f"{override_origin}: {_err}")
+            _disable_location(f"invalid location setting in {override_origin}")
+            return
 
     # 0) kill switch  --  checked before lat,lon parsing and before the airport
     # regex, since 'none'/'off' are 3-4 alpha chars and would otherwise be sent
@@ -1319,10 +1442,7 @@ def _init_system_location(config: dict) -> None:
         _disable_location('offline mode')
         return
     if _location_is_disabled(cfg_override):
-        _disable_location(f"config location: {cfg_override!r}")
-        return
-    if cfg_override is None and _location_is_disabled(_read_user_location_setting()):
-        _disable_location(f"{_LOCATION_YAML_PATH} sets location: disabled")
+        _disable_location(f"{override_origin} sets location: {cfg_override!r}")
         return
 
     # 1) explicit override handling
