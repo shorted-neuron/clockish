@@ -826,6 +826,7 @@ def _fetch_url_raw(url: str, timeout: int, verify_ssl: bool) -> tuple[str | None
         return (response_text, status_code)
     except Exception as e:
         if DEBUG:
+            # codeql[py/clear-text-logging-sensitive-data]
             print(f"DEBUG: cached-facts fetch failed: {url} -> {e}")
         return (None, None)
 
@@ -1569,10 +1570,12 @@ def _fetch_and_store_sun_times(lat: float, lon: float, timeout: int = 10) -> Non
         )
         if DEBUG:
             # URL carries lat/lon query params; redacted to 1dp before logging
+            # codeql[py/clear-text-logging-sensitive-data]
             print(f"DEBUG: sun-times call -> {_redact_url(url)}")
         text, status = _fetch_url_raw(url, timeout, True)
         if text is None:
             if DEBUG:
+                # codeql[py/clear-text-logging-sensitive-data]
                 print(f"DEBUG: sun-times fetch failed (no response) for {_redact_url(url)}")
             return
         data = json.loads(text)
