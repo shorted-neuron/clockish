@@ -1,0 +1,165 @@
+---
+# location-disabled demo -- the DEFAULT behaviour, shown explicitly.
+#
+# Setting 'location: disabled' (or 'none' / 'off' / 'false') is the kill switch:
+#   - no GeoIP call to ipwho.is
+#   - no airport lookup at api.freeairportdb.com
+#   - no geocode at geocoding-api.open-meteo.com
+#   - no recurring sunrise/sunset call to api.open-meteo.com
+#   - ~/.config/clockish/location-cache.yaml is DELETED if it exists, so a
+#     location resolved by an earlier run cannot quietly keep being used
+#   - your own ~/.config/clockish/location.yaml is never touched -- it is yours
+#
+# Leaving 'location:' out entirely behaves the same way; it is spelled out here
+# so the intent is visible in the config rather than implied by absence.
+#
+# Compare against: location-static.yaml (explicit fields, no lookups except sun
+# times), location-by-airport.yaml (one lookup by code), location-auto.yaml
+# (GeoIP -- sends your public IP).
+orientation: landscape
+preview_size: 480x320
+
+location: disabled
+
+rows:
+  - name: demo-text
+    height: 10%
+    background: blue
+    panels:
+      - type: text
+        label: "location-disabled"
+        font_size: small
+        justify: left
+      - type: fact
+        source: version
+        label: "clockish v"
+        font_size: small
+        justify: right
+
+  - name: explain-fields
+    height: 8%
+    background: black
+    panels:
+      - type: text
+        label: "location: disabled -- every location.* fact below renders empty"
+        color: white
+        font_size: 11px
+        justify: left
+
+  # Same panels as location-static.yaml. With location disabled these render as
+  # just their labels: there is no location data, and none is fetched to fill
+  # them in. Nothing errors -- panels simply stay blank.
+  - name: location-city
+    height: 5%
+    background: darkgrey
+    panels:
+      - type: fact
+        source: location.city
+        label: "City: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-state
+    height: 5%
+    background: black
+    panels:
+      - type: fact
+        source: location.region
+        label: "region/state: "
+        color: white
+        font_size: 12px
+        justify: left
+      - type: fact
+        source: location.region_code
+        label: "region_code: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-country
+    height: 5%
+    background: grey
+    panels:
+      - type: fact
+        source: location.country
+        label: "Country: "
+        color: white
+        font_size: 12px
+        justify: left
+  - name: location-coordinates
+    height: 8%
+    background: forestgreen
+    panels:
+      - type: fact
+        source: location.latitude
+        label: "Lat: "
+        color: white
+        font_size: 12px
+        justify: left
+      - type: fact
+        source: location.longitude
+        label: "Lon: "
+        color: white
+        font_size: 12px
+        justify: left
+
+  # Day/night is the one that does NOT go blank, so it is the one to watch out
+  # for. daytime/nighttime still return 'true'/'false', but with no coordinates
+  # there is nothing to ask Open-Meteo about, so they fall back to a FIXED
+  # STATIC RULE (roughly: day between 07:00 and 19:00 local) rather than real
+  # sunrise/sunset for where you are. Near a solstice, or anywhere far from the
+  # middle of a timezone, that can be off by hours -- and it looks exactly like
+  # a working sun sensor. clockish-validate warns when a config is in this state.
+  #
+  # Want real sun times? Give clockish coordinates by ANY of: location: auto,
+  # an airport code, explicit lat/lon (see location-static.yaml). Only the
+  # sunrise/sunset call itself then goes out; lat/lon needs no other lookup.
+  - name: day-night-warning
+    height: 8%
+    background: rust
+    panels:
+      - type: text
+        label: "day/night below: static 07:00-19:00 rule, NOT real sun times"
+        color: white
+        font_size: 11px
+        justify: left
+
+  - name: day-night
+    height: 8%
+    background: black
+    panels:
+      - type: fact
+        source: daytime
+        label: "Day: "
+        color: yellow
+        font_size: 12px
+        justify: left
+      - type: fact
+        source: nighttime
+        label: "Night: "
+        color: skyblue
+        font_size: 12px
+        justify: left
+
+  # The clock is unaffected: local time comes from the system clock and the TZ
+  # database, never from the location feature. Disabling location does not stop
+  # clockish telling the time.
+  - name: clock-note
+    height: 8%
+    background: indigo
+    panels:
+      - type: text
+        label: "clock unaffected: system clock + TZ, not the location feature"
+        color: white
+        font_size: 11px
+        justify: left
+
+  - name: local-clock
+    height: 22%
+    background: dimred
+    panels:
+      - type: clock
+        timezone: local
+        time_format: 24hs
+        color: brown
+        font_size: auto
+        justify: left
