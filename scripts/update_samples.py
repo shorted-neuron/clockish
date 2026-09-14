@@ -64,7 +64,10 @@ def main():
 
     om_url = (
         f'https://api.open-meteo.com/v1/forecast?latitude={latf}&longitude={lonf}'
-        f'&daily=sunrise,sunset&start_date={start}&end_date={end}&timezone=UTC'
+        # timezone=auto matches what display.py::_fetch_and_store_sun_times
+        # requests; fetching in UTC produced a fixture whose wall times did not
+        # line up with what the runtime parses.
+        f'&daily=sunrise,sunset&start_date={start}&end_date={end}&timezone=auto'
     )
     print('Fetching', om_url)
     try:

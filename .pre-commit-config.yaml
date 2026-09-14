@@ -102,7 +102,7 @@ repos:
     hooks:
       - id: clockish-preview
         name: clockish-preview (regenerate docs/previews/*.png)
-        entry: python src/clockish/render_preview.py
+        entry: python src/clockish/render_preview.py --contrib
         language: python
         additional_dependencies: ["PyYAML>=6.0", "Pillow>=10.0"]
         stages: [manual]

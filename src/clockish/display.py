@@ -93,6 +93,11 @@ _args          = None
 DEBUG: bool    = False
 DEBUG_LAYOUT: bool = False
 _PREVIEW_MODE: bool = False
+#: Preview location mode. 'contrib' (default) resolves location from the
+#: checked-in sample payloads and performs NO location network I/O, so renders
+#: destined for docs/previews/*.png can never carry the renderer's real
+#: location. 'personal' behaves like a live run: real lookups, real cache.
+_PREVIEW_LOCATION_MODE: str = 'contrib'
 #: True -> no outbound network I/O at all (location, sun-times, cached-facts).
 #: Set by --offline or CLOCKISH_OFFLINE=1; env var is read at import so that
 #: preview/test entry points that never touch _parser still honour it.
@@ -1048,6 +1053,65 @@ _GEOIP_SOURCES: frozenset[str] = frozenset({'ipwho', 'geoip'})
 _flat_user_file_warned = False
 
 
+#: tests/samples/ relative to the repo root (src/clockish/display.py -> ../../..).
+_SAMPLES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'tests', 'samples',
+)
+
+#: Used when tests/samples/ipwho-sample.json is unavailable (e.g. a wheel
+#: install with no repo checkout). Mirrors the committed sample's key fields.
+_FALLBACK_SAMPLE_LOCATION: dict = {
+    'city': 'Laramie', 'region': 'Wyoming', 'region_code': 'WY',
+    'country': 'United States', 'country_code': 'US', 'postal': '82070',
+    'lat': 41.3113829, 'lon': -105.5911007, 'source': 'sample',
+}
+
+
+def _contrib_preview() -> bool:
+    """True when rendering a preview that must not touch the network.
+
+    Contrib previews feed docs/previews/*.png, which is tracked in git -- a
+    real location resolved here would be committed upstream.
+    """
+    return _PREVIEW_MODE and _PREVIEW_LOCATION_MODE != 'personal'
+
+
+def _load_sample_json(name: str) -> dict | None:
+    """Load tests/samples/<name>; return None when absent or unparseable."""
+    path = os.path.join(_SAMPLES_DIR, name)
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        _log_warning(f"failed to read sample {path}: {e}")
+        return None
+
+
+def _sample_location() -> dict:
+    """Location for contrib previews: the checked-in ipwho sample payload."""
+    data = _load_sample_json('ipwho-sample.json')
+    if not data:
+        return dict(_FALLBACK_SAMPLE_LOCATION)
+    try:
+        return {
+            'city': data.get('city') or '',
+            'lat': float(data.get('latitude')),
+            'lon': float(data.get('longitude')),
+            'region': data.get('region'),
+            'region_code': data.get('region_code'),
+            'country': data.get('country'),
+            'country_code': data.get('country_code'),
+            'postal': data.get('postal'),
+            'source': 'sample',
+        }
+    except (TypeError, ValueError):
+        return dict(_FALLBACK_SAMPLE_LOCATION)
+
+
 def _load_location_document(path: str) -> tuple[object, bool]:
     """Read a location YAML file; return (raw_location_value, was_flat_shape).
 
@@ -1222,6 +1286,12 @@ def _write_system_location_cache(d: dict) -> None:
         # Update global in-memory copy so renderers see canonical keys
         global _SYSTEM_LOCATION
         _SYSTEM_LOCATION = norm
+        if _contrib_preview():
+            # A contrib preview is a throwaway render against sample data; it
+            # must not overwrite the real cache of whoever ran it.
+            if DEBUG:
+                print('DEBUG: contrib preview -- not writing the location cache')
+            return
         # warn about missing main fields (non-fatal)
         try:
             _warn_missing_location_fields(norm)
@@ -1246,6 +1316,10 @@ def _fetch_ipwho_coords(timeout: int = 5, ip_override: str | None = None) -> dic
     If ip_override is provided, call https://ipwho.is/{ip_override} (used
     by preview mode to request a stable sample IP like 6.0.0.0).
     """
+    if _contrib_preview():
+        if DEBUG:
+            print('DEBUG: contrib preview -- GeoIP resolved from tests/samples/ipwho-sample.json')
+        return _sample_location()
     url = 'https://ipwho.is/' if not ip_override else f'https://ipwho.is/{ip_override}'
     if DEBUG:
         print(f"DEBUG: geoip call -> {url}")
@@ -1300,19 +1374,35 @@ def _lookup_airport_code(code: str, timeout: int = 10) -> dict | None:
     if not code:
         return None
 
-    url = f"{_FREEAIRPORTDB_BASE}/airports/{code}"
-    if DEBUG:
-        print(f"DEBUG: fetching airport data -> {url}")
-    text, status = _fetch_url_raw(url, timeout, True)
-    if text is None:
+    if _contrib_preview():
+        # No network in a contrib preview: only codes with a checked-in sample
+        # can resolve. Anything else renders blank rather than phoning home.
+        payload = (
+            _load_sample_json(f"airport-lookup-icao-{code}.json")
+            or _load_sample_json(f"airport-lookup-iata-{code}.json")
+        )
+        if payload is None:
+            _log_warning(
+                f"contrib preview: no tests/samples/airport-lookup-*-{code}.json; "
+                f"location panels will render blank. Re-run with --personal for a live lookup"
+            )
+            return None
         if DEBUG:
-            print(f"DEBUG: airport lookup failed for {code} (status={status})")
-        return None
+            print(f"DEBUG: contrib preview -- airport {code} from sample payload")
+    else:
+        url = f"{_FREEAIRPORTDB_BASE}/airports/{code}"
+        if DEBUG:
+            print(f"DEBUG: fetching airport data -> {url}")
+        text, status = _fetch_url_raw(url, timeout, True)
+        if text is None:
+            if DEBUG:
+                print(f"DEBUG: airport lookup failed for {code} (status={status})")
+            return None
 
-    try:
-        payload = json.loads(text)
-    except Exception:
-        return None
+        try:
+            payload = json.loads(text)
+        except Exception:
+            return None
 
     # The API returns {'data': {...}} on success
     data = payload.get('data') if isinstance(payload, dict) else None
@@ -1358,6 +1448,12 @@ def _geocode_open_meteo(name: str, timeout: int = 5) -> dict | None:
         if DEBUG:
             print('DEBUG: geocode skipped: empty city name')
         return None
+    if _contrib_preview():
+        _log_warning(
+            f"contrib preview: skipping the Open-Meteo geocode of '{name}' (no network). "
+            "Add explicit lat/lon to the config, or re-run with --personal"
+        )
+        return None
     q = urllib.parse.quote(name)
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={q}&count=1&language=en"
     if DEBUG:
@@ -1400,6 +1496,32 @@ def _geocode_open_meteo(name: str, timeout: int = 5) -> dict | None:
         return None
 
 
+
+
+def _resolve_sun_times_for(loc: dict | None) -> None:
+    """Populate sun-times for *loc*: one-shot in preview, background worker live.
+
+    Every resolution branch ends here, so no branch can silently skip sunrise /
+    sunset again -- 'location: auto' previously did, leaving daytime/nighttime
+    permanently on the static fallback rule.
+    """
+    if not loc:
+        return
+    lat, lon = loc.get('lat'), loc.get('lon')
+    if lat is None or lon is None:
+        return
+    try:
+        latf, lonf = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return
+    try:
+        if _PREVIEW_MODE:
+            _fetch_and_store_sun_times(latf, lonf)
+        else:
+            _start_sun_times(latf, lonf)
+    except Exception as e:
+        if DEBUG:
+            print(f"DEBUG: sun-times setup failed: {e}")
 
 
 def _init_system_location(config: dict) -> None:
@@ -1448,33 +1570,21 @@ def _init_system_location(config: dict) -> None:
     # 1) explicit override handling
     # Preview-mode special case: if no location provided or empty string, use stable sample IP
     if _PREVIEW_MODE and (cfg_override is None or (isinstance(cfg_override, str) and cfg_override.strip() == '')):
-        if DEBUG:
-            print('DEBUG: preview mode + no location -> using stable ipwho sample 129.72.188.0')
-        geo = _fetch_ipwho_coords(timeout=5, ip_override='129.72.188.0')
-        if geo:
+        # A config with no location: still renders location/daytime panels in
+        # preview, so there is something to look at. Contrib previews get the
+        # sample; personal previews get nothing (a real lookup here would be
+        # location data the user never asked this config for).
+        if _contrib_preview():
+            _SYSTEM_LOCATION = _sample_location()
+            _write_system_location_cache(_SYSTEM_LOCATION)
             try:
-                _SYSTEM_LOCATION = {
-                    'city': geo.get('city') or '',
-                    'lat': float(geo.get('lat')),
-                    'lon': float(geo.get('lon')),
-                    'region': geo.get('region'),
-                    'region_code': geo.get('region_code'),
-                    'country': geo.get('country'),
-                    'country_code': geo.get('country_code'),
-                    'postal': geo.get('postal'),
-                    'source': 'ipwho',
-                }
+                _fetch_and_store_sun_times(_SYSTEM_LOCATION['lat'], _SYSTEM_LOCATION['lon'])
             except Exception:
-                _SYSTEM_LOCATION = None
-            if _SYSTEM_LOCATION:
-                _write_system_location_cache(_SYSTEM_LOCATION)
-                # fetch sun-times synchronously for preview
-                try:
-                    _fetch_and_store_sun_times(_SYSTEM_LOCATION['lat'], _SYSTEM_LOCATION['lon'])
-                except Exception:
-                    pass
-                return
-        _SYSTEM_LOCATION = None
+                pass
+            if DEBUG:
+                print('DEBUG: preview + no location -> sample location (contrib)')
+            return
+        _disable_location('personal preview with no location: in the config')
         return
 
     if isinstance(cfg_override, str):
@@ -1498,9 +1608,10 @@ def _init_system_location(config: dict) -> None:
                     'country': geo.get('country'),
                     'country_code': geo.get('country_code'),
                     'postal': geo.get('postal'),
-                    'source': 'ipwho',
+                    'source': geo.get('source') or 'ipwho',
                 }
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 return
             else:
                 _SYSTEM_LOCATION = None
@@ -1521,10 +1632,11 @@ def _init_system_location(config: dict) -> None:
                     'country': geo.get('country'),
                     'country_code': geo.get('country_code'),
                     'postal': geo.get('postal'),
-                    'source': 'ipwho',
+                    'source': geo.get('source') or 'ipwho',
                 }
                 # Per policy: no reverse geocoding. Rely on provider fields or user-supplied structured fields.
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 return
             else:
                 _SYSTEM_LOCATION = None
@@ -1684,6 +1796,7 @@ def _init_system_location(config: dict) -> None:
                     'source': 'config',
                 }
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 if DEBUG:
                     print('DEBUG: system_location loaded from config override (lat/lon)')
                 return
@@ -1703,6 +1816,7 @@ def _init_system_location(config: dict) -> None:
                 _SYSTEM_LOCATION = {'city': om.get('city') or city, 'lat': float(om['lat']), 'lon': float(om['lon']),
                                     'country': om.get('country'), 'source': 'open-meteo'}
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 return
             # fall through
 
@@ -1710,6 +1824,7 @@ def _init_system_location(config: dict) -> None:
     cached = _read_system_location_cache()
     if cached and isinstance(cached, dict) and cached.get('lat') is not None and cached.get('lon') is not None:
         _SYSTEM_LOCATION = cached
+        _resolve_sun_times_for(_SYSTEM_LOCATION)
         if DEBUG:
             print(f"DEBUG: system_location loaded from cache: {_SYSTEM_LOCATION.get('city')}")
             print(f" ({_SYSTEM_LOCATION.get('lat')},{_SYSTEM_LOCATION.get('lon')})")
@@ -1741,8 +1856,47 @@ def get_system_location() -> str:
 
 # Sun times fetching / storage
 
+def _store_sample_sun_times() -> None:
+    """Populate _SUN_TIMES from the checked-in Open-Meteo sample payload.
+
+    The sample's dates are whenever it was fetched, so each entry is shifted
+    forward onto today/tomorrow (preserving its wall-clock times) -- otherwise
+    get_daytime() would never find an entry for today and would silently fall
+    back to the static rule, defeating the point of the fixture.
+    """
+    data = _load_sample_json('open-meteo-sun-sample.json')
+    daily = (data or {}).get('daily') or {}
+    dates = daily.get('time') or []
+    sunrises = daily.get('sunrise') or []
+    sunsets = daily.get('sunset') or []
+    if not dates:
+        _log_warning('contrib preview: no usable open-meteo-sun-sample.json; '
+                     'daytime/nighttime fall back to the static rule')
+        return
+    try:
+        base = datetime.date.fromisoformat(dates[0])
+    except ValueError:
+        return
+    shift = datetime.date.today() - base
+    for d, rs, ss in zip(dates, sunrises, sunsets):
+        try:
+            key = (datetime.date.fromisoformat(d) + shift).isoformat()
+            _SUN_TIMES[key] = {
+                'sunrise': datetime.datetime.fromisoformat(rs) + shift,
+                'sunset': datetime.datetime.fromisoformat(ss) + shift,
+                'fetched_at': datetime.datetime.now(),
+            }
+        except ValueError:
+            continue
+    if DEBUG:
+        print(f"DEBUG: contrib preview -- sun-times from sample for {','.join(sorted(_SUN_TIMES))}")
+
+
 def _fetch_and_store_sun_times(lat: float, lon: float, timeout: int = 10) -> None:
     """Fetch sunrise/sunset for today and tomorrow via Open-Meteo and store in _SUN_TIMES."""
+    if _contrib_preview():
+        _store_sample_sun_times()
+        return
     try:
         today = datetime.date.today()
         tomorrow = today + datetime.timedelta(days=1)
