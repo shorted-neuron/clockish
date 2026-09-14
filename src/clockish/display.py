@@ -76,6 +76,9 @@ _parser.add_argument('-d', '--debug', action='store_true', default=False,
                      help='Print per-frame timing to stdout')
 _parser.add_argument('--debug-layout', action='store_true', default=False,
                      help='Print row/panel layout info, render one frame, then exit')
+_parser.add_argument('--offline', action='store_true', default=False,
+                     help='Disable all outbound network I/O (location lookups, '
+                          'sun-times, cached-facts). Same as CLOCKISH_OFFLINE=1')
 _parser.add_argument('config', nargs='?', default=None,
                      metavar='CONFIG',
                      help='Path to YAML config file (default: %(const)s)',
@@ -90,6 +93,10 @@ _args          = None
 DEBUG: bool    = False
 DEBUG_LAYOUT: bool = False
 _PREVIEW_MODE: bool = False
+#: True -> no outbound network I/O at all (location, sun-times, cached-facts).
+#: Set by --offline or CLOCKISH_OFFLINE=1; env var is read at import so that
+#: preview/test entry points that never touch _parser still honour it.
+_OFFLINE: bool = os.environ.get('CLOCKISH_OFFLINE', '').strip().lower() in ('1', 'true', 'yes', 'on')
 _config: dict  = {}
 _display_cfg: dict = {}
 width: int     = 320
@@ -803,6 +810,11 @@ def _fetch_url_raw(url: str, timeout: int, verify_ssl: bool) -> tuple[str | None
     - response_text (on success) with HTTP status code (e.g., 200)
     - (None, None) on any network/fetch exception.
     """
+    if _OFFLINE:
+        if DEBUG:
+            print(f"DEBUG: offline mode -- skipping fetch: {url}")
+        return (None, None)
+
     try:
         # Create SSL context (ignore certificate for https by default)
         if url.lower().startswith('https://'):
@@ -953,7 +965,77 @@ def _init_cached_facts(config: dict) -> None:
 # ---------------------------------------------------------------------------
 
 _LOCATION_YAML_PATH = os.path.expanduser('~/.config/clockish/location.yaml')
+#: Runtime-written cache (step 2 splits this from the user-owned file above).
+_LOCATION_CACHE_PATH = os.path.expanduser('~/.config/clockish/location-cache.yaml')
 _FREEAIRPORTDB_BASE = 'https://api.freeairportdb.com/v1'
+
+#: Scalar 'location:' values that mean "location is OFF". Checked BEFORE the
+#: lat,lon and airport-code parsing, since 'none'/'off' are themselves 3-4
+#: alpha chars and would otherwise be sent to the airport lookup API.
+_LOCATION_DISABLED_VALUES: frozenset[str] = frozenset({'disabled', 'none', 'off', 'false'})
+
+
+def _location_is_disabled(value) -> bool:
+    """True if *value* is a scalar 'location:' setting meaning OFF."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value is False
+    if isinstance(value, str):
+        return value.strip().lower() in _LOCATION_DISABLED_VALUES
+    return False
+
+
+def _purge_location_cache() -> None:
+    """Delete the runtime location cache. Called when location is disabled.
+
+    Disabled means disabled: nothing stale is left on disk to be picked up by
+    a later run whose config no longer says 'auto'.
+    """
+    for path in (_LOCATION_CACHE_PATH,):
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+                if DEBUG:
+                    print(f"DEBUG: location disabled -- purged {path}")
+        except Exception as e:
+            _log_warning(f"failed to purge location cache {path}: {e}")
+
+
+def _disable_location(reason: str) -> None:
+    """Enter the location-OFF state: no data, no worker, no cached file."""
+    global _SYSTEM_LOCATION
+    _SYSTEM_LOCATION = None
+    _SUN_TIMES.clear()
+    try:
+        _stop_sun_times()
+    except Exception:
+        pass
+    _purge_location_cache()
+    if DEBUG:
+        print(f"DEBUG: location disabled ({reason}); no lookups will be performed")
+
+
+def _location_enabled() -> bool:
+    """True if a usable, non-disabled location is resolved.
+
+    Guards every sun-times start site: a disabled or unresolved location must
+    never spin up the Open-Meteo worker (0.0/0.0 is not a location).
+    """
+    if _OFFLINE:
+        return False
+    if not _SYSTEM_LOCATION or not isinstance(_SYSTEM_LOCATION, dict):
+        return False
+    if _SYSTEM_LOCATION.get('source') == 'disabled':
+        return False
+    lat = _SYSTEM_LOCATION.get('lat')
+    lon = _SYSTEM_LOCATION.get('lon')
+    if lat is None or lon is None:
+        return False
+    try:
+        return not (float(lat) == 0.0 and float(lon) == 0.0)
+    except (TypeError, ValueError):
+        return False
 
 
 def _read_system_location_cache() -> dict | None:
@@ -965,6 +1047,24 @@ def _read_system_location_cache() -> dict | None:
     except Exception:
         pass
     return None
+
+
+def _read_user_location_setting():
+    """Return the raw 'location:' value from the user-owned location.yaml.
+
+    Accepts both the canonical nested shape ({'location': ...}) and the legacy
+    flat mapping. Returns None when the file is absent or unreadable.
+    """
+    try:
+        if not os.path.isfile(_LOCATION_YAML_PATH):
+            return None
+        with open(_LOCATION_YAML_PATH) as f:
+            data = yaml.safe_load(f)
+    except Exception:
+        return None
+    if isinstance(data, dict) and 'location' in data:
+        return data['location']
+    return data
 
 
 def _normalize_location_dict(d: dict) -> dict:
@@ -1210,6 +1310,20 @@ def _init_system_location(config: dict) -> None:
     cfg_override = None
     if isinstance(config, dict):
         cfg_override = config.get('location')
+
+    # 0) kill switch  --  checked before lat,lon parsing and before the airport
+    # regex, since 'none'/'off' are 3-4 alpha chars and would otherwise be sent
+    # to the airport lookup API. Disabled means: no fetch, no cache read, no
+    # cache write, no sun-times worker, and the cache file purged from disk.
+    if _OFFLINE:
+        _disable_location('offline mode')
+        return
+    if _location_is_disabled(cfg_override):
+        _disable_location(f"config location: {cfg_override!r}")
+        return
+    if cfg_override is None and _location_is_disabled(_read_user_location_setting()):
+        _disable_location(f"{_LOCATION_YAML_PATH} sets location: disabled")
+        return
 
     # 1) explicit override handling
     # Preview-mode special case: if no location provided or empty string, use stable sample IP
@@ -1481,24 +1595,11 @@ def _init_system_location(config: dict) -> None:
             print(f" ({_SYSTEM_LOCATION.get('lat')},{_SYSTEM_LOCATION.get('lon')})")
         return
 
-    # 3) privacy-first default: disabled unless user explicitly set 'auto' or provided a location
-    if DEBUG:
-        print('DEBUG: no location configured or cached; defaulting to DISABLED for privacy')
-    _SYSTEM_LOCATION = {
-        'city': 'disabled',
-        'lat': 0.0,
-        'lon': 0.0,
-        'country': 'disabled',
-        'country_code': '__',
-        'region': 'disabled',
-        'region_code': '__',
-        'postal': '0',
-        'source': 'disabled',
-    }
-    try:
-        _write_system_location_cache(_SYSTEM_LOCATION)
-    except Exception:
-        pass
+    # 3) privacy-first default: disabled unless the user explicitly set 'auto'
+    # or provided a location. No 0.0/0.0 sentinel is written -- that is not a
+    # location, and it previously kept the sun-times worker polling Open-Meteo
+    # for the Gulf of Guinea while location was nominally off.
+    _disable_location('no location configured or cached')
     return
 
 
@@ -1599,6 +1700,10 @@ def _sun_times_worker(lat: float, lon: float) -> None:
 
 def _start_sun_times(lat: float, lon: float) -> None:
     global _sun_times_thread, _sun_times_stop_event, _sun_times_event
+    if _OFFLINE:
+        if DEBUG:
+            print('DEBUG: offline mode -- sun-times worker not started')
+        return
     # Stop existing
     _stop_sun_times()
     _sun_times_stop_event.clear()
@@ -2896,28 +3001,32 @@ def _attempt_config_reload() -> None:
         # Non-fatal: if no workers exist (preview mode) or other issue, ignore.
         pass
 
-    # Wake sun-times worker (if running) so it fetches immediately on reload.
-    # If no worker exists but we have a system_location, start it.
-    try:
-        if _sun_times_event is not None:
-            _sun_times_event.set()
+    # Sun-times worker after reload. A reload can flip location from enabled to
+    # disabled (or vice versa), so honour the current state rather than assuming
+    # the pre-reload one: never wake or start a worker for a disabled location.
+    if not _location_enabled():
+        try:
+            _stop_sun_times()
             if DEBUG:
-                print("DEBUG: Waking sun-times worker after config reload")
-    except Exception:
-        pass
-
-    # Ensure worker is running if we have a location
-    try:
-        if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict) and _SYSTEM_LOCATION.get('lat') is not None:
+                print("DEBUG: location disabled after config reload; sun-times worker stopped")
+        except Exception:
+            pass
+    else:
+        try:
+            if _sun_times_event is not None:
+                _sun_times_event.set()
+                if DEBUG:
+                    print("DEBUG: Waking sun-times worker after config reload")
+        except Exception:
+            pass
+        try:
             if _sun_times_thread is None and not _PREVIEW_MODE:
-                try:
-                    _start_sun_times(float(_SYSTEM_LOCATION['lat']), float(_SYSTEM_LOCATION['lon']))
-                    if DEBUG:
-                        print("DEBUG: started sun-times worker after config reload")
-                except Exception:
-                    pass
-    except Exception:
-        pass
+                assert _SYSTEM_LOCATION is not None  # guaranteed by _location_enabled()
+                _start_sun_times(float(_SYSTEM_LOCATION['lat']), float(_SYSTEM_LOCATION['lon']))
+                if DEBUG:
+                    print("DEBUG: started sun-times worker after config reload")
+        except Exception:
+            pass
 
     print("Config reloaded successfully.")
 
@@ -2982,7 +3091,7 @@ def _init() -> None:
     All module-level globals used by renderers are set here.  Nothing outside
     _init() / main() should depend on them being available at import time.
     """
-    global _args, DEBUG, DEBUG_LAYOUT
+    global _args, DEBUG, DEBUG_LAYOUT, _OFFLINE
     global _config, _display_cfg, _resolved_display_config, width, height, rotation
     global image, draw, padding, top, bottom, x
     global lcd, _orientation
@@ -2995,6 +3104,10 @@ def _init() -> None:
     _args = _parser.parse_args()
     DEBUG = _args.debug
     DEBUG_LAYOUT = _args.debug_layout
+    if getattr(_args, 'offline', False):
+        _OFFLINE = True
+    if _OFFLINE and DEBUG:
+        print('DEBUG: offline mode -- all outbound network I/O disabled')
 
     # --- Config ------------------------------------------------------------
     _config = _load_config(_args.config)
@@ -3071,11 +3184,9 @@ def _init() -> None:
     # Initialize system location and sun-times worker (startup immediate fetch)
     try:
         _init_system_location(_config)
-        if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict) and _SYSTEM_LOCATION.get('lat') is not None:
-            lat = float(_SYSTEM_LOCATION['lat'])
-            lon = float(_SYSTEM_LOCATION['lon'])
-            if not _PREVIEW_MODE:
-                _start_sun_times(lat, lon)
+        if _location_enabled() and not _PREVIEW_MODE:
+            assert _SYSTEM_LOCATION is not None  # guaranteed by _location_enabled()
+            _start_sun_times(float(_SYSTEM_LOCATION['lat']), float(_SYSTEM_LOCATION['lon']))
     except Exception:
         pass
 
