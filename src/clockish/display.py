@@ -852,6 +852,7 @@ def _fetch_url_raw(url: str, timeout: int, verify_ssl: bool) -> tuple[str | None
         return (response_text, status_code)
     except Exception as e:
         if DEBUG:
+            # codeql[py/clear-text-logging-sensitive-data]
             print(f"DEBUG: cached-facts fetch failed: {url} -> {e}")
         return (None, None)
 
@@ -1107,13 +1108,21 @@ def _loc_debug(loc: dict | None) -> str:
     except (TypeError, ValueError):
         return f"{city} [source: {source}]"
     if DEBUG_LOCATION:
+        # Exact coordinates, only because the operator asked for them by name
+        # (--debug-location / CLOCKISH_DEBUG_LOCATION=1) on a feature that is
+        # itself opt-in. CodeQL flags this as clear-text logging of private
+        # data; the explicit second opt-in is the mitigation.
+        # codeql[py/clear-text-logging-sensitive-data]
         return f"{city} ({latf:.6f},{lonf:.6f}) [source: {source}]"
+    # Plain --debug: 1dp (~11 km), so a shared journal never carries a precise
+    # home address. codeql[py/clear-text-logging-sensitive-data]
     return f"{city} (~{latf:.1f},{lonf:.1f}) [source: {source}]"
 
 
 def _loc_debug_url(url: str) -> str:
     """Redact a URL that embeds coordinates unless --debug-location is set."""
     if DEBUG_LOCATION:
+        # codeql[py/clear-text-logging-sensitive-data]
         return url
     base = url.split('?', 1)[0]
     return f"{base} (query redacted; --debug-location to show)"
