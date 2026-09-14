@@ -1,0 +1,21 @@
+{
+  "data": {
+    "code": "KEGE",
+    "iata": "EGE",
+    "icao": "KEGE",
+    "name": "Eagle County Regional Airport",
+    "continent_code": "NA",
+    "continent_name": "North America",
+    "region_code": "US-CO",
+    "region_name": "Colorado",
+    "country_code": "US",
+    "country_name": "United States",
+    "municipality": "Eagle",
+    "latitude": 39.642601,
+    "longitude": -106.917999,
+    "elevation": 1995.8,
+    "elevation_ft": 6547.9,
+    "time_zone": "America/Denver",
+    "type": "medium_airport"
+  }
+}

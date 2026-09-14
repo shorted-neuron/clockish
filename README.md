@@ -170,7 +170,14 @@ Each panel has a `type` and type-specific keys:
 | `debug`        | Per-frame render timings (development aid)                                                               |
 | `blank`        | Empty space                                                                                              |
 
-See `configs/clockish.yaml` for a fully annotated reference configuration.
+See [configs directory](configs/) for lots of fully annotated reference configuration.
+
+Clockish can try to use public APIs to determine a general location to enable
+features like local weather displays, display auto-dimming and so on.  
+Clockish honors your privacy so you must turn these features on if you want 
+to use them.  You can specify a location with airport codes or similar 
+manually if you like.  See [how_location_works.md](docs/how_location_works.md)
+and examples that start with `location`.
 
 ---
 

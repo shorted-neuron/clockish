@@ -120,6 +120,8 @@ KNOWN_FACT_SOURCES: frozenset[str] = frozenset({
     'ntp_status', 'ntp_upstream', 'ntp_all',
     'wireguard',
     'wifi_status', 'wifi_ssid', 'wifi_signal', 'wifi_quality', 'wifi_all',
+    # new built-in facts
+    'location', 'daytime', 'nighttime',
 })
 
 #: Fetcher ``type:`` values recognised for ``cached-facts:`` entries.
@@ -194,7 +196,7 @@ _KNOWN_ROW_KEYS: frozenset[str] = frozenset({
 
 #: Valid top-level config keys.
 _KNOWN_TOP_LEVEL_KEYS: frozenset[str] = frozenset({
-    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size', 'cached-facts', 'reload',
+    'orientation', 'default_font', 'fonts', 'rows', 'display', 'preview_size', 'cached-facts', 'reload', 'location',
 })
 
 #: Format for preview_size: "WxH", e.g. "240x135". Preview-tool only; ignored by production.
@@ -536,6 +538,10 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
     if not isinstance(rows, list):
         return issues  # structural check already caught this
 
+    # Track which location subkeys panels reference (e.g. location.city)
+    ref_key_to_paths: dict[str, list[str]] = {}
+    composite_panel_paths: list[str] = []  # panels that use source: location (whole dict)
+
     for ri, row in enumerate(rows):
         if not isinstance(row, dict):
             continue  # structural check handles this
@@ -672,19 +678,44 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                             "or 'json_path' (use exactly one)",
                         )
                 else:
-                    if source not in KNOWN_FACT_SOURCES:
+                    # Check if source is a valid built-in or a dotted location.* variant
+                    is_valid_source = source in KNOWN_FACT_SOURCES
+                    if not is_valid_source and isinstance(source, str):
+                        # Check for dotted location.* sources (e.g. 'location.city')
+                        if source.startswith('location.'):
+                            is_valid_source = True
+
+                    if not is_valid_source:
                         warn(
                             ploc,
                             f"unrecognised fact source '{source}' "
                             f"(known sources: {', '.join(sorted(KNOWN_FACT_SOURCES))}, "
-                            f"or 'cached-facts.<name>')",
+                            f"or 'cached-facts.<name>', or 'location.<field>')",
                         )
-                    if has_pattern or has_json_path:
+
+                    # json_path is only invalid on non-location built-in sources
+                    # (location source supports json_path for field extraction)
+                    if (has_pattern or has_json_path) and source != 'location':
                         warn(
                             ploc,
                             "'pattern'/'json_path' only apply to "
-                            "'source: cached-facts.<name>' -- ignored otherwise",
+                            "'source: cached-facts.<name>' or 'source: location' -- ignored otherwise",
                         )
+
+                    # Track references to top-level 'location' fields so we can
+                    # warn at config-time if they are missing. Examples:
+                    #   source: location.city
+                    #   source: location (with json_path: city)
+                    if isinstance(source, str) and source.startswith('location'):
+                        if '.' in source:
+                            _, suffix = source.split('.', 1)
+                            ref_key_to_paths.setdefault(suffix, []).append(ploc)
+                        elif has_json_path:
+                            # source: location + json_path: city
+                            ref_key_to_paths.setdefault(json_path, []).append(ploc)
+                        else:
+                            # panel expects the whole location dict (composite usage)
+                            composite_panel_paths.append(ploc)
 
                 # Validate mem_format if present and source is 'mem'
                 if source == 'mem':
@@ -772,6 +803,91 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                     tloc,
                                     f"transform '{name}' argument must be a string, got {arg!r}",
                                 )
+
+    # After walking rows/panels, statically validate any panels that referenced
+    # top-level 'location' fields.
+    if ref_key_to_paths or composite_panel_paths:
+        loc_cfg = config.get('location')
+
+        # Canonical set of main fields the runtime warns about
+        MAIN_LOC_KEYS = ['city', 'region', 'region_code', 'country', 'country_code', 'postal', 'lat', 'lon']
+
+        def _key_missing_in_loc(k: str) -> bool:
+            if not isinstance(loc_cfg, dict):
+                return True
+            v = loc_cfg.get(k)
+            return v is None or (isinstance(v, str) and v.strip() == '')
+
+        # Warn for each referenced key that is missing in the config's top-level
+        # location mapping. If location is not a mapping at all, warn once for
+        # all referenced keys.
+        if not isinstance(loc_cfg, dict):
+            for k, paths in ref_key_to_paths.items():
+                warn(
+                    '(root)',
+                    (
+                        f"fact panels {', '.join(paths)} reference 'location.{k}' "
+                        "but top-level 'location' is not a structured mapping; this may be "
+                        "missing at runtime. Provide explicit '{k}: ...' under 'location' "
+                        "or use lat/lon or an airport code."
+                    ),
+                )
+            if composite_panel_paths:
+                warn(
+                    '(root)',
+                    (
+                        f"fact panels {', '.join(composite_panel_paths)} expect the whole 'location' dict "
+                        "but top-level 'location' is not a mapping; provide structured fields or "
+                        "lat/lon."
+                    ),
+                )
+        else:
+            # Check if location has airport/icao/iata code that will be resolved at runtime
+            has_airport_code = (isinstance(loc_cfg, dict) and
+                               (loc_cfg.get('airport') or loc_cfg.get('icao') or loc_cfg.get('iata')))
+
+            # For structured location, warn per-key if missing (unless airport will resolve it)
+            for k, paths in ref_key_to_paths.items():
+                if _key_missing_in_loc(k):
+                    # Skip warning if airport code present (runtime will fetch these fields)
+                    if not has_airport_code:
+                        warn(
+                            '(root)',
+                            (
+                                f"fact panels {', '.join(paths)} reference 'location.{k}' "
+                                "but top-level 'location' mapping is missing this key or it is empty"
+                            ),
+                        )
+
+            # For panels using the whole location dict, ensure at least city or lat/lon
+            if composite_panel_paths:
+                # composite usage expects the renderer to read either city or lat/lon
+                missing_city = _key_missing_in_loc('city')
+                missing_latlon = _key_missing_in_loc('lat') or _key_missing_in_loc('lon')
+                if missing_city and missing_latlon:
+                    # Skip if airport code will provide coords
+                    if not has_airport_code:
+                        warn(
+                            '(root)',
+                            (
+                                f"fact panels {', '.join(composite_panel_paths)} expect 'location' to contain "
+                                "at least 'city' or both 'lat' and 'lon', but none are present"
+                            ),
+                        )
+
+            # Additionally, warn if the top-level location mapping is missing many
+            # of the MAIN_LOC_KEYS (helpful for users using static examples)
+            # Skip if airport code present (will resolve fields)
+            if not has_airport_code:
+                missing_main = [k for k in MAIN_LOC_KEYS if _key_missing_in_loc(k)]
+                if len(missing_main) >= len(MAIN_LOC_KEYS) // 2 and len(missing_main) > 0:
+                    warn(
+                        '(root)',
+                    (
+                        "top-level 'location' mapping is missing many expected keys: "
+                        f"{', '.join(missing_main)}; runtime may show blanks in previews/labels"
+                    ),
+                )
 
     return issues
 
