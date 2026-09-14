@@ -1006,6 +1006,13 @@ def _purge_location_cache() -> None:
     Disabled means disabled: nothing stale is left on disk to be picked up by
     a later run whose config no longer says 'auto'.
     """
+    if _contrib_preview():
+        # A contrib preview is a throwaway render against sample data; it must
+        # not delete the cache belonging to whoever ran it. (Personal previews
+        # behave like a live run, so they do purge.)
+        if DEBUG:
+            print('DEBUG: contrib preview -- not purging the location cache')
+        return
     for path in (_LOCATION_CACHE_PATH,):
         try:
             if os.path.isfile(path):

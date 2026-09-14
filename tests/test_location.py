@@ -535,3 +535,29 @@ class TestSetupLocation:
 
     def test_disabled_summary_is_readable(self, sl):
         assert sl._summarize_location('disabled') == 'disabled'
+
+
+class TestPreviewDoesNotTouchTheCache:
+    """A preview is a throwaway render; it must not mutate live state."""
+
+    def test_contrib_preview_of_a_disabled_config_keeps_the_cache(
+            self, loc_env, monkeypatch):
+        monkeypatch.setattr(cd, '_PREVIEW_MODE', True)
+        monkeypatch.setattr(cd, '_PREVIEW_LOCATION_MODE', 'contrib')
+        loc_env.cache_file.write_text(yaml.safe_dump(
+            {'location': {'city': 'Denver', 'lat': 39.7, 'lon': -104.9,
+                          'source': 'airport'}}))
+
+        cd._init_system_location({'location': 'disabled'})
+
+        assert loc_env.cache_file.exists(), \
+            'previewing a disabled config deleted the real runtime cache'
+
+    def test_live_run_of_a_disabled_config_still_purges(self, loc_env):
+        loc_env.cache_file.write_text(yaml.safe_dump(
+            {'location': {'city': 'Denver', 'lat': 39.7, 'lon': -104.9,
+                          'source': 'airport'}}))
+
+        cd._init_system_location({'location': 'disabled'})
+
+        assert not loc_env.cache_file.exists()
