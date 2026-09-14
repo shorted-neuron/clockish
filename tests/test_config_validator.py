@@ -514,6 +514,129 @@ class TestLocation:
         assert not result.has_errors, f"location with airport key should not error: {result.errors}"
 
 
+class TestLocationValue:
+    """The top-level 'location:' setting's own shape.
+
+    An unrecognised scalar is treated as an airport code at runtime and sent to
+    a third-party API, so typos have to fail validation rather than leak a
+    lookup.
+    """
+
+    def _cfg(self, loc, source='location.city'):
+        return {
+            'orientation': 'landscape',
+            'location': loc,
+            'rows': [{'name': 'r', 'height': 40,
+                      'panels': [{'type': 'fact', 'source': source}]}],
+        }
+
+    @pytest.mark.parametrize('value', ['disabled', 'none', 'off', False, 'auto',
+                                       'KEGE', '39.7392,-104.9903',
+                                       {'airport': 'KEGE'}, {'lat': 1, 'lon': 2},
+                                       {'city': 'A', 'region': 'B', 'country': 'C'}])
+    def test_valid_forms_accepted(self, value):
+        result = validate_config_dict(self._cfg(value))
+        assert not result.has_errors, result.errors
+
+    @pytest.mark.parametrize('value', ['atuo', 'nnoe', True, 42,
+                                       {'citty': 'x'}, {'lat': 1},
+                                       {'lat': 'abc', 'lon': 2}])
+    def test_invalid_forms_rejected(self, value):
+        result = validate_config_dict(self._cfg(value))
+        assert result.has_errors
+
+    def test_typo_of_auto_names_the_intended_keyword(self):
+        result = validate_config_dict(self._cfg('atuo'))
+        assert any("typo for 'auto'" in i.message for i in result.errors)
+
+    def test_auto_warns_about_what_is_sent(self):
+        result = validate_config_dict(self._cfg('auto'))
+        assert any('ipwho.is' in i.message for i in result.warnings)
+
+    def test_bare_airport_code_explains_the_lookup(self):
+        result = validate_config_dict(self._cfg('KEGE'))
+        assert any('freeairportdb' in i.message for i in result.warnings)
+
+
+class TestLocationFactSources:
+
+    def _cfg(self, loc, source):
+        return {
+            'orientation': 'landscape',
+            'location': loc,
+            'rows': [{'name': 'r', 'height': 40,
+                      'panels': [{'type': 'fact', 'source': source}]}],
+        }
+
+    def test_unknown_suffix_warns(self):
+        result = validate_config_dict(self._cfg('auto', 'location.citty'))
+        assert any('not a location field' in i.message for i in result.warnings)
+
+    def test_known_suffix_is_quiet(self):
+        result = validate_config_dict(self._cfg('auto', 'location.city'))
+        assert not any('not a location field' in i.message for i in result.warnings)
+
+    def test_lat_satisfies_a_latitude_reference(self):
+        """_normalize_location_dict fills latitude from lat, so this renders."""
+        cfg = self._cfg({'lat': 1, 'lon': 2}, 'location.latitude')
+        result = validate_config_dict(cfg)
+        assert not any('latitude' in i.message and 'no' in i.message
+                       for i in result.warnings)
+
+    def test_missing_field_warns_for_a_static_mapping(self):
+        cfg = self._cfg({'lat': 1, 'lon': 2}, 'location.region')
+        result = validate_config_dict(cfg)
+        assert any("location.region" in i.message for i in result.warnings)
+
+    def test_airport_mapping_does_not_warn_about_unresolved_fields(self):
+        cfg = self._cfg({'airport': 'KEGE'}, 'location.region')
+        result = validate_config_dict(cfg)
+        assert not any('location.region' in i.message for i in result.warnings)
+
+    def test_disabled_location_warns_that_panels_render_empty(self):
+        result = validate_config_dict(self._cfg('disabled', 'location.city'))
+        assert any('render empty' in i.message for i in result.warnings)
+
+    def test_absent_location_warns(self):
+        cfg = {
+            'orientation': 'landscape',
+            'rows': [{'name': 'r', 'height': 40,
+                      'panels': [{'type': 'fact', 'source': 'location.city'}]}],
+        }
+        result = validate_config_dict(cfg)
+        assert any('defaults to disabled' in i.message for i in result.warnings)
+
+    def test_json_path_on_a_dotted_source_is_called_redundant(self):
+        cfg = {
+            'orientation': 'landscape',
+            'location': {'city': 'A', 'region': 'B', 'country': 'C'},
+            'rows': [{'name': 'r', 'height': 40,
+                      'panels': [{'type': 'fact', 'source': 'location.city',
+                                  'json_path': 'city'}]}],
+        }
+        result = validate_config_dict(cfg)
+        assert any('already names the field' in i.message for i in result.warnings)
+
+    def test_daytime_without_location_warns_about_the_static_fallback(self):
+        cfg = {
+            'orientation': 'landscape',
+            'rows': [{'name': 'r', 'height': 40,
+                      'panels': [{'type': 'fact', 'source': 'daytime'}]}],
+        }
+        result = validate_config_dict(cfg)
+        assert any('static' in i.message for i in result.warnings)
+
+    def test_daytime_with_location_is_quiet(self):
+        cfg = {
+            'orientation': 'landscape',
+            'location': {'lat': 1, 'lon': 2},
+            'rows': [{'name': 'r', 'height': 40,
+                      'panels': [{'type': 'fact', 'source': 'daytime'}]}],
+        }
+        result = validate_config_dict(cfg)
+        assert not any('static' in i.message for i in result.warnings)
+
+
 # ---------------------------------------------------------------------------
 # Row with no panels (blank spacer rows)
 # ---------------------------------------------------------------------------
