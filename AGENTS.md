@@ -18,6 +18,16 @@ Pattern: `[thing] [action] [reason]. [next step].`
 - always check before creating new worktree, ask user for worktree/branch names
 - Otherwise check before `git add` / `git commit` / `git push`
 
+**No AI attribution or session identifiers in commits/PRs**
+- Never add `Co-Authored-By: Claude` (or any AI co-author trailer) to a commit
+  message or PR body. This is not an attribution-required project: the work is
+  the maintainer's, done under a paid service.
+- Never include a session URL, session ID, or any similar agent-run identifier
+  anywhere in a commit message, PR body, code comment, or committed file.
+  Treat it as an information leak, not a convenience link.
+- The same goes for "Generated with ..." footers and tool banners. Commit
+  messages describe the change, nothing else.
+
 Git pager: repo has `core.pager=cat` set locally (`.git/config`) -- git commands
 never invoke `less`. Still use `--no-pager` / pipe to `cat` explicitly in any
 new command for safety (e.g. a fresh clone won't have this local config set).
