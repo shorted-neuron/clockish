@@ -40,6 +40,7 @@ def main():
     ipwho_path = os.path.join(samples_dir, 'ipwho-sample.json')
     with open(ipwho_path, 'w', encoding='utf-8') as fh:
         json.dump(ipwho, fh, indent=2, ensure_ascii=False)
+        fh.write('\n')
     print('Wrote', ipwho_path)
 
     # ipwho may return 'latitude'/'longitude' or 'lat'/'lon'
@@ -79,6 +80,7 @@ def main():
     om_path = os.path.join(samples_dir, 'open-meteo-sun-sample.json')
     with open(om_path, 'w', encoding='utf-8') as fh:
         json.dump(om, fh, indent=2, ensure_ascii=False)
+        fh.write('\n')
     print('Wrote', om_path)
 
     # Fetch airport samples from FreeAirportDB API for KEGE (ICAO) and DEN (IATA).
@@ -102,6 +104,7 @@ def main():
         # Write raw JSON response as-is
         with open(out_path, 'w', encoding='utf-8') as fh:
             json.dump(data, fh, indent=2, ensure_ascii=False)
+            fh.write('\n')
         print('Wrote', out_path)
 
 
