@@ -530,6 +530,9 @@ def render_config(config_path: str, out_path: str, mock: bool,
     # preview_response) instead of spawning background threads.
     _ppd._PREVIEW_MODE = True
     _ppd._PREVIEW_LOCATION_MODE = location_mode
+    # Each config in a batch resolves location independently; the runtime's
+    # once-per-run guard would otherwise carry the previous config's result.
+    _ppd._invalidate_location_resolution()
 
     # Run the real layout pass  --  resolves font: / font_size: auto into
     # row-relative synthetic font entries and pre-computes panel widths,
