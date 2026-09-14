@@ -17,6 +17,14 @@ from datetime import datetime, timedelta, timezone
 from urllib.request import Request, urlopen
 
 
+def _redact(value):
+    """Round a coordinate to 1dp (~11 km) for console output."""
+    try:
+        return f'{float(value):.1f}'
+    except (TypeError, ValueError):
+        return '?'
+
+
 def fetch_json(url, headers=None, timeout=15):
     req = Request(url, headers=headers or {'User-Agent': 'clockish-sample-fetcher/1.0'})
     with urlopen(req, timeout=timeout) as resp:
@@ -53,7 +61,12 @@ def main():
         latf = float(lat)
         lonf = float(lon)
     except Exception:
-        print('Invalid lat/lon values from ipwho:', lat, lon)
+        # Dev-only sample fetcher; coords come from a public GeoIP lookup of a
+        # fixed sample IP, and are rounded to 1dp (~11 km) before printing so a
+        # pasted console log never carries a precise position.
+        print(  # codeql[py/clear-text-logging-sensitive-data]
+            'Invalid lat/lon values from ipwho:', _redact(lat), _redact(lon)
+        )
         return
 
     # Fetch sunrise/sunset for today + tomorrow

@@ -955,6 +955,32 @@ def _init_cached_facts(config: dict) -> None:
 _LOCATION_YAML_PATH = os.path.expanduser('~/.config/clockish/location.yaml')
 _FREEAIRPORTDB_BASE = 'https://api.freeairportdb.com/v1'
 
+# Debug logging of coordinates: system location defaults to DISABLED (see
+# _init_system_location step 3) -- coords only exist here because the user
+# explicitly set `location:` or an on-disk cache from a prior opt-in. Even then,
+# debug output is truncated to 1 decimal place (~11 km) so a shared `--debug`
+# log never carries a precise home address. CodeQL flags these prints as
+# clear-text logging of private data; the redaction below is the mitigation.
+_COORD_QS_RE = re.compile(r'\b(latitude|longitude|lat|lon)=(-?\d+(?:\.\d+)?)')
+
+
+def _redact_coord(value: object) -> str:
+    """Round one coordinate to 1dp (~11 km) for debug output."""
+    try:
+        return f"{float(value):.1f}"  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return '?'
+
+
+def _redact_coords(lat: object, lon: object) -> str:
+    """Format a lat/lon pair, both rounded to 1dp, for debug output."""
+    return f"{_redact_coord(lat)},{_redact_coord(lon)}"
+
+
+def _redact_url(url: str) -> str:
+    """Round any lat/lon query params in *url* to 1dp before it gets logged."""
+    return _COORD_QS_RE.sub(lambda m: f"{m.group(1)}={_redact_coord(m.group(2))}", url or '')
+
 
 def _read_system_location_cache() -> dict | None:
     # Prefer human-editable YAML location file.
@@ -1069,9 +1095,10 @@ def _fetch_ipwho_coords(timeout: int = 5, ip_override: str | None = None) -> dic
             'postal': data.get('postal') or data.get('zip') or None,
         }
         if DEBUG:
-            print(
-                f"DEBUG: geoip resolved city={result['city']} lat={result['lat']:.6f} "
-                f"lon={result['lon']:.6f} via {url}"
+            # coords redacted to 1dp; location is opt-in (default disabled)
+            print(  # codeql[py/clear-text-logging-sensitive-data]
+                f"DEBUG: geoip resolved city={result['city']} "
+                f"coords~{_redact_coords(result['lat'], result['lon'])} via {url}"
             )
         return result
     except Exception as e:
@@ -1180,9 +1207,11 @@ def _geocode_open_meteo(name: str, timeout: int = 5) -> dict | None:
         if result['postcodes']:
             result['postal'] = result['postcodes'][0]
         if DEBUG:
-            print(
-                f"DEBUG: geocode resolved city={result['city']} lat={result['lat']:.6f} "
-                f"lon={result['lon']:.6f} country={result.get('country')} via {url}"
+            # coords redacted to 1dp; location is opt-in (default disabled)
+            print(  # codeql[py/clear-text-logging-sensitive-data]
+                f"DEBUG: geocode resolved city={result['city']} "
+                f"coords~{_redact_coords(result['lat'], result['lon'])} "
+                f"country={result.get('country')} via {url}"
             )
         return result
     except Exception as e:
@@ -1308,7 +1337,11 @@ def _init_system_location(config: dict) -> None:
                 # Per policy: no reverse geocoding. If callers want region/country/postal, they must supply them.
                 _write_system_location_cache(_SYSTEM_LOCATION)
                 if DEBUG:
-                    print(f"DEBUG: location parsed from lat/lon string in config: {lat},{lon}")
+                    # coords redacted to 1dp; user supplied these explicitly in config
+                    print(  # codeql[py/clear-text-logging-sensitive-data]
+                        f"DEBUG: location parsed from lat/lon string in config: "
+                        f"~{_redact_coords(lat, lon)}"
+                    )
                 # in preview mode, also fetch sun-times synchronously so panels using daytime/nighttime work
                 if _PREVIEW_MODE:
                     try:
@@ -1477,8 +1510,11 @@ def _init_system_location(config: dict) -> None:
     if cached and isinstance(cached, dict) and cached.get('lat') is not None and cached.get('lon') is not None:
         _SYSTEM_LOCATION = cached
         if DEBUG:
+            # cache only exists after an explicit opt-in; coords redacted to 1dp
             print(f"DEBUG: system_location loaded from cache: {_SYSTEM_LOCATION.get('city')}")
-            print(f" ({_SYSTEM_LOCATION.get('lat')},{_SYSTEM_LOCATION.get('lon')})")
+            print(  # codeql[py/clear-text-logging-sensitive-data]
+                f" (~{_redact_coords(_SYSTEM_LOCATION.get('lat'), _SYSTEM_LOCATION.get('lon'))})"
+            )
         return
 
     # 3) privacy-first default: disabled unless user explicitly set 'auto' or provided a location
@@ -1532,11 +1568,12 @@ def _fetch_and_store_sun_times(lat: float, lon: float, timeout: int = 10) -> Non
             f"&daily=sunrise,sunset&start_date={start}&end_date={end}&timezone=auto"
         )
         if DEBUG:
-            print(f"DEBUG: sun-times call -> {url}")
+            # URL carries lat/lon query params; redacted to 1dp before logging
+            print(f"DEBUG: sun-times call -> {_redact_url(url)}")
         text, status = _fetch_url_raw(url, timeout, True)
         if text is None:
             if DEBUG:
-                print(f"DEBUG: sun-times fetch failed (no response) for {url}")
+                print(f"DEBUG: sun-times fetch failed (no response) for {_redact_url(url)}")
             return
         data = json.loads(text)
         daily = data.get('daily', {})
