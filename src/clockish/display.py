@@ -826,7 +826,7 @@ def _fetch_url_raw(url: str, timeout: int, verify_ssl: bool) -> tuple[str | None
     """
     if _OFFLINE:
         if DEBUG:
-            print(f"DEBUG: offline mode -- skipping fetch: {url}")
+            print(f"DEBUG: offline mode -- skipping fetch: {_loc_debug_url(url)}")
         return (None, None)
 
     try:
