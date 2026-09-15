@@ -34,3 +34,43 @@ display:
   device:   /dev/fb0
   rotation: 0
   clear_on_exit: false
+
+  # Backlight control -- OPTIONAL. Omit this whole block if your display has
+  # no software-controllable backlight (e.g. always-on panel, or brightness
+  # fixed by a physical knob).
+  backlight:
+    # How the backlight is actually driven. Only 'sysfs' exists today.
+    method: sysfs
+
+    # Backlight device folder name under /sys/class/backlight/ -- NOT a full
+    # path. The driver always writes to:
+    #   /sys/class/backlight/<device>/brightness
+    # Find yours with:
+    #   ls /sys/class/backlight/
+    device: 10-0045
+
+    # Log every actual brightness change (skips no-op writes). Default: false.
+    logging: true
+
+    # off/min/max are the three brightness values (integers, 0-255) you'll
+    # reference by name from `schedule:` below.
+    #   off -- fully off (usually 0)
+    #   min -- dimmest level where the display is still legible
+    #   max -- full brightness (usually 255, your panel's ceiling)
+    off:  0
+    min:  40
+    max:  255
+
+    # Time-of-day schedule. Each entry's `start`/`end` is a 24h "HH:MM" local
+    # time; `end` before `start` (like "night" below) wraps past midnight.
+    # Entries must not overlap (checked at validation time). Any time of day
+    # NOT covered by an entry uses the midpoint between min and max.
+    schedule:
+      - name: night
+        start: "22:00"
+        end:   "06:59"
+        value: 42
+      - name: day
+        start: "07:00"
+        end:   "19:59"
+        value: 255
