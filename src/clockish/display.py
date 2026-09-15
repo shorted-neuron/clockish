@@ -34,7 +34,7 @@ except ImportError:
 import PIL.ImageOps
 from PIL import Image, ImageDraw, ImageFont
 
-from clockish import __version__
+from clockish import __version__, backlight
 from clockish.colors import BY_NAME, rgb_to_hex
 from clockish.drivers import load_driver
 from clockish.transforms import apply_transforms
@@ -2192,6 +2192,11 @@ def _init_layout() -> None:
     # Initialize system location (caches to ~/.config/clockish/location.yaml).
     # Runs at startup and on config reload so callers get immediate availability.
     _init_system_location(_config)
+    # Start/reset the backlight scheduler thread (no-op if display.backlight:
+    # isn't configured). Runs at startup and on config reload; start_backlight()
+    # stops any existing thread and applies the current schedule synchronously
+    # before returning, so a reload/restart never leaves a stale brightness level.
+    backlight.start_backlight(_display_cfg)
 
 
 
@@ -2983,6 +2988,8 @@ def _cleanup() -> None:
         _stop_cached_facts()
         # Stop sun-times worker
         _stop_sun_times()
+        # Stop backlight scheduler worker
+        backlight.stop_backlight()
     except Exception:
         pass
 
