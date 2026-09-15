@@ -462,13 +462,21 @@ def _resolve_preview_dimensions(cfg: dict, config_path: str) -> tuple[int, int]:
     return fallback
 
 
-def render_config(config_path: str, out_path: str, mock: bool) -> None:
+def render_config(config_path: str, out_path: str, mock: bool,
+                  location_mode: str = "contrib") -> None:
     """Load a YAML config, render one frame, and save to out_path (PNG).
 
     mock=True:  fixed worst-case time/date, cpu%=100.0, huge fixed uptime.
     mock=False: real current time/date (per panel timezone) and this host's
                 real uptime; cpu%=42.7 fixed (hostname/IP/wifi SSID still
                 always mocked).
+
+    location_mode="contrib":  location resolves from tests/samples/, no network
+                and no cache write -- safe for renders committed to
+                docs/previews/.
+    location_mode="personal": location resolves for real (GeoIP / airport
+                lookup) exactly like a live run. The render then contains the
+                renderer's own location, so it must not be committed.
     """
     import platform
 
@@ -521,6 +529,10 @@ def render_config(config_path: str, out_path: str, mock: bool) -> None:
     # Enable preview mode so cached-facts entries fetch synchronously (or use
     # preview_response) instead of spawning background threads.
     _ppd._PREVIEW_MODE = True
+    _ppd._PREVIEW_LOCATION_MODE = location_mode
+    # Each config in a batch resolves location independently; the runtime's
+    # once-per-run guard would otherwise carry the previous config's result.
+    _ppd._invalidate_location_resolution()
 
     # Run the real layout pass  --  resolves font: / font_size: auto into
     # row-relative synthetic font entries and pre-computes panel widths,
@@ -595,10 +607,26 @@ def main() -> None:
         help="Skip the 'mock' (worst-case, deterministic) render -- live only.",
     )
     parser.add_argument(
+        "--personal", action="store_true",
+        help="Resolve location for real (GeoIP / airport lookup) instead of from "
+             "tests/samples/. The render then contains YOUR location -- output goes "
+             "to {outdir}/personal/, which is gitignored. Do not commit it.",
+    )
+    parser.add_argument(
+        "--contrib", action="store_true",
+        help="Force contrib mode (the default): location from tests/samples/, no "
+             "network, safe to commit.",
+    )
+    parser.add_argument(
         "configs", nargs="*",
         help="YAML config files to render (default: all files in configs/)"
     )
     args = parser.parse_args()
+
+    if args.personal and args.contrib:
+        print("--personal and --contrib are mutually exclusive.", file=sys.stderr)
+        sys.exit(2)
+    location_mode = "personal" if args.personal else "contrib"
 
     configs = args.configs
     if not configs:
@@ -613,21 +641,30 @@ def main() -> None:
         print("No config files found.", file=sys.stderr)
         sys.exit(1)
 
-    mock_dir = os.path.join(args.outdir, "mock")
+    # Personal renders carry the renderer's real location, so they never land
+    # in the tracked docs/previews/ tree.
+    base_dir = os.path.join(args.outdir, "personal") if location_mode == "personal" else args.outdir
+    mock_dir = os.path.join(base_dir, "mock")
     modes = []
     if not args.skip_live:
-        modes.append((False, args.outdir))
+        modes.append((False, base_dir))
     if not args.skip_mock:
         modes.append((True, mock_dir))
 
-    print(f"Rendering {len(configs)} config(s) x {len(modes)} mode(s) -> {args.outdir}/")
+    if location_mode == "personal":
+        print("*** PERSONAL mode: location is resolved for real; these renders may show")
+        print(f"*** your city and coordinates. Output goes to {base_dir}/ (gitignored).")
+        print("*** Do NOT commit them. Re-run without --personal for shareable previews.")
+    else:
+        print("Location mode: contrib (from tests/samples/, no network) -- safe to commit.")
+    print(f"Rendering {len(configs)} config(s) x {len(modes)} mode(s) -> {base_dir}/")
     for cfg_path in configs:
         name = os.path.splitext(os.path.basename(cfg_path))[0]
         print(f"  [{name}]")
         for mock, out_dir in modes:
             out = os.path.join(out_dir, f"{name}.png")
             try:
-                render_config(cfg_path, out, mock=mock)
+                render_config(cfg_path, out, mock=mock, location_mode=location_mode)
             except Exception as exc:
                 label = "mock" if mock else "live"
                 print(f"  ERROR rendering {cfg_path} ({label}): {exc}", file=sys.stderr)

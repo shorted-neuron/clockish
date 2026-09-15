@@ -478,7 +478,11 @@ fi
 # current location (if any) and offers keep-or-reconfigure.
 if command -v "$VENV_PY" >/dev/null 2>&1; then
     section "Location setup"
-    "$VENV_PY" "$SCRIPT_DIR/scripts/setup_location.py" || warn "Location setup failed or was cancelled."
+    if [[ -x "$VENV_DIR/bin/clockish-location" ]]; then
+        "$VENV_DIR/bin/clockish-location" || warn "Location setup failed or was cancelled."
+    else
+        "$VENV_PY" "$SCRIPT_DIR/scripts/setup_location.py" || warn "Location setup failed or was cancelled."
+    fi
 fi
 
 # Install the display profile to the user config directory.

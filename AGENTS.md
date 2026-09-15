@@ -18,6 +18,16 @@ Pattern: `[thing] [action] [reason]. [next step].`
 - always check before creating new worktree, ask user for worktree/branch names
 - Otherwise check before `git add` / `git commit` / `git push`
 
+**No AI attribution or session identifiers in commits/PRs**
+- Never add `Co-Authored-By: Claude` (or any AI co-author trailer) to a commit
+  message or PR body. This is not an attribution-required project: the work is
+  the maintainer's, done under a paid service.
+- Never include a session URL, session ID, or any similar agent-run identifier
+  anywhere in a commit message, PR body, code comment, or committed file.
+  Treat it as an information leak, not a convenience link.
+- The same goes for "Generated with ..." footers and tool banners. Commit
+  messages describe the change, nothing else.
+
 Git pager: repo has `core.pager=cat` set locally (`.git/config`) -- git commands
 never invoke `less`. Still use `--no-pager` / pipe to `cat` explicitly in any
 new command for safety (e.g. a fresh clone won't have this local config set).
@@ -68,6 +78,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 - `clockish-preview` → `render_preview.py` (no hardware needed; stubs GPIO/SPI/etc.)
 - `clockish-time-samples` → `render_time_samples.py` (one config, many synthetic clock/date moments; see below)
 - `clockish-validate` → `config_validator.py` (YAML validation + schema check)
+- `clockish-location` → `setup_location.py` (writes `~/.config/clockish/location.yaml`)
 
 ### Core flow
 
@@ -274,6 +285,10 @@ background-thread-fetched raw value:
 | `ntp_upstream` | number of upstream sources                                       |
 | `wireguard`    | wg status (stubbed if no wg)                                     |
 | `wifi_*`       | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
+| `location`     | resolved location as "City, Country (lat,lon)"; empty when disabled |
+| `location.*`   | one field of it (`city`, `region`, `country_code`, `lat`, ...)    |
+| `daytime`      | 'true'/'false' from real sunrise/sunset; static rule without a location |
+| `nighttime`    | inverse of `daytime`                                             |
 
 ### cached-facts (background-thread-fetched remote data)
 
@@ -322,6 +337,60 @@ verbatim (fully offline/deterministic). If not, `_init_cached_facts()` fetches o
 synchronously, before the frame renders -- a real network call is allowed here (per design),
 it just has to complete before rendering, not run in the background.
 
+### location (privacy-first, off by default)
+
+Top-level `location:` drives weather coords, sunrise/sunset and the `location.*`
+/ `daytime` / `nighttime` fact sources. **The governing rule: no location
+network call happens unless the user asked for one.** Anything added here must
+keep that true.
+
+Forms: `disabled`/`none`/`off`/`false` (kill switch), `auto` (GeoIP at
+ipwho.is), a 3-4 letter airport code, `"lat,lon"`, or a mapping (airport code,
+or lat+lon, or city+region+country). Precedence: config > user-owned
+`~/.config/clockish/location.yaml` > runtime `location-cache.yaml` > disabled.
+An invalid setting disables rather than guessing -- a bare 3-4 letter scalar is
+an airport lookup, so a typo must not be passed through to the API.
+
+Mechanics (`display.py`):
+
+- `_init_system_location(config, force=False)` resolves once per run (keyed on
+  the config value + preview mode); the reload path calls
+  `_invalidate_location_resolution()` first. It is reached from `_init_layout()`
+  only -- do not add a second call site.
+- The kill switch runs **first**, before lat,lon parsing and before the airport
+  regex: `none`/`off` are themselves 3-4 alpha chars.
+- `_disable_location()` is the single OFF state: `_SYSTEM_LOCATION = None`, sun
+  worker stopped, cache file deleted. There is no 0,0 sentinel; `_location_enabled()`
+  gates every sun-times start site and rejects 0,0.
+- Every resolution branch ends at `_resolve_sun_times_for()` (one-shot in
+  preview, background worker live). A branch that returns without calling it
+  silently leaves `daytime`/`nighttime` on the static fallback.
+- `_OFFLINE` (`--offline` / `CLOCKISH_OFFLINE=1`) short-circuits `_fetch_url_raw()`
+  itself -- the one choke point every fetch passes through.
+- Files: canonical shape is one top-level `location:` key (scalar `disabled` or a
+  mapping), mode 0600. The runtime writes **only** `location-cache.yaml`
+  (stamped `source` + `resolved_at`, GeoIP entries expire after 30 days);
+  `location.yaml` belongs to the user and is written solely by
+  `clockish-location` (`clockish/setup_location.py`).
+- Debug: exact coordinates, API query strings and raw payloads are gated behind
+  `--debug-location` / `CLOCKISH_DEBUG_LOCATION=1`. Plain `--debug` rounds to
+  ~11km. Do not print raw coordinates in new debug lines.
+
+Preview modes: `_PREVIEW_LOCATION_MODE` is `contrib` (default -- resolves from
+`tests/samples/*.json`, no network, no cache write; what `docs/previews/*.png`
+is generated with) or `personal` (`clockish-preview --personal`, real lookups,
+output to gitignored `docs/previews/personal/`).
+
+Validation: `config_validator.validate_location_value()` /
+`location_value_warnings()` are shared by the validator, `display.py` and
+`setup_location.py` -- one definition of a valid location. Unlike the
+`KNOWN_FONT_BEHAVIORS` duplication, this one **is** imported (the validator has
+no hardware-driver imports; the dependency only runs one way).
+
+Tests: `tests/test_location.py`. Any test that could reach the network
+monkeypatches `_fetch_url_raw` and asserts the recorded call list is empty --
+keep that pattern, or "makes no network call" stops being a real assertion.
+
 ### Display drivers
 
 Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.dimensions` property.
@@ -343,7 +412,8 @@ Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idl
 ### Testing & validation
 
 **pytest**: `tests/test_config_validator.py`, `tests/test_cached_facts.py` (background-thread
-fetch/retry/SIGUSR1 machinery), `tests/test_display_transform_wiring.py`,
+fetch/retry/SIGUSR1 machinery), `tests/test_location.py` (location resolution, kill switch,
+file shapes, contrib-preview no-network guarantees), `tests/test_display_transform_wiring.py`,
 `test_platform_utils.py`, `test_all_encoding.py`.
 
 Run:
@@ -428,7 +498,8 @@ gitignored (ad-hoc exploratory artifact, like `docs/previews/mock/`).
 ```bash
 pip install -e ".[dev]"
 clockish-validate configs/clockish.yaml
-clockish-preview configs/clockish.yaml  # outputs docs/previews/*.png + docs/previews/mock/*.png
+clockish-preview configs/clockish.yaml  # contrib mode: docs/previews/*.png + mock/ (no location network I/O)
+clockish-preview --personal configs/clockish.yaml  # real location -> docs/previews/personal/ (gitignored, do not commit)
 clockish-time-samples configs/nixie.yaml  # outputs docs/previews/time-samples/nixie/*.png
 pytest
 ruff check .
@@ -536,6 +607,16 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 4. Document in `URL_FACT_GUIDE.md` transforms table
 5. Test in `test_transforms.py` + `test_config_validator.py::TestTransform`
 
+**Add a location source / touch location code**:
+1. Keep the rule: no network call without an explicit user setting. New lookups
+   go behind an existing consented form, never behind the default path
+2. Gate the fetch so `_contrib_preview()` resolves it from `tests/samples/`
+   instead, and add the sample payload + a `scripts/update_samples.py` entry
+3. End the resolution branch at `_resolve_sun_times_for()` if it produces coords
+4. Extend `validate_location_value()` (shared) rather than adding a second
+   notion of validity
+5. Test in `tests/test_location.py` asserting zero network calls
+
 **Add a font_behavior**:
 1. Add name to `KNOWN_FONT_BEHAVIORS` in **both** `display.py` and `config_validator.py`
    (duplicated on purpose -- see font_behavior section above)
@@ -581,3 +662,5 @@ Ruff auto-flags unsorted imports. Reorganize them to fix `unsorted-imports` warn
 | Test preview | `clockish-preview`  | outputs PNG offline; cross-platform                  |
 | Time-sample layout check | `clockish-time-samples` | outputs PNG offline; one config, many clock/date moments |
 | Add transform| `transforms.py`     | `TRANSFORM_REGISTRY['myop'] = _t_myop`               |
+| Set location | `clockish-location` | writes `~/.config/clockish/location.yaml`; off by default |
+| Kill network | `--offline`         | blocks location + cached-facts fetches               |

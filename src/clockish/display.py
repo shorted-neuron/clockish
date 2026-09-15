@@ -76,6 +76,13 @@ _parser.add_argument('-d', '--debug', action='store_true', default=False,
                      help='Print per-frame timing to stdout')
 _parser.add_argument('--debug-layout', action='store_true', default=False,
                      help='Print row/panel layout info, render one frame, then exit')
+_parser.add_argument('--debug-location', action='store_true', default=False,
+                     help='Include exact coordinates and location API URLs in debug '
+                          'output. Plain --debug rounds coordinates and omits URLs, '
+                          'since debug output lands in the system journal')
+_parser.add_argument('--offline', action='store_true', default=False,
+                     help='Disable all outbound network I/O (location lookups, '
+                          'sun-times, cached-facts). Same as CLOCKISH_OFFLINE=1')
 _parser.add_argument('config', nargs='?', default=None,
                      metavar='CONFIG',
                      help='Path to YAML config file (default: %(const)s)',
@@ -89,7 +96,21 @@ _parser.add_argument('config', nargs='?', default=None,
 _args          = None
 DEBUG: bool    = False
 DEBUG_LAYOUT: bool = False
+#: Location debug output is opt-in: --debug alone goes to the journal on a
+#: headless Pi, and exact coordinates are the one thing this feature exists to
+#: keep private. Set by --debug-location or CLOCKISH_DEBUG_LOCATION=1.
+DEBUG_LOCATION: bool = os.environ.get(
+    'CLOCKISH_DEBUG_LOCATION', '').strip().lower() in ('1', 'true', 'yes', 'on')
 _PREVIEW_MODE: bool = False
+#: Preview location mode. 'contrib' (default) resolves location from the
+#: checked-in sample payloads and performs NO location network I/O, so renders
+#: destined for docs/previews/*.png can never carry the renderer's real
+#: location. 'personal' behaves like a live run: real lookups, real cache.
+_PREVIEW_LOCATION_MODE: str = 'contrib'
+#: True -> no outbound network I/O at all (location, sun-times, cached-facts).
+#: Set by --offline or CLOCKISH_OFFLINE=1; env var is read at import so that
+#: preview/test entry points that never touch _parser still honour it.
+_OFFLINE: bool = os.environ.get('CLOCKISH_OFFLINE', '').strip().lower() in ('1', 'true', 'yes', 'on')
 _config: dict  = {}
 _display_cfg: dict = {}
 width: int     = 320
@@ -803,6 +824,11 @@ def _fetch_url_raw(url: str, timeout: int, verify_ssl: bool) -> tuple[str | None
     - response_text (on success) with HTTP status code (e.g., 200)
     - (None, None) on any network/fetch exception.
     """
+    if _OFFLINE:
+        if DEBUG:
+            print(f"DEBUG: offline mode -- skipping fetch: {_loc_debug_url(url)}")
+        return (None, None)
+
     try:
         # Create SSL context (ignore certificate for https by default)
         if url.lower().startswith('https://'):
@@ -954,44 +980,299 @@ def _init_cached_facts(config: dict) -> None:
 # ---------------------------------------------------------------------------
 
 _LOCATION_YAML_PATH = os.path.expanduser('~/.config/clockish/location.yaml')
+#: Runtime-written cache (step 2 splits this from the user-owned file above).
+_LOCATION_CACHE_PATH = os.path.expanduser('~/.config/clockish/location-cache.yaml')
 _FREEAIRPORTDB_BASE = 'https://api.freeairportdb.com/v1'
 
-# Debug logging of coordinates: system location defaults to DISABLED (see
-# _init_system_location step 3) -- coords only exist here because the user
-# explicitly set `location:` or an on-disk cache from a prior opt-in. Even then,
-# debug output is truncated to 1 decimal place (~11 km) so a shared `--debug`
-# log never carries a precise home address. CodeQL flags these prints as
-# clear-text logging of private data; the redaction below is the mitigation.
-_COORD_QS_RE = re.compile(r'\b(latitude|longitude|lat|lon)=(-?\d+(?:\.\d+)?)')
+#: Scalar 'location:' values that mean "location is OFF". Checked BEFORE the
+#: lat,lon and airport-code parsing, since 'none'/'off' are themselves 3-4
+#: alpha chars and would otherwise be sent to the airport lookup API.
+_LOCATION_DISABLED_VALUES: frozenset[str] = frozenset({'disabled', 'none', 'off', 'false'})
 
 
-def _redact_coord(value: object) -> str:
-    """Round one coordinate to 1dp (~11 km) for debug output."""
+def _location_is_disabled(value) -> bool:
+    """True if *value* is a scalar 'location:' setting meaning OFF."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value is False
+    if isinstance(value, str):
+        return value.strip().lower() in _LOCATION_DISABLED_VALUES
+    return False
+
+
+def _purge_location_cache() -> None:
+    """Delete the runtime location cache. Called when location is disabled.
+
+    Disabled means disabled: nothing stale is left on disk to be picked up by
+    a later run whose config no longer says 'auto'.
+    """
+    if _contrib_preview():
+        # A contrib preview is a throwaway render against sample data; it must
+        # not delete the cache belonging to whoever ran it. (Personal previews
+        # behave like a live run, so they do purge.)
+        if DEBUG:
+            print('DEBUG: contrib preview -- not purging the location cache')
+        return
+    for path in (_LOCATION_CACHE_PATH,):
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+                if DEBUG:
+                    print(f"DEBUG: location disabled -- purged {path}")
+        except Exception as e:
+            _log_warning(f"failed to purge location cache {path}: {e}")
+
+
+def _disable_location(reason: str) -> None:
+    """Enter the location-OFF state: no data, no worker, no cached file."""
+    global _SYSTEM_LOCATION
+    _SYSTEM_LOCATION = None
+    _SUN_TIMES.clear()
     try:
-        return f"{float(value):.1f}"  # type: ignore[arg-type]
+        _stop_sun_times()
+    except Exception:
+        pass
+    _purge_location_cache()
+    if DEBUG:
+        print(f"DEBUG: location disabled ({reason}); no lookups will be performed")
+
+
+def _location_enabled() -> bool:
+    """True if a usable, non-disabled location is resolved.
+
+    Guards every sun-times start site: a disabled or unresolved location must
+    never spin up the Open-Meteo worker (0.0/0.0 is not a location).
+    """
+    if _OFFLINE:
+        return False
+    if not _SYSTEM_LOCATION or not isinstance(_SYSTEM_LOCATION, dict):
+        return False
+    if _SYSTEM_LOCATION.get('source') == 'disabled':
+        return False
+    lat = _SYSTEM_LOCATION.get('lat')
+    lon = _SYSTEM_LOCATION.get('lon')
+    if lat is None or lon is None:
+        return False
+    try:
+        return not (float(lat) == 0.0 and float(lon) == 0.0)
     except (TypeError, ValueError):
-        return '?'
+        return False
 
 
-def _redact_coords(lat: object, lon: object) -> str:
-    """Format a lat/lon pair, both rounded to 1dp, for debug output."""
-    return f"{_redact_coord(lat)},{_redact_coord(lon)}"
+#: GeoIP-derived cache entries go stale: a device moves, an ISP re-allocates.
+#: Re-resolution needs live consent ('location: auto'), so an expired entry with
+#: no current consent means disabled, not "look it up again".
+_LOCATION_CACHE_TTL_DAYS = 30
+#: Cache 'source' values that came from a GeoIP lookup (subject to the TTL).
+_GEOIP_SOURCES: frozenset[str] = frozenset({'ipwho', 'geoip'})
+#: Warn about a legacy flat-shape user file once per process, not once per read.
+_flat_user_file_warned = False
+#: repr() of the config's 'location:' value at the last resolution, or None if
+#: never resolved. _init_system_location() is called from both _init_layout()
+#: and the reload path; without this guard a single startup resolved location
+#: twice (two GeoIP / airport lookups per run, and another pair per reload).
+_location_resolved_key: str | None = None
 
 
-def _redact_url(url: str) -> str:
-    """Round any lat/lon query params in *url* to 1dp before it gets logged."""
-    return _COORD_QS_RE.sub(lambda m: f"{m.group(1)}={_redact_coord(m.group(2))}", url or '')
+#: tests/samples/ relative to the repo root (src/clockish/display.py -> ../../..).
+_SAMPLES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'tests', 'samples',
+)
+
+#: Used when tests/samples/ipwho-sample.json is unavailable (e.g. a wheel
+#: install with no repo checkout). Mirrors the committed sample's key fields.
+_FALLBACK_SAMPLE_LOCATION: dict = {
+    'city': 'Laramie', 'region': 'Wyoming', 'region_code': 'WY',
+    'country': 'United States', 'country_code': 'US', 'postal': '82070',
+    'lat': 41.3113829, 'lon': -105.5911007, 'source': 'sample',
+}
+
+
+def _loc_debug(loc: dict | None) -> str:
+    """Describe a location for debug output, honouring DEBUG_LOCATION.
+
+    Without --debug-location: city + source and coordinates rounded to ~11 km,
+    enough to tell "it resolved somewhere near right" from "it resolved in the
+    wrong hemisphere" without writing the user's street-level position into the
+    journal. With it: the exact values.
+    """
+    if not loc:
+        return 'none'
+    city = loc.get('city') or '?'
+    source = loc.get('source') or '?'
+    lat, lon = loc.get('lat'), loc.get('lon')
+    try:
+        latf, lonf = float(lat), float(lon)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return f"{city} [source: {source}]"
+    if DEBUG_LOCATION:
+        # Exact coordinates, only because the operator asked for them by name
+        # (--debug-location / CLOCKISH_DEBUG_LOCATION=1) on a feature that is
+        # itself opt-in. CodeQL flags this as clear-text logging of private
+        # data; the explicit second opt-in is the mitigation.
+        # codeql[py/clear-text-logging-sensitive-data]
+        return f"{city} ({latf:.6f},{lonf:.6f}) [source: {source}]"
+    # Plain --debug: 1dp (~11 km), so a shared journal never carries a precise
+    # home address. codeql[py/clear-text-logging-sensitive-data]
+    return f"{city} (~{latf:.1f},{lonf:.1f}) [source: {source}]"
+
+
+def _loc_debug_url(url: str) -> str:
+    """Redact a URL that embeds coordinates unless --debug-location is set."""
+    if DEBUG_LOCATION:
+        # codeql[py/clear-text-logging-sensitive-data]
+        return url
+    base = url.split('?', 1)[0]
+    return f"{base} (query redacted; --debug-location to show)"
+
+
+def _contrib_preview() -> bool:
+    """True when rendering a preview that must not touch the network.
+
+    Contrib previews feed docs/previews/*.png, which is tracked in git -- a
+    real location resolved here would be committed upstream.
+    """
+    return _PREVIEW_MODE and _PREVIEW_LOCATION_MODE != 'personal'
+
+
+def _load_sample_json(name: str) -> dict | None:
+    """Load tests/samples/<name>; return None when absent or unparseable."""
+    path = os.path.join(_SAMPLES_DIR, name)
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        _log_warning(f"failed to read sample {path}: {e}")
+        return None
+
+
+def _sample_location() -> dict:
+    """Location for contrib previews: the checked-in ipwho sample payload."""
+    data = _load_sample_json('ipwho-sample.json')
+    if not data:
+        return dict(_FALLBACK_SAMPLE_LOCATION)
+    try:
+        return {
+            'city': data.get('city') or '',
+            'lat': float(data.get('latitude')),
+            'lon': float(data.get('longitude')),
+            'region': data.get('region'),
+            'region_code': data.get('region_code'),
+            'country': data.get('country'),
+            'country_code': data.get('country_code'),
+            'postal': data.get('postal'),
+            'source': 'sample',
+        }
+    except (TypeError, ValueError):
+        return dict(_FALLBACK_SAMPLE_LOCATION)
+
+
+def _load_location_document(path: str) -> tuple[object, bool]:
+    """Read a location YAML file; return (raw_location_value, was_flat_shape).
+
+    Canonical shape is a single top-level 'location:' key. The legacy shape was
+    a bare flat mapping of location fields. Returns (None, False) when the file
+    is absent, empty or unparseable -- never raises.
+    """
+    try:
+        if not os.path.isfile(path):
+            return (None, False)
+        with open(path) as f:
+            data = yaml.safe_load(f)
+    except Exception as e:
+        _log_warning(f"failed to read {path}: {e}")
+        return (None, False)
+    if data is None:
+        return (None, False)
+    if isinstance(data, dict) and 'location' in data:
+        return (data['location'], False)
+    # Legacy flat shape: the whole document is the location mapping.
+    return (data, isinstance(data, dict))
+
+
+def _read_user_location_setting():
+    """Return the raw 'location:' value from the user-owned location.yaml.
+
+    Accepts the canonical nested shape and the legacy flat mapping. The user's
+    file is NEVER rewritten by the runtime -- it is theirs. A legacy shape earns
+    a one-time warning pointing at clockish-location, which does migrate it.
+    """
+    global _flat_user_file_warned
+    value, was_flat = _load_location_document(_LOCATION_YAML_PATH)
+    if was_flat and not _flat_user_file_warned:
+        _flat_user_file_warned = True
+        _log_warning(
+            f"{_LOCATION_YAML_PATH} uses the legacy flat shape; expected a top-level "
+            "'location:' key. Run clockish-location to migrate it"
+        )
+    return value
+
+
+def _location_cache_is_expired(d: dict) -> bool:
+    """True if a GeoIP-derived cache entry has outlived _LOCATION_CACHE_TTL_DAYS."""
+    if d.get('source') not in _GEOIP_SOURCES:
+        return False  # airport / coords / structured entries are deterministic
+    stamp = d.get('resolved_at')
+    if not stamp:
+        return True  # undated GeoIP entry: predates stamping, treat as stale
+    try:
+        resolved = datetime.datetime.fromisoformat(str(stamp))
+    except ValueError:
+        return True
+    if resolved.tzinfo is not None:
+        resolved = resolved.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    age = now_utc - resolved
+    return age > datetime.timedelta(days=_LOCATION_CACHE_TTL_DAYS)
 
 
 def _read_system_location_cache() -> dict | None:
-    # Prefer human-editable YAML location file.
-    try:
-        if os.path.isfile(_LOCATION_YAML_PATH):
-            with open(_LOCATION_YAML_PATH) as f:
-                return yaml.safe_load(f) or None
-    except Exception:
-        pass
-    return None
+    """Read the runtime cache, migrating legacy shapes and honouring the TTL.
+
+    Returns None (and purges the file) for anything unusable: malformed YAML, a
+    shape the shared validator rejects, or an expired GeoIP entry. Never raises.
+    """
+    value, was_flat = _load_location_document(_LOCATION_CACHE_PATH)
+    if value is None:
+        return None
+
+    if _location_is_disabled(value):
+        return None
+
+    if not isinstance(value, dict):
+        _log_warning(f"{_LOCATION_CACHE_PATH} holds no usable location; ignoring")
+        _purge_location_cache()
+        return None
+
+    from clockish.config_validator import validate_location_value
+    errors = validate_location_value(value)
+    if errors:
+        _log_warning(f"{_LOCATION_CACHE_PATH} is invalid ({errors[0]}); ignoring")
+        _purge_location_cache()
+        return None
+
+    if _location_cache_is_expired(value):
+        if DEBUG:
+            print(
+                f"DEBUG: location cache expired (>{_LOCATION_CACHE_TTL_DAYS}d, "
+                f"source={value.get('source')}); purging"
+            )
+        _purge_location_cache()
+        return None
+
+    if was_flat:
+        # One-time migration to the canonical nested shape. The cache is ours to
+        # rewrite (unlike the user's file), so do it silently.
+        if DEBUG:
+            print(f"DEBUG: migrating {_LOCATION_CACHE_PATH} to the nested 'location:' shape")
+        _write_location_document(_LOCATION_CACHE_PATH, _normalize_location_dict(value))
+
+    return value
 
 
 def _normalize_location_dict(d: dict) -> dict:
@@ -1037,23 +1318,54 @@ def _warn_missing_location_fields(d: dict) -> None:
         _log_warning(f"location missing fields: {', '.join(missing)} -- panels may show defaults")
 
 
+def _write_location_document(path: str, loc) -> None:
+    """Write *loc* to *path* in the canonical nested shape, mode 0600.
+
+    Canonical shape is a single top-level 'location:' key holding either a
+    mapping or the scalar 'disabled'. 0600 because the file records where the
+    user physically is.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        yaml.safe_dump({'location': loc}, f, sort_keys=False)
+    try:
+        os.chmod(path, 0o600)  # pre-existing file keeps its old mode otherwise
+    except OSError:
+        pass
+
+
 def _write_system_location_cache(d: dict) -> None:
+    """Store a resolved location in memory and in the runtime cache file.
+
+    Writes ONLY location-cache.yaml -- never the user-owned location.yaml, which
+    belongs to the user and is written solely by clockish-location.
+    """
     try:
         norm = _normalize_location_dict(d)
         # Update global in-memory copy so renderers see canonical keys
         global _SYSTEM_LOCATION
         _SYSTEM_LOCATION = norm
+        if _contrib_preview():
+            # A contrib preview is a throwaway render against sample data; it
+            # must not overwrite the real cache of whoever ran it.
+            if DEBUG:
+                print('DEBUG: contrib preview -- not writing the location cache')
+            return
         # warn about missing main fields (non-fatal)
         try:
             _warn_missing_location_fields(norm)
         except Exception:
             pass
-        os.makedirs(os.path.dirname(_LOCATION_YAML_PATH), exist_ok=True)
-        with open(_LOCATION_YAML_PATH, 'w') as f:
-            yaml.safe_dump(norm, f)
-        # No legacy JSON write; keep only the human-editable YAML at ~/.config/clockish/location.yaml
+        # Drop null-valued keys: a cache file full of 'postal: null' is noise.
+        stamped = {k: v for k, v in norm.items() if v is not None}
+        stamped.setdefault('source', 'config')
+        stamped['resolved_at'] = (
+            datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0).isoformat()
+        )
+        _write_location_document(_LOCATION_CACHE_PATH, stamped)
         if DEBUG:
-            print(f"DEBUG: wrote system_location cache to {_LOCATION_YAML_PATH}")
+            print(f"DEBUG: wrote system_location cache to {_LOCATION_CACHE_PATH}")
     except Exception as e:
         _log_warning(f"failed to write system_location cache: {e}")
 
@@ -1064,13 +1376,17 @@ def _fetch_ipwho_coords(timeout: int = 5, ip_override: str | None = None) -> dic
     If ip_override is provided, call https://ipwho.is/{ip_override} (used
     by preview mode to request a stable sample IP like 6.0.0.0).
     """
+    if _contrib_preview():
+        if DEBUG:
+            print('DEBUG: contrib preview -- GeoIP resolved from tests/samples/ipwho-sample.json')
+        return _sample_location()
     url = 'https://ipwho.is/' if not ip_override else f'https://ipwho.is/{ip_override}'
     if DEBUG:
-        print(f"DEBUG: geoip call -> {url}")
+        print(f"DEBUG: geoip call -> {_loc_debug_url(url)}")
     text, status = _fetch_url_raw(url, timeout, True)
     if text is None:
         if DEBUG:
-            print(f"DEBUG: geoip call failed for {url} (status={status})")
+            print(f"DEBUG: geoip call failed (status={status})")
         return None
     try:
         data = json.loads(text)
@@ -1080,7 +1396,8 @@ def _fetch_ipwho_coords(timeout: int = 5, ip_override: str | None = None) -> dic
         lon = data.get('longitude') or data.get('lon')
         if lat is None or lon is None:
             if DEBUG:
-                print(f"DEBUG: geoip response for {url} missing lat/lon: {data}")
+                print('DEBUG: geoip response missing lat/lon'
+                      + (f": {data}" if DEBUG_LOCATION else ''))
             return None
         result = {
             'city': city or '',
@@ -1096,15 +1413,12 @@ def _fetch_ipwho_coords(timeout: int = 5, ip_override: str | None = None) -> dic
             'postal': data.get('postal') or data.get('zip') or None,
         }
         if DEBUG:
-            # coords redacted to 1dp; location is opt-in (default disabled)
-            print(  # codeql[py/clear-text-logging-sensitive-data]
-                f"DEBUG: geoip resolved city={result['city']} "
-                f"coords~{_redact_coords(result['lat'], result['lon'])} via {url}"
-            )
+            print(f"DEBUG: geoip resolved {_loc_debug(result)}")
         return result
     except Exception as e:
         if DEBUG:
-            print(f"DEBUG: geoip parse error for {url}: {e} :: {text[:250]}")
+            print(f"DEBUG: geoip parse error: {e}"
+                  + (f" :: {text[:250]}" if DEBUG_LOCATION else ''))
         return None
 
 
@@ -1119,19 +1433,35 @@ def _lookup_airport_code(code: str, timeout: int = 10) -> dict | None:
     if not code:
         return None
 
-    url = f"{_FREEAIRPORTDB_BASE}/airports/{code}"
-    if DEBUG:
-        print(f"DEBUG: fetching airport data -> {url}")
-    text, status = _fetch_url_raw(url, timeout, True)
-    if text is None:
+    if _contrib_preview():
+        # No network in a contrib preview: only codes with a checked-in sample
+        # can resolve. Anything else renders blank rather than phoning home.
+        payload = (
+            _load_sample_json(f"airport-lookup-icao-{code}.json")
+            or _load_sample_json(f"airport-lookup-iata-{code}.json")
+        )
+        if payload is None:
+            _log_warning(
+                f"contrib preview: no tests/samples/airport-lookup-*-{code}.json; "
+                f"location panels will render blank. Re-run with --personal for a live lookup"
+            )
+            return None
         if DEBUG:
-            print(f"DEBUG: airport lookup failed for {code} (status={status})")
-        return None
+            print(f"DEBUG: contrib preview -- airport {code} from sample payload")
+    else:
+        url = f"{_FREEAIRPORTDB_BASE}/airports/{code}"
+        if DEBUG:
+            print(f"DEBUG: fetching airport data -> {url}")
+        text, status = _fetch_url_raw(url, timeout, True)
+        if text is None:
+            if DEBUG:
+                print(f"DEBUG: airport lookup failed for {code} (status={status})")
+            return None
 
-    try:
-        payload = json.loads(text)
-    except Exception:
-        return None
+        try:
+            payload = json.loads(text)
+        except Exception:
+            return None
 
     # The API returns {'data': {...}} on success
     data = payload.get('data') if isinstance(payload, dict) else None
@@ -1177,14 +1507,20 @@ def _geocode_open_meteo(name: str, timeout: int = 5) -> dict | None:
         if DEBUG:
             print('DEBUG: geocode skipped: empty city name')
         return None
+    if _contrib_preview():
+        _log_warning(
+            f"contrib preview: skipping the Open-Meteo geocode of '{name}' (no network). "
+            "Add explicit lat/lon to the config, or re-run with --personal"
+        )
+        return None
     q = urllib.parse.quote(name)
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={q}&count=1&language=en"
     if DEBUG:
-        print(f"DEBUG: geocode call -> {url}")
+        print(f"DEBUG: geocode call -> {_loc_debug_url(url)}")
     text, status = _fetch_url_raw(url, timeout, True)
     if text is None:
         if DEBUG:
-            print(f"DEBUG: geocode call failed for {url} (status={status})")
+            print(f"DEBUG: geocode call failed (status={status})")
         return None
     try:
         data = json.loads(text)
@@ -1208,22 +1544,54 @@ def _geocode_open_meteo(name: str, timeout: int = 5) -> dict | None:
         if result['postcodes']:
             result['postal'] = result['postcodes'][0]
         if DEBUG:
-            # coords redacted to 1dp; location is opt-in (default disabled)
-            print(  # codeql[py/clear-text-logging-sensitive-data]
-                f"DEBUG: geocode resolved city={result['city']} "
-                f"coords~{_redact_coords(result['lat'], result['lon'])} "
-                f"country={result.get('country')} via {url}"
-            )
+            print(f"DEBUG: geocode resolved {_loc_debug(result)}")
         return result
     except Exception as e:
         if DEBUG:
-            print(f"DEBUG: geocode parse error for {url}: {e} :: {text[:250]}")
+            print(f"DEBUG: geocode parse error: {e}"
+                  + (f" :: {text[:250]}" if DEBUG_LOCATION else ''))
         return None
 
 
 
 
-def _init_system_location(config: dict) -> None:
+def _resolve_sun_times_for(loc: dict | None) -> None:
+    """Populate sun-times for *loc*: one-shot in preview, background worker live.
+
+    Every resolution branch ends here, so no branch can silently skip sunrise /
+    sunset again -- 'location: auto' previously did, leaving daytime/nighttime
+    permanently on the static fallback rule.
+    """
+    if not loc:
+        return
+    lat, lon = loc.get('lat'), loc.get('lon')
+    if lat is None or lon is None:
+        return
+    try:
+        latf, lonf = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return
+    try:
+        if _PREVIEW_MODE:
+            _fetch_and_store_sun_times(latf, lonf)
+        else:
+            _start_sun_times(latf, lonf)
+    except Exception as e:
+        if DEBUG:
+            print(f"DEBUG: sun-times setup failed: {e}")
+
+
+def _invalidate_location_resolution() -> None:
+    """Force the next _init_system_location() to re-resolve.
+
+    Called on config reload: the config's location: may have changed, and the
+    user-owned location.yaml may have been edited since startup.
+    """
+    global _location_resolved_key
+    _location_resolved_key = None
+
+
+def _init_system_location(config: dict, force: bool = False) -> None:
     """Populate _SYSTEM_LOCATION from config override, cache, or GeoIP.
 
     New behavior:
@@ -1235,42 +1603,70 @@ def _init_system_location(config: dict) -> None:
       - Preview mode forces fresh airport lookups so previews don't use stale data.
       - Cache final resolved dict in ~/.config/clockish/location.yaml.
     """
-    global _SYSTEM_LOCATION
-    # Accept only top-level 'location' key in config (legacy 'system_location' support removed)
+    global _SYSTEM_LOCATION, _location_resolved_key
+
+    # Resolve at most once per (config value, process) unless forced. Location
+    # lookups hit third-party APIs; doing them twice per startup is both slower
+    # and twice the data sent.
+    _key = repr((
+        config.get('location') if isinstance(config, dict) else None,
+        _PREVIEW_MODE,
+        _PREVIEW_LOCATION_MODE,
+    ))
+    if not force and _location_resolved_key == _key:
+        if DEBUG:
+            print('DEBUG: location already resolved this run; skipping re-resolution')
+        return
+    _location_resolved_key = _key
+
+    # Precedence: config 'location:' > user-owned location.yaml > runtime cache >
+    # disabled. The user file's value is treated exactly like a config value, so
+    # 'auto' / an airport code / lat,lon all work from either place.
     cfg_override = None
     if isinstance(config, dict):
         cfg_override = config.get('location')
+    override_origin = 'config'
+    if cfg_override is None:
+        cfg_override = _read_user_location_setting()
+        override_origin = _LOCATION_YAML_PATH
+    if cfg_override is not None:
+        from clockish.config_validator import validate_location_value
+        _loc_errors = validate_location_value(cfg_override)
+        if _loc_errors:
+            for _err in _loc_errors:
+                _log_warning(f"{override_origin}: {_err}")
+            _disable_location(f"invalid location setting in {override_origin}")
+            return
+
+    # 0) kill switch  --  checked before lat,lon parsing and before the airport
+    # regex, since 'none'/'off' are 3-4 alpha chars and would otherwise be sent
+    # to the airport lookup API. Disabled means: no fetch, no cache read, no
+    # cache write, no sun-times worker, and the cache file purged from disk.
+    if _OFFLINE:
+        _disable_location('offline mode')
+        return
+    if _location_is_disabled(cfg_override):
+        _disable_location(f"{override_origin} sets location: {cfg_override!r}")
+        return
 
     # 1) explicit override handling
     # Preview-mode special case: if no location provided or empty string, use stable sample IP
     if _PREVIEW_MODE and (cfg_override is None or (isinstance(cfg_override, str) and cfg_override.strip() == '')):
-        if DEBUG:
-            print('DEBUG: preview mode + no location -> using stable ipwho sample 129.72.188.0')
-        geo = _fetch_ipwho_coords(timeout=5, ip_override='129.72.188.0')
-        if geo:
+        # A config with no location: still renders location/daytime panels in
+        # preview, so there is something to look at. Contrib previews get the
+        # sample; personal previews get nothing (a real lookup here would be
+        # location data the user never asked this config for).
+        if _contrib_preview():
+            _SYSTEM_LOCATION = _sample_location()
+            _write_system_location_cache(_SYSTEM_LOCATION)
             try:
-                _SYSTEM_LOCATION = {
-                    'city': geo.get('city') or '',
-                    'lat': float(geo.get('lat')),
-                    'lon': float(geo.get('lon')),
-                    'region': geo.get('region'),
-                    'region_code': geo.get('region_code'),
-                    'country': geo.get('country'),
-                    'country_code': geo.get('country_code'),
-                    'postal': geo.get('postal'),
-                    'source': 'ipwho',
-                }
+                _fetch_and_store_sun_times(_SYSTEM_LOCATION['lat'], _SYSTEM_LOCATION['lon'])
             except Exception:
-                _SYSTEM_LOCATION = None
-            if _SYSTEM_LOCATION:
-                _write_system_location_cache(_SYSTEM_LOCATION)
-                # fetch sun-times synchronously for preview
-                try:
-                    _fetch_and_store_sun_times(_SYSTEM_LOCATION['lat'], _SYSTEM_LOCATION['lon'])
-                except Exception:
-                    pass
-                return
-        _SYSTEM_LOCATION = None
+                pass
+            if DEBUG:
+                print('DEBUG: preview + no location -> sample location (contrib)')
+            return
+        _disable_location('personal preview with no location: in the config')
         return
 
     if isinstance(cfg_override, str):
@@ -1294,9 +1690,10 @@ def _init_system_location(config: dict) -> None:
                     'country': geo.get('country'),
                     'country_code': geo.get('country_code'),
                     'postal': geo.get('postal'),
-                    'source': 'ipwho',
+                    'source': geo.get('source') or 'ipwho',
                 }
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 return
             else:
                 _SYSTEM_LOCATION = None
@@ -1317,10 +1714,11 @@ def _init_system_location(config: dict) -> None:
                     'country': geo.get('country'),
                     'country_code': geo.get('country_code'),
                     'postal': geo.get('postal'),
-                    'source': 'ipwho',
+                    'source': geo.get('source') or 'ipwho',
                 }
                 # Per policy: no reverse geocoding. Rely on provider fields or user-supplied structured fields.
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 return
             else:
                 _SYSTEM_LOCATION = None
@@ -1338,11 +1736,7 @@ def _init_system_location(config: dict) -> None:
                 # Per policy: no reverse geocoding. If callers want region/country/postal, they must supply them.
                 _write_system_location_cache(_SYSTEM_LOCATION)
                 if DEBUG:
-                    # coords redacted to 1dp; user supplied these explicitly in config
-                    print(  # codeql[py/clear-text-logging-sensitive-data]
-                        f"DEBUG: location parsed from lat/lon string in config: "
-                        f"~{_redact_coords(lat, lon)}"
-                    )
+                    print(f"DEBUG: location parsed from config lat/lon: {_loc_debug(_SYSTEM_LOCATION)}")
                 # in preview mode, also fetch sun-times synchronously so panels using daytime/nighttime work
                 if _PREVIEW_MODE:
                     try:
@@ -1477,13 +1871,22 @@ def _init_system_location(config: dict) -> None:
         # direct lat/lon provided
         if 'lat' in cfg_override and 'lon' in cfg_override:
             try:
+                # Carry through every field the user spelled out. Keeping only
+                # city/lat/lon discarded region/country/postal, so the very
+                # configs written to avoid network lookups (see
+                # configs/location-static.yaml) rendered those panels blank.
                 _SYSTEM_LOCATION = {
                     'city': cfg_override.get('city') or '',
                     'lat': float(cfg_override['lat']),
                     'lon': float(cfg_override['lon']),
                     'source': 'config',
                 }
+                for _k in ('region', 'region_code', 'country', 'country_code',
+                           'postal', 'elevation', 'elevation_ft', 'timezone'):
+                    if cfg_override.get(_k) not in (None, ''):
+                        _SYSTEM_LOCATION[_k] = cfg_override[_k]
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 if DEBUG:
                     print('DEBUG: system_location loaded from config override (lat/lon)')
                 return
@@ -1503,6 +1906,7 @@ def _init_system_location(config: dict) -> None:
                 _SYSTEM_LOCATION = {'city': om.get('city') or city, 'lat': float(om['lat']), 'lon': float(om['lon']),
                                     'country': om.get('country'), 'source': 'open-meteo'}
                 _write_system_location_cache(_SYSTEM_LOCATION)
+                _resolve_sun_times_for(_SYSTEM_LOCATION)
                 return
             # fall through
 
@@ -1510,32 +1914,16 @@ def _init_system_location(config: dict) -> None:
     cached = _read_system_location_cache()
     if cached and isinstance(cached, dict) and cached.get('lat') is not None and cached.get('lon') is not None:
         _SYSTEM_LOCATION = cached
+        _resolve_sun_times_for(_SYSTEM_LOCATION)
         if DEBUG:
-            # cache only exists after an explicit opt-in; coords redacted to 1dp
-            print(f"DEBUG: system_location loaded from cache: {_SYSTEM_LOCATION.get('city')}")
-            print(  # codeql[py/clear-text-logging-sensitive-data]
-                f" (~{_redact_coords(_SYSTEM_LOCATION.get('lat'), _SYSTEM_LOCATION.get('lon'))})"
-            )
+            print(f"DEBUG: system_location loaded from cache: {_loc_debug(_SYSTEM_LOCATION)}")
         return
 
-    # 3) privacy-first default: disabled unless user explicitly set 'auto' or provided a location
-    if DEBUG:
-        print('DEBUG: no location configured or cached; defaulting to DISABLED for privacy')
-    _SYSTEM_LOCATION = {
-        'city': 'disabled',
-        'lat': 0.0,
-        'lon': 0.0,
-        'country': 'disabled',
-        'country_code': '__',
-        'region': 'disabled',
-        'region_code': '__',
-        'postal': '0',
-        'source': 'disabled',
-    }
-    try:
-        _write_system_location_cache(_SYSTEM_LOCATION)
-    except Exception:
-        pass
+    # 3) privacy-first default: disabled unless the user explicitly set 'auto'
+    # or provided a location. No 0.0/0.0 sentinel is written -- that is not a
+    # location, and it previously kept the sun-times worker polling Open-Meteo
+    # for the Gulf of Guinea while location was nominally off.
+    _disable_location('no location configured or cached')
     return
 
 
@@ -1557,8 +1945,47 @@ def get_system_location() -> str:
 
 # Sun times fetching / storage
 
+def _store_sample_sun_times() -> None:
+    """Populate _SUN_TIMES from the checked-in Open-Meteo sample payload.
+
+    The sample's dates are whenever it was fetched, so each entry is shifted
+    forward onto today/tomorrow (preserving its wall-clock times) -- otherwise
+    get_daytime() would never find an entry for today and would silently fall
+    back to the static rule, defeating the point of the fixture.
+    """
+    data = _load_sample_json('open-meteo-sun-sample.json')
+    daily = (data or {}).get('daily') or {}
+    dates = daily.get('time') or []
+    sunrises = daily.get('sunrise') or []
+    sunsets = daily.get('sunset') or []
+    if not dates:
+        _log_warning('contrib preview: no usable open-meteo-sun-sample.json; '
+                     'daytime/nighttime fall back to the static rule')
+        return
+    try:
+        base = datetime.date.fromisoformat(dates[0])
+    except ValueError:
+        return
+    shift = datetime.date.today() - base
+    for d, rs, ss in zip(dates, sunrises, sunsets):
+        try:
+            key = (datetime.date.fromisoformat(d) + shift).isoformat()
+            _SUN_TIMES[key] = {
+                'sunrise': datetime.datetime.fromisoformat(rs) + shift,
+                'sunset': datetime.datetime.fromisoformat(ss) + shift,
+                'fetched_at': datetime.datetime.now(),
+            }
+        except ValueError:
+            continue
+    if DEBUG:
+        print(f"DEBUG: contrib preview -- sun-times from sample for {','.join(sorted(_SUN_TIMES))}")
+
+
 def _fetch_and_store_sun_times(lat: float, lon: float, timeout: int = 10) -> None:
     """Fetch sunrise/sunset for today and tomorrow via Open-Meteo and store in _SUN_TIMES."""
+    if _contrib_preview():
+        _store_sample_sun_times()
+        return
     try:
         today = datetime.date.today()
         tomorrow = today + datetime.timedelta(days=1)
@@ -1569,14 +1996,11 @@ def _fetch_and_store_sun_times(lat: float, lon: float, timeout: int = 10) -> Non
             f"&daily=sunrise,sunset&start_date={start}&end_date={end}&timezone=auto"
         )
         if DEBUG:
-            # URL carries lat/lon query params; redacted to 1dp before logging
-            # codeql[py/clear-text-logging-sensitive-data]
-            print(f"DEBUG: sun-times call -> {_redact_url(url)}")
+            print(f"DEBUG: sun-times call -> {_loc_debug_url(url)}")
         text, status = _fetch_url_raw(url, timeout, True)
         if text is None:
             if DEBUG:
-                # codeql[py/clear-text-logging-sensitive-data]
-                print(f"DEBUG: sun-times fetch failed (no response) for {_redact_url(url)}")
+                print("DEBUG: sun-times fetch failed (no response)")
             return
         data = json.loads(text)
         daily = data.get('daily', {})
@@ -1589,7 +2013,8 @@ def _fetch_and_store_sun_times(lat: float, lon: float, timeout: int = 10) -> Non
                 ss_dt = datetime.datetime.fromisoformat(ss)
                 _SUN_TIMES[d] = {'sunrise': sr, 'sunset': ss_dt, 'fetched_at': datetime.datetime.now()}
                 if DEBUG:
-                    print(f"DEBUG: sun-times for {d}: sunrise={sr.isoformat()} sunset={ss_dt.isoformat()}")
+                    if DEBUG_LOCATION:
+                        print(f"DEBUG: sun-times for {d}: sunrise={sr.isoformat()} sunset={ss_dt.isoformat()}")
             except Exception:
                 if DEBUG:
                     print(f"DEBUG: failed parsing sun-times for {d}: {rs} / {ss}")
@@ -1639,6 +2064,10 @@ def _sun_times_worker(lat: float, lon: float) -> None:
 
 def _start_sun_times(lat: float, lon: float) -> None:
     global _sun_times_thread, _sun_times_stop_event, _sun_times_event
+    if _OFFLINE:
+        if DEBUG:
+            print('DEBUG: offline mode -- sun-times worker not started')
+        return
     # Stop existing
     _stop_sun_times()
     _sun_times_stop_event.clear()
@@ -2916,6 +3345,10 @@ def _attempt_config_reload() -> None:
     global _FONT_PATH
     _FONT_PATH = _find_font(_config.get('default_font', 'DejaVuSans.ttf'))
 
+    # Location may have changed in the new config (or in location.yaml since
+    # startup), so let _init_layout()'s resolution run for real this time.
+    _invalidate_location_resolution()
+
     _init_layout()
 
     # Reload default font variables (used by some renderers)
@@ -2936,28 +3369,32 @@ def _attempt_config_reload() -> None:
         # Non-fatal: if no workers exist (preview mode) or other issue, ignore.
         pass
 
-    # Wake sun-times worker (if running) so it fetches immediately on reload.
-    # If no worker exists but we have a system_location, start it.
-    try:
-        if _sun_times_event is not None:
-            _sun_times_event.set()
+    # Sun-times worker after reload. A reload can flip location from enabled to
+    # disabled (or vice versa), so honour the current state rather than assuming
+    # the pre-reload one: never wake or start a worker for a disabled location.
+    if not _location_enabled():
+        try:
+            _stop_sun_times()
             if DEBUG:
-                print("DEBUG: Waking sun-times worker after config reload")
-    except Exception:
-        pass
-
-    # Ensure worker is running if we have a location
-    try:
-        if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict) and _SYSTEM_LOCATION.get('lat') is not None:
+                print("DEBUG: location disabled after config reload; sun-times worker stopped")
+        except Exception:
+            pass
+    else:
+        try:
+            if _sun_times_event is not None:
+                _sun_times_event.set()
+                if DEBUG:
+                    print("DEBUG: Waking sun-times worker after config reload")
+        except Exception:
+            pass
+        try:
             if _sun_times_thread is None and not _PREVIEW_MODE:
-                try:
-                    _start_sun_times(float(_SYSTEM_LOCATION['lat']), float(_SYSTEM_LOCATION['lon']))
-                    if DEBUG:
-                        print("DEBUG: started sun-times worker after config reload")
-                except Exception:
-                    pass
-    except Exception:
-        pass
+                assert _SYSTEM_LOCATION is not None  # guaranteed by _location_enabled()
+                _start_sun_times(float(_SYSTEM_LOCATION['lat']), float(_SYSTEM_LOCATION['lon']))
+                if DEBUG:
+                    print("DEBUG: started sun-times worker after config reload")
+        except Exception:
+            pass
 
     print("Config reloaded successfully.")
 
@@ -3022,7 +3459,7 @@ def _init() -> None:
     All module-level globals used by renderers are set here.  Nothing outside
     _init() / main() should depend on them being available at import time.
     """
-    global _args, DEBUG, DEBUG_LAYOUT
+    global _args, DEBUG, DEBUG_LAYOUT, DEBUG_LOCATION, _OFFLINE
     global _config, _display_cfg, _resolved_display_config, width, height, rotation
     global image, draw, padding, top, bottom, x
     global lcd, _orientation
@@ -3035,6 +3472,12 @@ def _init() -> None:
     _args = _parser.parse_args()
     DEBUG = _args.debug
     DEBUG_LAYOUT = _args.debug_layout
+    if getattr(_args, 'debug_location', False):
+        DEBUG_LOCATION = True
+    if getattr(_args, 'offline', False):
+        _OFFLINE = True
+    if _OFFLINE and DEBUG:
+        print('DEBUG: offline mode -- all outbound network I/O disabled')
 
     # --- Config ------------------------------------------------------------
     _config = _load_config(_args.config)
@@ -3108,16 +3551,9 @@ def _init() -> None:
     # --- Layout (calls _resolve_panel_widths; safe here since all fns defined) --
     _init_layout()
 
-    # Initialize system location and sun-times worker (startup immediate fetch)
-    try:
-        _init_system_location(_config)
-        if _SYSTEM_LOCATION and isinstance(_SYSTEM_LOCATION, dict) and _SYSTEM_LOCATION.get('lat') is not None:
-            lat = float(_SYSTEM_LOCATION['lat'])
-            lon = float(_SYSTEM_LOCATION['lon'])
-            if not _PREVIEW_MODE:
-                _start_sun_times(lat, lon)
-    except Exception:
-        pass
+    # NOTE: location resolution and the sun-times worker are started by
+    # _init_layout() -> _init_system_location() -> _resolve_sun_times_for()
+    # above. Resolving again here meant two lookups per startup.
 
     # --- Register signal handlers -------------------------------------------
     # SIGUSR1: trigger a full config reload
