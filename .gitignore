@@ -33,14 +33,11 @@ htmlcov/
 
 # ── PyCharm / JetBrains ────────────────────────────────────────────────────────
 # Keep project config but not local/machine-specific stuff
-.idea/*
-!.idea/.gitignore
-!.idea/modules.xml
-!.idea/vcs.xml
-!.idea/inspectionProfiles/
+.idea/**
+!.idea/runConfigurations
+!.idea/codeStyles
+!.idea/inspectionProfiles
 
-# .iml holds a machine-local interpreter reference; churns across dev machines
-.idea/*.iml
 
 # ── OS cruft ──────────────────────────────────────────────────────────────────
 .DS_Store
