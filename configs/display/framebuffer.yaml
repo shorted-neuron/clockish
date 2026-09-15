@@ -52,14 +52,16 @@ display:
     # Log every actual brightness change (skips no-op writes). Default: false.
     logging: true
 
-    # off/min/max are the three brightness values (integers, 0-255) you'll
-    # reference by name from `schedule:` below.
-    #   off -- fully off (usually 0)
-    #   min -- dimmest level where the display is still legible
-    #   max -- full brightness (usually 255, your panel's ceiling)
-    off:  0
-    min:  40
-    max:  255
+    # off_value/min/max are the three brightness values (integers, 0-255)
+    # you'll reference by name from `schedule:` below.
+    #   off_value -- fully off (usually 0). NOT named 'off': an unquoted
+    #                'off:' key is parsed by YAML 1.1 as the boolean False,
+    #                not the string "off" -- a real gotcha, not a style choice.
+    #   min       -- dimmest level where the display is still legible
+    #   max       -- full brightness (usually 255, your panel's ceiling)
+    off_value: 0
+    min:       40
+    max:       255
 
     # Time-of-day schedule. Each entry's `start`/`end` is a 24h "HH:MM" local
     # time; `end` before `start` (like "night" below) wraps past midnight.

@@ -91,6 +91,12 @@ except ImportError:  # pragma: no cover
 #: Prefix a fact panel's `source:` uses to reference a top-level cached-facts entry.
 CACHED_FACTS_SOURCE_PREFIX: str = 'cached-facts.'
 
+def _hhmm_to_minutes(value: str) -> int:
+    """Convert an 'HH:MM' string (already validated against _HHMM_RE) to minutes-since-midnight."""
+    hh, mm = value.split(':')
+    return int(hh) * 60 + int(mm)
+
+
 def _is_valid_interval(interval_str: str) -> bool:
     """Check if interval_str is in valid format: <number>[s|m|h].
 
@@ -131,6 +137,21 @@ KNOWN_CACHED_FACT_TYPES: frozenset[str] = frozenset({'url-fact'})
 _CACHED_FACT_ATTRS: frozenset[str] = frozenset({
     'name', 'type', 'url', 'interval', 'timeout', 'verify_ssl', 'preview_response',
 })
+
+#: Backlight control ``method:`` values recognised under ``display.backlight:``.
+#: Only 'sysfs' is implemented today; see clockish.backlight._METHODS.
+KNOWN_BACKLIGHT_METHODS: frozenset[str] = frozenset({'sysfs'})
+
+#: All valid keys for a ``display.backlight:`` mapping.
+_BACKLIGHT_ATTRS: frozenset[str] = frozenset({
+    'method', 'device', 'logging', 'off_value', 'min', 'max', 'schedule',
+})
+
+#: All valid keys for one ``display.backlight.schedule:`` list entry.
+_BACKLIGHT_SCHEDULE_ATTRS: frozenset[str] = frozenset({'name', 'start', 'end', 'value'})
+
+#: 24h "HH:MM" local time, as used by ``display.backlight.schedule[].start/end``.
+_HHMM_RE = re.compile(r'^([01]\d|2[0-3]):[0-5]\d$')
 
 #: Built-in font scale names (should be used with ``font_size:``, not ``font:``).
 BUILTIN_FONT_NAMES: frozenset[str] = frozenset({
@@ -532,6 +553,106 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
             if poll_interval is not None:
                 if not isinstance(poll_interval, str) or not _is_valid_interval(poll_interval):
                     err('reload', f"poll_interval '{poll_interval}' must be a string in format <number>[s|m|h]")
+
+    # -- display.backlight section -------------------------------------------
+    # Optional brightness scheduler; see clockish.backlight and AGENTS.md.
+    display_cfg = config.get('display')
+    if isinstance(display_cfg, dict):
+        backlight_cfg = display_cfg.get('backlight')
+        if backlight_cfg is not None:
+            if not isinstance(backlight_cfg, dict):
+                err('display.backlight', "'backlight' must be a mapping")
+            else:
+                for key in backlight_cfg:
+                    if key not in _BACKLIGHT_ATTRS:
+                        warn('display.backlight', f"unexpected key '{key}' on backlight")
+
+                method = backlight_cfg.get('method')
+                if not method:
+                    err('display.backlight', "backlight missing required 'method' key")
+                elif method not in KNOWN_BACKLIGHT_METHODS:
+                    err(
+                        'display.backlight',
+                        f"unknown backlight method '{method}' "
+                        f"(known methods: {', '.join(sorted(KNOWN_BACKLIGHT_METHODS))})",
+                    )
+
+                if not backlight_cfg.get('device'):
+                    err('display.backlight', "backlight missing required 'device' key (will crash at runtime)")
+
+                logging_flag = backlight_cfg.get('logging')
+                if logging_flag is not None and not isinstance(logging_flag, bool):
+                    warn('display.backlight', f"'logging: {logging_flag!r}' should be a boolean")
+
+                def _valid_level(v: object) -> bool:
+                    return isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 255
+
+                levels: dict[str, int] = {}
+                for level_name in ('off_value', 'min', 'max'):
+                    level_val = backlight_cfg.get(level_name)
+                    if level_val is None:
+                        err('display.backlight', f"backlight missing required '{level_name}' key")
+                    elif not _valid_level(level_val):
+                        err('display.backlight', f"'{level_name}: {level_val!r}' must be an integer 0-255")
+                    else:
+                        levels[level_name] = level_val
+
+                min_v, max_v = levels.get('min'), levels.get('max')
+                if min_v is not None and max_v is not None and min_v > max_v:
+                    err('display.backlight', f"'min: {min_v}' must not be greater than 'max: {max_v}'")
+
+                schedule = backlight_cfg.get('schedule')
+                if schedule is None:
+                    err('display.backlight', "backlight missing required 'schedule' key")
+                elif not isinstance(schedule, list) or not schedule:
+                    err('display.backlight.schedule', "'schedule' must be a non-empty list of entries")
+                else:
+                    # (start_min, end_min, entry_label) -- a wraparound entry (end < start)
+                    # contributes two pieces so the overlap check below still works.
+                    intervals: list[tuple[int, int, str]] = []
+                    for si, entry in enumerate(schedule):
+                        sloc = f'display.backlight.schedule[{si}]'
+                        if not isinstance(entry, dict):
+                            err(sloc, "schedule entry must be a mapping")
+                            continue
+
+                        for key in entry:
+                            if key not in _BACKLIGHT_SCHEDULE_ATTRS:
+                                warn(sloc, f"unexpected key '{key}' on schedule entry")
+
+                        name = entry.get('name', f'[{si}]')
+                        start, end, value = entry.get('start'), entry.get('end'), entry.get('value')
+
+                        valid_times = True
+                        for field_name, field_val in (('start', start), ('end', end)):
+                            if not isinstance(field_val, str) or not _HHMM_RE.match(field_val):
+                                err(sloc, f"'{field_name}: {field_val!r}' must be a 24h \"HH:MM\" string")
+                                valid_times = False
+
+                        if value is None:
+                            err(sloc, "schedule entry missing required 'value' key")
+                        elif not _valid_level(value):
+                            err(sloc, f"'value: {value!r}' must be an integer 0-255")
+
+                        if valid_times:
+                            start_min, end_min = _hhmm_to_minutes(start), _hhmm_to_minutes(end)
+                            if start_min <= end_min:
+                                intervals.append((start_min, end_min, name))
+                            else:
+                                intervals.append((start_min, 1439, name))
+                                intervals.append((0, end_min, name))
+
+                    reported: set[tuple[str, str]] = set()
+                    for i, (a_start, a_end, a_name) in enumerate(intervals):
+                        for b_start, b_end, b_name in intervals[i + 1:]:
+                            pair_lo, pair_hi = sorted((a_name, b_name))
+                            pair = (pair_lo, pair_hi)
+                            if a_name != b_name and a_start <= b_end and b_start <= a_end and pair not in reported:
+                                reported.add(pair)
+                                err(
+                                    'display.backlight.schedule',
+                                    f"schedule entries '{a_name}' and '{b_name}' overlap",
+                                )
 
     # -- rows ---------------------------------------------------------------
     rows = config.get('rows')

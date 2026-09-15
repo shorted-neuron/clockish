@@ -51,6 +51,72 @@ properties:
   display:
     type: object
     description: Display hardware profile. Usually provided by a separate display.yaml file.
+    properties:
+      backlight:
+        type: object
+        description: |
+          Optional backlight brightness scheduler. Omit this whole block if the
+          display has no software-controllable backlight. See AGENTS.md
+          ("backlight") and configs/display/framebuffer.yaml for a worked example.
+        required: [method, device, off_value, min, max, schedule]
+        additionalProperties: false
+        properties:
+          method:
+            type: string
+            enum: [sysfs]
+            description: How the backlight is driven. Only 'sysfs' is implemented today.
+          device:
+            type: string
+            description: >-
+              Backlight device folder name under /sys/class/backlight/ (NOT a full
+              path), e.g. "10-0045". Brightness is written to
+              /sys/class/backlight/<device>/brightness.
+          logging:
+            type: boolean
+            description: 'Log every actual brightness change (skips no-op writes). Default: false.'
+          off_value:
+            type: integer
+            minimum: 0
+            maximum: 255
+            description: >-
+              Fully-off brightness value (usually 0). Named 'off_value', not 'off',
+              because an unquoted 'off:' key is parsed by YAML 1.1 as the boolean
+              False, not the string "off" -- a real PyYAML gotcha, not a style choice.
+          min:
+            type: integer
+            minimum: 0
+            maximum: 255
+            description: Dimmest level where the display is still legible.
+          max:
+            type: integer
+            minimum: 0
+            maximum: 255
+            description: Full brightness (usually 255, your panel's ceiling).
+          schedule:
+            type: array
+            minItems: 1
+            description: |
+              Time-of-day brightness schedule. Entries must not overlap. Any time
+              of day not covered by an entry uses the midpoint between min and max.
+            items:
+              type: object
+              required: [name, start, end, value]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                start:
+                  type: string
+                  pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+                  description: 24h "HH:MM" local time. May be later than 'end' to wrap past midnight.
+                end:
+                  type: string
+                  pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+                  description: 24h "HH:MM" local time, inclusive.
+                value:
+                  type: integer
+                  minimum: 0
+                  maximum: 255
   preview_size:
     type: string
     pattern: '^\d+x\d+$'

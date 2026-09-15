@@ -861,6 +861,116 @@ class TestCachedFacts:
 
 
 # ---------------------------------------------------------------------------
+# display.backlight: brightness scheduler validation
+# ---------------------------------------------------------------------------
+
+def _backlight_config(**overrides) -> dict:
+    """A minimal valid config with a 'display.backlight:' block, with overrides."""
+    backlight = {
+        'method': 'sysfs',
+        'device': '10-0045',
+        'off_value': 0,
+        'min': 40,
+        'max': 255,
+        'schedule': [
+            {'name': 'night', 'start': '22:00', 'end': '06:59', 'value': 42},
+            {'name': 'day', 'start': '07:00', 'end': '19:59', 'value': 255},
+        ],
+    }
+    backlight.update(overrides)
+    cfg = _minimal_config()
+    cfg['display'] = {'driver': 'framebuffer', 'backlight': backlight}
+    return cfg
+
+
+class TestBacklight:
+    """Tests for the optional 'display.backlight:' brightness-scheduler block."""
+
+    def test_valid_config_ok(self) -> None:
+        result = validate_config_dict(_backlight_config())
+        assert result.ok, f"expected no issues, got: {result.issues}"
+
+    def test_missing_method_errors(self) -> None:
+        cfg = _backlight_config()
+        del cfg['display']['backlight']['method']
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('method' in i.message.lower() for i in result.errors)
+
+    def test_unknown_method_errors(self) -> None:
+        cfg = _backlight_config(method='gpio')
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('method' in i.message.lower() for i in result.errors)
+
+    def test_missing_device_errors(self) -> None:
+        cfg = _backlight_config()
+        del cfg['display']['backlight']['device']
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('device' in i.message.lower() for i in result.errors)
+
+    def test_off_value_out_of_range_errors(self) -> None:
+        cfg = _backlight_config(off_value=999)
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('off_value' in i.message for i in result.errors)
+
+    def test_min_greater_than_max_errors(self) -> None:
+        cfg = _backlight_config(min=200, max=100)
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('min' in i.message and 'max' in i.message for i in result.errors)
+
+    def test_unexpected_key_warns(self) -> None:
+        # Schema also rejects it (additionalProperties: false), same as cached-facts entries.
+        cfg = _backlight_config(brightness=42)
+        result = validate_config_dict(cfg)
+        assert any('brightness' in i.message for i in result.warnings)
+
+    def test_empty_schedule_errors(self) -> None:
+        cfg = _backlight_config(schedule=[])
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('schedule' in i.message.lower() for i in result.errors)
+
+    def test_schedule_entry_bad_time_format_errors(self) -> None:
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '7:00', 'end': '19:59', 'value': 255}])
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('HH:MM' in i.message for i in result.errors)
+
+    def test_schedule_entry_value_out_of_range_errors(self) -> None:
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '07:00', 'end': '19:59', 'value': 500}])
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('value' in i.message.lower() for i in result.errors)
+
+    def test_overlapping_schedule_entries_error(self) -> None:
+        cfg = _backlight_config(schedule=[
+            {'name': 'a', 'start': '00:00', 'end': '12:00', 'value': 100},
+            {'name': 'b', 'start': '11:00', 'end': '23:59', 'value': 200},
+        ])
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('overlap' in i.message.lower() for i in result.errors)
+
+    def test_non_overlapping_adjacent_entries_ok(self) -> None:
+        # night wraps midnight, day doesn't -- must not false-positive as overlapping
+        result = validate_config_dict(_backlight_config())
+        assert result.ok, f"expected no issues, got: {result.issues}"
+
+    def test_wraparound_entry_overlaps_correctly_detected(self) -> None:
+        cfg = _backlight_config(schedule=[
+            {'name': 'night', 'start': '22:00', 'end': '06:59', 'value': 42},
+            {'name': 'early', 'start': '05:00', 'end': '08:00', 'value': 100},
+        ])
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('overlap' in i.message.lower() for i in result.errors)
+
+
+# ---------------------------------------------------------------------------
 # transform: value-transform pipeline validation
 # ---------------------------------------------------------------------------
 
