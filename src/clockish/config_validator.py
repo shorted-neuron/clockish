@@ -319,10 +319,15 @@ _CACHED_FACT_ATTRS: frozenset[str] = frozenset({
 #: Only 'sysfs' is implemented today; see clockish.backlight._METHODS.
 KNOWN_BACKLIGHT_METHODS: frozenset[str] = frozenset({'sysfs'})
 
-#: All valid keys for a ``display.backlight:`` mapping.
+#: All valid keys for a ``display.backlight:`` mapping. Exactly one of
+#: 'schedule'/'curve' is required -- see clockish.backlight module docstring.
 _BACKLIGHT_ATTRS: frozenset[str] = frozenset({
-    'method', 'device', 'logging', 'off_value', 'min', 'max', 'schedule',
+    'method', 'device', 'logging', 'off_value', 'min', 'max', 'schedule', 'curve',
 })
+
+#: Backlight ``curve:`` values -- an alternative to a fixed ``schedule:``.
+#: Only 'sun' is implemented today; see clockish.backlight.resolve_sun_curve_value.
+KNOWN_BACKLIGHT_CURVES: frozenset[str] = frozenset({'sun'})
 
 #: All valid keys for one ``display.backlight.schedule:`` list entry.
 _BACKLIGHT_SCHEDULE_ATTRS: frozenset[str] = frozenset({'name', 'start', 'end', 'value'})
@@ -778,12 +783,24 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                 if min_v is not None and max_v is not None and min_v > max_v:
                     err('display.backlight', f"'min: {min_v}' must not be greater than 'max: {max_v}'")
 
-                schedule = backlight_cfg.get('schedule')
-                if schedule is None:
-                    err('display.backlight', "backlight missing required 'schedule' key")
-                elif not isinstance(schedule, list) or not schedule:
+                has_schedule = 'schedule' in backlight_cfg
+                has_curve = 'curve' in backlight_cfg
+                if has_schedule and has_curve:
+                    err('display.backlight', "backlight must not specify both 'schedule' and 'curve' -- pick one")
+                elif not has_schedule and not has_curve:
+                    err('display.backlight', "backlight missing required 'schedule' or 'curve' key (pick one)")
+                elif has_curve:
+                    curve = backlight_cfg.get('curve')
+                    if curve not in KNOWN_BACKLIGHT_CURVES:
+                        err(
+                            'display.backlight',
+                            f"unknown backlight curve '{curve}' "
+                            f"(known curves: {', '.join(sorted(KNOWN_BACKLIGHT_CURVES))})",
+                        )
+                elif not isinstance(backlight_cfg.get('schedule'), list) or not backlight_cfg.get('schedule'):
                     err('display.backlight.schedule', "'schedule' must be a non-empty list of entries")
                 else:
+                    schedule = backlight_cfg['schedule']
                     # (start_min, end_min, entry_label) -- a wraparound entry (end < start)
                     # contributes two pieces so the overlap check below still works.
                     intervals: list[tuple[int, int, str]] = []

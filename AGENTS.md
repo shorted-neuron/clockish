@@ -396,9 +396,10 @@ keep that pattern, or "makes no network call" stops being a real assertion.
 
 Optional `backlight:` block under a display profile's `display:` section (see
 `configs/display/framebuffer.yaml` for a full worked example). Runs a background daemon thread
-(`clockish/backlight.py`) that checks a simple time-of-day `schedule:` roughly every 10 minutes
-and writes the resulting brightness level to the backlight hardware -- decoupled from the render
-loop the same way `cached-facts` is.
+(`clockish/backlight.py`) that computes a brightness level roughly every 10 minutes -- from
+EITHER a fixed time-of-day `schedule:` OR a sun-following `curve: sun` (mutually exclusive, pick
+one) -- and writes it to the backlight hardware, decoupled from the render loop the same way
+`cached-facts` is.
 
 ```yaml
 display:
@@ -409,6 +410,8 @@ display:
     off_value: 0         # fully off. NOT named 'off' -- see gotcha below
     min:       40
     max:       255
+
+    # EITHER a fixed schedule:
     schedule:
       - name: night
         start: "22:00"   # 24h "HH:MM"; end < start wraps past midnight
@@ -418,6 +421,9 @@ display:
         start: "07:00"
         end:   "19:59"
         value: 255
+
+    # OR a sun-following curve (mutually exclusive with schedule: above):
+    # curve: sun
 ```
 
 **Why `off_value` and not `off`**: an unquoted `off:` YAML key is parsed under YAML 1.1 (PyYAML's
@@ -430,28 +436,44 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
 - `resolve_scheduled_value(schedule, min_, max_, now)` -- pure function, no I/O. Matches `now`
   against each entry's `start`/`end` (inclusive both ends; `end < start` wraps past midnight).
   Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`).
+- `resolve_sun_curve_value(sunrise, sunset, min_, max_, now)` -- pure function for `curve: sun`.
+  `min_` below the horizon; above it, a full-period cosine bump
+  (`min_ + (max_-min_) * (1 - cos(2*pi*t)) / 2`, `t` = fraction of daylight elapsed) that's `min_`
+  at sunrise/sunset with zero slope (no kink against the flat night level either side) and peaks
+  at `max_` exactly at solar noon (`t=0.5`). A **half**-period cosine (`1 - cos(pi*t)`) was tried
+  first and is wrong -- it's a monotonic sunrise-to-sunset ramp, not a peak-at-noon bump; if this
+  curve ever looks like it's just ramping up all day instead of peaking at noon, that's this exact
+  mistake creeping back in.
+- `curve: sun` needs today's sunrise/sunset. Rather than importing `display.py` (circular --
+  it already imports `backlight.py` -- and it'd pull in hardware-driver code this module has no
+  business depending on), `start_backlight(display_cfg, get_sun_times=...)` takes a callable;
+  `display.py`'s `_get_today_sun_times()` reads its own `_SUN_TIMES` global and is passed in at
+  the call site. Returns `None` before the first sunrise/sunset fetch completes, in which case
+  `_apply()` falls back to the `min`/`max` midpoint (same fallback shape as a schedule gap).
 - `method:` is a dispatch key (`_METHODS` dict) so other control schemes (GPIO pin toggle,
   PWM, etc.) can be added later without reshaping the module -- only `'sysfs'` is implemented
   today, which writes the integer to `/sys/class/backlight/<device>/brightness`.
 - `_backlight_worker()` mirrors `display.py`'s `_sun_times_worker()` threading pattern exactly:
   a daemon thread looping on `event.wait(timeout=600)`, woken early by config reload.
-- `start_backlight(display_cfg)` (called from `_init_layout()`, so it re-applies on every config
-  reload too) applies the current scheduled value **synchronously before returning** -- a restart
-  never leaves the backlight at a stale level (e.g. full brightness at 2am) until the first
-  10-minute tick.
+- `start_backlight(display_cfg, get_sun_times=None)` (called from `_init_layout()`, so it
+  re-applies on every config reload too) applies the current value **synchronously before
+  returning** -- a restart never leaves the backlight at a stale level (e.g. full brightness at
+  2am) until the first 10-minute tick.
 - Writes are de-duplicated: `_apply()` only touches sysfs (and only logs, if `logging: true`)
   when the computed value actually changed since the last write.
 - `config_validator.py` validates the whole block: required keys, `method` enum, 0-255 ranges,
-  `min <= max`, `HH:MM` format, and schedule-entry overlap (midnight-wrap aware).
+  `min <= max`, exactly one of `schedule`/`curve` present, `curve` enum, `HH:MM` format, and
+  schedule-entry overlap (midnight-wrap aware).
+
+**Verified against real hardware** (SSH to a Pi with a `/sys/class/backlight/10-0045/brightness`
+DSI panel): `_write_sysfs()` and the full `start_backlight()`/`stop_backlight()` lifecycle both
+confirmed working against the actual sysfs file (readback matched every write), including the
+`logging: true` message. No `sudo` needed -- the `video` group already has write access to the
+brightness file.
 
 **TODO -- other backlight control methods**: `st7789` (and other non-sysfs displays) need a
 different brightness-control mechanism (GPIO pin? different sysfs path?) -- untested, needs a
 real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extension point.
-
-**TODO -- sun-following brightness curve**: replace the fixed two-entry schedule with a
-continuous ramp keyed off `display.py`'s `_SUN_TIMES` (sunrise/sunset), so brightness eases from
-`min` at dawn up to `max` through the day and back down at dusk -- still on the same ~10-minute
-worker cadence (no photocell sensor, so this is the best approximation available).
 
 ### Display drivers
 
@@ -690,6 +712,12 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 2. Write a `_write_<method>(device, value) -> bool` function in `backlight.py`, add it to
    `_METHODS`
 3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklight`
+
+**Add a backlight curve** (currently only `curve: sun` exists, alongside fixed `schedule:`):
+1. Add name to `KNOWN_BACKLIGHT_CURVES` in `config_validator.py`
+2. Write a `resolve_<name>_curve_value(..., min_, max_, now) -> int` pure function in
+   `backlight.py`, wire it into `_resolve_value()`'s `cfg.get('curve')` dispatch
+3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklightCurve`
 
 ---
 

@@ -1093,6 +1093,40 @@ class TestBacklight:
         assert any('overlap' in i.message.lower() for i in result.errors)
 
 
+def _curve_backlight_config(curve: str = 'sun', **overrides) -> dict:
+    """A minimal valid config with a 'curve:' backlight block (no schedule:)."""
+    cfg = _backlight_config(curve=curve, **overrides)
+    del cfg['display']['backlight']['schedule']
+    return cfg
+
+
+class TestBacklightCurve:
+    """Tests for 'curve: sun' as an alternative to a fixed 'schedule:'."""
+
+    def test_valid_curve_config_ok(self) -> None:
+        result = validate_config_dict(_curve_backlight_config())
+        assert result.ok, f"expected no issues, got: {result.issues}"
+
+    def test_unknown_curve_errors(self) -> None:
+        cfg = _curve_backlight_config(curve='moon')
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('curve' in i.message.lower() for i in result.errors)
+
+    def test_both_schedule_and_curve_errors(self) -> None:
+        cfg = _backlight_config(curve='sun')  # _backlight_config already sets schedule:
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('both' in i.message.lower() for i in result.errors)
+
+    def test_neither_schedule_nor_curve_errors(self) -> None:
+        cfg = _backlight_config()
+        del cfg['display']['backlight']['schedule']
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any('schedule' in i.message.lower() and 'curve' in i.message.lower() for i in result.errors)
+
+
 # ---------------------------------------------------------------------------
 # transform: value-transform pipeline validation
 # ---------------------------------------------------------------------------
