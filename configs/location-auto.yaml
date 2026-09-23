@@ -2,8 +2,9 @@
 orientation: landscape
 preview_size: 480x320
 
-# location: auto  # normally, use this!  gets location from ipwho.is
-location: auto-preview  # special preview behavior when generating previews which will be committed to clockish upstream
+# Consent to a GeoIP lookup (ipwho.is) at runtime. Previews render this from
+# tests/samples/ unless clockish-preview is run with --personal.
+location: auto
 
 rows:
   - name: demo-text
@@ -25,7 +26,6 @@ rows:
     panels:
       - type: fact
         source: location.city
-        json_path: city
         label: "City: "
         color: white
         font_size: 12px

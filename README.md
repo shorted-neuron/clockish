@@ -172,12 +172,23 @@ Each panel has a `type` and type-specific keys:
 
 See [configs directory](configs/) for lots of fully annotated reference configuration.
 
-Clockish can try to use public APIs to determine a general location to enable
-features like local weather displays, display auto-dimming and so on.  
-Clockish honors your privacy so you must turn these features on if you want 
-to use them.  You can specify a location with airport codes or similar 
-manually if you like.  See [how_location_works.md](docs/how_location_works.md)
-and examples that start with `location`.
+### Location (off by default)
+
+Clockish can use a location for local weather, sunrise/sunset and display
+auto-dimming. It is **off unless you turn it on**: with no `location:` set,
+nothing is looked up and nothing is sent.
+
+Turn it on with `clockish-location`, which shows what each option sends before
+contacting anything, or set `location:` in a config. `location: auto` sends your
+public IP to ipwho.is; an airport code (`location: KEGE`) or explicit
+coordinates send nothing about your device. `location: disabled` shuts
+everything off, including the recurring sunrise/sunset lookups, and deletes the
+cached location.
+
+`--offline` (or `CLOCKISH_OFFLINE=1`) blocks all outbound requests.
+
+See [how_location_works.md](docs/how_location_works.md) for the full list of what
+leaves the device and when, plus the `configs/location-*.yaml` examples.
 
 ---
 

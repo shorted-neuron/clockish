@@ -29,7 +29,7 @@ cached-facts:
     url: https://api.open-meteo.com/v1/forecast?latitude=39.57&longitude=-104.85&current=temperature_2m,wind_speed_10m
     interval: 20m                       # fetch frequency (default: 5m)
     timeout: 5                          # HTTP timeout, seconds (default: 5)
-    verify_ssl: false                   # TLS verification (default: false)
+    verify_ssl: true                    # TLS verification (default: true)
     preview_response: '{"current": {"temperature_2m": 71.8, "wind_speed_10m": 5.2}}'
     # ^ optional: used verbatim by clockish-preview/clockish-time-samples instead of a
     #   real network fetch, keeping preview renders offline/deterministic. If omitted,
@@ -64,7 +64,7 @@ rows:
   wrapping long URLs across lines -- whitespace is stripped automatically
 - `interval` (optional): fetch frequency, e.g. `30s`, `5m`, `1h`, `2.5m` (default: `5m`)
 - `timeout` (optional): HTTP request timeout in seconds (default: `5`)
-- `verify_ssl` (optional): TLS certificate verification for `https://` URLs (default: `false`;
+- `verify_ssl` (optional): TLS certificate verification for `https://` URLs (default: `true`;
   ignored for `http://`)
 - `preview_response` (optional): raw response body used verbatim in preview mode instead of a
   real fetch
@@ -206,7 +206,6 @@ cached-facts:
     url: https://api.ipify.org?format=json
     interval: 3m
     timeout: 5
-    verify_ssl: false
 ```
 ```yaml
 - type: fact
@@ -224,7 +223,6 @@ cached-facts:
     url: https://api.quotable.io/random
     interval: 1h
     timeout: 5
-    verify_ssl: false
 ```
 ```yaml
 - type: fact
@@ -260,7 +258,6 @@ cached-facts:
     url: https://api.open-meteo.com/v1/forecast?latitude=51.5074&longitude=-0.1278&current=temperature_2m,wind_speed_10m
     interval: 10m
     timeout: 5
-    verify_ssl: false
 ```
 ```yaml
 - type: fact
@@ -331,14 +328,15 @@ clockish --debug my-config.yaml
 
 ## TLS/SSL Certificate Verification
 
-By default, `verify_ssl: false` (no certificate validation). This is intentional for non-critical
-data. If you want strict validation:
+By default, `verify_ssl: true` (certificates are validated). If a source needs relaxed
+validation (e.g. a self-signed cert on a local/dev endpoint), opt out explicitly:
 
 ```yaml
-verify_ssl: true
+verify_ssl: false
 ```
 
-Note: `verify_ssl` only applies to HTTPS URLs; HTTP URLs always ignore this setting.
+Note: `verify_ssl` only applies to HTTPS URLs; HTTP URLs always ignore this setting -- a plain
+`http://` source is the user's own choice and is unaffected either way.
 
 ## Preview mode (`clockish-preview` / `clockish-time-samples`)
 
