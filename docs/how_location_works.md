@@ -30,9 +30,9 @@ Notes:
 
 - The sun-times call repeats on a schedule for as long as clockish runs, so a
   configured location means recurring contact with `api.open-meteo.com`.
-- All four calls verify TLS certificates. (`cached-facts:` entries default to
-  `verify_ssl: false`; these location calls are not configurable and are always
-  verified.)
+- All four calls verify TLS certificates. (`cached-facts:` entries also default
+  to `verify_ssl: true`; these location calls are not configurable and are
+  always verified.)
 - `--offline` (or `CLOCKISH_OFFLINE=1`) blocks every outbound request, location
   and `cached-facts:` alike.
 - `location: disabled` stops all four: no lookup, no cache read, no sun-times

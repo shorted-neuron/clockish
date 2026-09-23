@@ -938,7 +938,7 @@ def _init_cached_facts(config: dict) -> None:
         url = (entry.get('url') or '').strip()
         interval_secs = _parse_interval(entry.get('interval', '5m'))
         timeout = entry.get('timeout', 5)
-        verify_ssl = entry.get('verify_ssl', False)
+        verify_ssl = entry.get('verify_ssl', True)
         preview_response = entry.get('preview_response')
 
         _cached_facts_events[name] = threading.Event()

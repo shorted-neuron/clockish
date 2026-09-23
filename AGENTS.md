@@ -120,7 +120,7 @@ cached-facts:                  # optional; background-thread-fetched remote data
     url: https://api.open-meteo.com/v1/forecast?...
     interval: 20m              # fetch frequency; default 5m
     timeout: 5                 # optional; HTTP timeout seconds, default 5
-    verify_ssl: false           # optional; TLS verification, default false
+    verify_ssl: true            # optional; TLS verification, default true
     preview_response: '{...}'  # optional; used verbatim by clockish-preview instead of a real fetch
 
 rows:
@@ -304,7 +304,7 @@ cached-facts:
     url: https://api.open-meteo.com/v1/forecast?...
     interval: 20m                 # fetch frequency; default 5m
     timeout: 5                    # optional; HTTP timeout seconds, default 5
-    verify_ssl: false              # optional; TLS cert verification, default false
+    verify_ssl: true               # optional; TLS cert verification, default true
     preview_response: '{...}'     # optional; used verbatim by clockish-preview, no real fetch
 ```
 
