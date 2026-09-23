@@ -222,16 +222,41 @@ def _location_setting_origin() -> tuple[object, str]:
     return None, 'nothing set (falls through to the runtime cache, else disabled)'
 
 
+#: How each `source:` stamp got its coordinates. display.py writes the stamp;
+#: this spells out what it means, so the one in play can be explained on its
+#: own line instead of printing a glossary of all of them every run.
+_SOURCE_EXPLANATIONS = {
+    'config': 'taken straight from the setting, no lookup',
+    'ipwho': 'GeoIP lookup of this machine\'s public IP (ipwho.is)',
+    'airport': 'airport code looked up (FreeAirportDB)',
+    'freeairportdb': 'airport code looked up (FreeAirportDB)',
+    'open-meteo': 'place name geocoded (Open-Meteo)',
+    'sample': 'checked-in sample payload -- preview mode, no network',
+}
+
+
+def _strip_source(text: str) -> str:
+    """Drop _loc_debug's trailing "[source: x]" (it gets its own line) and its
+    "?" placeholder for a location that resolved to coordinates but no city."""
+    text = text.split(' [source:', 1)[0].strip()
+    if text.startswith('? '):
+        text = text[2:]
+    # coordinates with no city left standing alone in their parens
+    return text[1:-1] if text.startswith('(') and text.endswith(')') else text
+
+
 def _format_location_setting(value: object) -> str:
     """Render a location SETTING for printing, at the same precision as
     display's own debug output -- a setting can itself be coordinates (a
     "lat,lon" string, or a mapping straight out of location.yaml), and those
     are exactly what --debug-location gates."""
     if isinstance(value, dict):
-        text = display._loc_debug(value)
-        # A setting carries no 'source' stamp of its own -- that belongs to the
-        # RESOLVED location below; don't print a bare "[source: ?]" here.
-        return text.replace(' [source: ?]', '') if not value.get('source') else text
+        if value.get('lat') is not None and value.get('lon') is not None:
+            return _strip_source(display._loc_debug(value))
+        if value.get('airport'):
+            return f"airport {value['airport']}"
+        parts = [str(value[k]) for k in ('city', 'region', 'country') if value.get(k)]
+        return ', '.join(parts) if parts else repr(value)
     if isinstance(value, str) and ',' in value and not display.DEBUG_LOCATION:
         try:
             lat, lon = (float(part) for part in value.split(',', 1))
@@ -263,11 +288,11 @@ def _print_location_provenance(args, day: datetime.date) -> None:
             print("  offline:    yes -- every location/sun-times fetch is short-circuited")
         loc = display._SYSTEM_LOCATION
         hint = '' if (display.DEBUG_LOCATION or not loc) else '   (--debug-location for exact coords)'
-        print(f"  resolved:   {display._loc_debug(loc)}{hint}")
+        print(f"  resolved:   {_strip_source(display._loc_debug(loc)) if loc else 'none'}{hint}")
         if loc:
-            print("              [source: ...] is how the coordinates were obtained -- config "
-                  "(taken verbatim\n              from the setting), ipwho (GeoIP), airport, "
-                  "open-meteo (geocoded), sample.")
+            source = loc.get('source') or '?'
+            why = _SOURCE_EXPLANATIONS.get(source, 'unrecognised source stamp')
+            print(f"  looked up:  {source} -- {why}")
         if not display._location_enabled():
             print("  location is OFF -- no sun times, so curve: sun falls back to the "
                   "min/max midpoint.\n"
