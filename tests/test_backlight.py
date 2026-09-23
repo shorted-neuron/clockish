@@ -3,9 +3,14 @@
 Tests for the pure brightness-resolution functions in clockish/backlight.py:
   - resolve_scheduled_value() -- fixed day/night `schedule:` list
   - resolve_sun_curve_value() -- sun-following `curve: sun` cosine ease
+  - _apply(cfg, now=...) -- the `now` injection point the simulated-day
+    runner (scripts/backlight_hardware_test.py) drives a whole day through
 """
 import datetime
 
+import pytest
+
+from clockish import backlight
 from clockish.backlight import resolve_scheduled_value, resolve_sun_curve_value
 
 SCHEDULE = [
@@ -103,3 +108,69 @@ class TestResolveSunCurveValue:
 
     def test_zero_length_daylight_is_min(self):
         assert resolve_sun_curve_value(SUNRISE, SUNRISE, min_=40, max_=255, now=SUNRISE) == 40
+
+
+@pytest.fixture
+def recorder(monkeypatch):
+    """Swap the sysfs writer for a recorder and reset _apply's dedup state."""
+    written: list[int] = []
+
+    def fake_write(device: str, value: int) -> bool:
+        written.append(value)
+        return True
+
+    monkeypatch.setitem(backlight._METHODS, 'sysfs', fake_write)
+    monkeypatch.setattr(backlight, '_last_written_value', None)
+    monkeypatch.setattr(backlight, '_get_sun_times', None)
+    return written
+
+
+class TestApplyNowInjection:
+    """`_apply(cfg, now=...)` -- same code path the worker thread takes, but
+    resolved for an arbitrary moment (the simulated-day runner's one seam)."""
+
+    SCHEDULE_CFG = {
+        'method': 'sysfs', 'device': 'test-dev',
+        'min': 40, 'max': 255, 'schedule': SCHEDULE,
+    }
+    CURVE_CFG = {
+        'method': 'sysfs', 'device': 'test-dev',
+        'min': 40, 'max': 255, 'curve': 'sun',
+    }
+
+    def test_schedule_writes_value_due_at_the_given_moment(self, recorder):
+        backlight._apply(self.SCHEDULE_CFG, now=_at(12, 0))
+        assert recorder == [255]
+
+    def test_schedule_replaying_a_day_follows_the_schedule(self, recorder):
+        # 00:00 night, 08:00 + 16:00 day (the second deduped), 23:00 night
+        for hour in (0, 8, 16, 23):
+            backlight._apply(self.SCHEDULE_CFG, now=_at(hour, 0))
+        assert recorder == [42, 255, 42]
+
+    def test_repeated_same_value_is_deduped(self, recorder):
+        backlight._apply(self.SCHEDULE_CFG, now=_at(12, 0))
+        backlight._apply(self.SCHEDULE_CFG, now=_at(13, 0))
+        assert recorder == [255]
+
+    def test_curve_uses_injected_now_not_real_now(self, recorder, monkeypatch):
+        monkeypatch.setattr(backlight, '_get_sun_times', lambda: (SUNRISE, SUNSET))
+        solar_noon = SUNRISE + (SUNSET - SUNRISE) / 2
+        backlight._apply(self.CURVE_CFG, now=solar_noon)
+        backlight._apply(self.CURVE_CFG, now=_at(2, 0))  # middle of the night
+        assert recorder == [255, 40]
+
+    def test_default_now_is_real_time(self, recorder, monkeypatch):
+        """Omitting `now` must behave exactly as before -- the worker relies on it."""
+        monkeypatch.setattr(backlight, '_get_sun_times', lambda: (SUNRISE, SUNSET))
+        backlight._apply(self.CURVE_CFG)
+        expected = resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255)
+        assert recorder == [expected]
+
+    def test_resolve_value_passes_now_through_for_schedule(self):
+        assert backlight._resolve_value(self.SCHEDULE_CFG, now=_at(23, 0)) == 42
+
+    def test_resolve_value_passes_now_through_for_curve(self, monkeypatch):
+        monkeypatch.setattr(backlight, '_get_sun_times', lambda: (SUNRISE, SUNSET))
+        solar_noon = SUNRISE + (SUNSET - SUNRISE) / 2
+        assert backlight._resolve_value(self.CURVE_CFG, now=solar_noon) == 255

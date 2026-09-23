@@ -130,8 +130,13 @@ _METHODS = {
 }
 
 
-def _resolve_value(cfg: dict) -> int:
-    """Dispatch to the fixed schedule or the sun-following curve, whichever `cfg` uses."""
+def _resolve_value(cfg: dict, now: datetime.datetime | None = None) -> int:
+    """Dispatch to the fixed schedule or the sun-following curve, whichever `cfg` uses.
+
+    `now` defaults to the real current time; pass one to resolve the value
+    for an arbitrary moment (scripts/backlight_hardware_test.py simulates a
+    whole day this way).
+    """
     min_, max_ = cfg.get('min', 0), cfg.get('max', 255)
 
     if cfg.get('curve') == 'sun':
@@ -141,13 +146,17 @@ def _resolve_value(cfg: dict) -> int:
                 print("DEBUG: backlight: curve: sun but sun times not available yet, using midpoint")
             return round((min_ + max_) / 2)
         sunrise, sunset = sun_times
-        return resolve_sun_curve_value(sunrise, sunset, min_=min_, max_=max_)
+        return resolve_sun_curve_value(sunrise, sunset, min_=min_, max_=max_, now=now)
 
-    return resolve_scheduled_value(cfg.get('schedule', []), min_=min_, max_=max_)
+    return resolve_scheduled_value(cfg.get('schedule', []), min_=min_, max_=max_, now=now)
 
 
-def _apply(cfg: dict) -> None:
-    """Compute the currently-due value and write it if it changed since the last write."""
+def _apply(cfg: dict, now: datetime.datetime | None = None) -> None:
+    """Compute the currently-due value and write it if it changed since the last write.
+
+    `now` defaults to the real current time (what the worker thread uses);
+    pass one to apply the value due at a simulated moment.
+    """
     global _last_written_value
     method = cfg.get('method')
     write_fn = _METHODS.get(method)
@@ -156,7 +165,7 @@ def _apply(cfg: dict) -> None:
             print(f"DEBUG: backlight: unknown or unimplemented method {method!r}, skipping")
         return
 
-    value = _resolve_value(cfg)
+    value = _resolve_value(cfg, now=now)
     if value == _last_written_value:
         return
 

@@ -471,6 +471,29 @@ confirmed working against the actual sysfs file (readback matched every write), 
 `logging: true` message. No `sudo` needed -- the `video` group already has write access to the
 brightness file.
 
+**Simulated-day runner** (`scripts/backlight_hardware_test.py`): replays a whole day against the
+real panel in ~2.5 minutes -- one wall-second per tick, each tick advancing a simulated clock by 10
+simulated minutes (the worker's own cadence), running the REAL `backlight._apply()` + sysfs write
+for that moment AND a REAL `display.show_rows()` frame with the simulated time injected, so the
+clock on screen agrees with the brightness being watched. Prints a per-tick bar, then checks the
+collected samples (night == min, peak within one step of solar noon, monotonic either side, every
+sysfs readback matched) and exits non-zero on failure -- the solar-noon check is what catches the
+half-period-cosine regression described above.
+
+```bash
+python3 scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware
+python3 scripts/backlight_hardware_test.py --dry-run --no-frames \
+        --tick-secs 0 --sunrise 06:22 --sunset 19:48            # instant, offline, dev box
+python3 scripts/backlight_hardware_test.py --checks-only        # old unit-level hw checks
+```
+
+Time injection lives entirely in that script (it monkeypatches `display._now_in_tz`,
+`get_daytime`, `get_nighttime`, and hands `display._init()` a synthetic `sys.argv`). The only
+accommodation in shipped source is the optional `now` parameter on `backlight._apply()` /
+`_resolve_value()` -- defaulting to `None` (= real now), so `_backlight_worker` is unchanged.
+Keep it that way: a new backlight behaviour should stay drivable by passing a `now`, not by
+patching module-level `datetime`.
+
 **TODO -- other backlight control methods**: `st7789` (and other non-sysfs displays) need a
 different brightness-control mechanism (GPIO pin? different sysfs path?) -- untested, needs a
 real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extension point.
