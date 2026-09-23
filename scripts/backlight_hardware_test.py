@@ -25,9 +25,9 @@ walk from midnight to midnight. `curve: sun` uses the device's genuinely
 resolved location and today's real sunrise/sunset (or `--sunrise/--sunset`
 for a repeatable offline run).
 
-Afterwards it checks the collected samples (night == min, peak at solar noon,
-monotonic either side, every sysfs readback matched) and exits non-zero on
-failure -- it is still a test, not only a demo.
+Afterwards it checks the collected samples (night == min, a flat max plateau
+centred on solar noon, monotonic ramps either side, every sysfs readback
+matched) and exits non-zero on failure -- it is still a test, not only a demo.
 
 Safety: reads the current brightness first and always restores it
 (try/finally), so it is safe to run against a display in use. It WILL visibly
@@ -48,7 +48,6 @@ the shipped source is `backlight._apply(cfg, now=...)`'s optional `now`.
 
 import argparse
 import datetime
-import math
 import os
 import sys
 import time
@@ -94,6 +93,27 @@ def _read_sysfs(device: str) -> int | None:
             return int(f.read().strip())
     except OSError:
         return None
+
+
+def _curve_landmarks(sunrise: datetime.datetime,
+                     sunset: datetime.datetime) -> dict[str, datetime.datetime]:
+    """The six moments that define the `curve: sun` trapezoid, in order.
+
+    Derived from backlight's own TWILIGHT_MINUTES/PEAK_FRACTION so this
+    script follows the shipped shape instead of hard-coding a second copy.
+    """
+    daylight = (sunset - sunrise).total_seconds()
+    shoulder = datetime.timedelta(seconds=daylight * backlight.PEAK_FRACTION)
+    twilight = datetime.timedelta(minutes=backlight.TWILIGHT_MINUTES)
+    return {
+        'ramp start': sunrise - twilight,
+        'sunrise': sunrise,
+        'peak start': sunrise + shoulder,
+        'solar noon': sunrise + datetime.timedelta(seconds=daylight / 2),
+        'peak end': sunset - shoulder,
+        'sunset': sunset,
+        'ramp end': sunset + twilight,
+    }
 
 
 def _bar(value: int, min_: int, max_: int) -> str:
@@ -212,13 +232,16 @@ def _simulate_day(args, cfg: dict, dry: _DryRunWriter | None) -> int:
         ssh, ssm = _hhmm(args.sunset)
         sunrise = datetime.datetime.combine(day, datetime.time(srh, srm))
         sunset = datetime.datetime.combine(day, datetime.time(ssh, ssm))
-    solar_noon = sunrise + (sunset - sunrise) / 2 if sunrise and sunset else None
+    lm = _curve_landmarks(sunrise, sunset) if sunrise and sunset else {}
 
     print()
     print(f"device={device}  min={min_}  max={max_}  "
           f"mode={'curve:' + str(cfg.get('curve')) if cfg.get('curve') else 'schedule'}")
-    if sunrise and sunset:
-        print(f"sunrise={sunrise:%H:%M}  solar noon={solar_noon:%H:%M}  sunset={sunset:%H:%M}")
+    if lm:
+        print(f"sunrise={lm['sunrise']:%H:%M}  sunset={lm['sunset']:%H:%M}  "
+              f"(twilight {backlight.TWILIGHT_MINUTES}m, peak fraction {backlight.PEAK_FRACTION})")
+        print(f"ramp up {lm['ramp start']:%H:%M} -> {lm['peak start']:%H:%M},  "
+              f"max until {lm['peak end']:%H:%M},  ramp down to {lm['ramp end']:%H:%M}")
     elif cfg.get('curve') == 'sun':
         print("WARNING: no sun times available -- curve: sun will flatten to the min/max "
               "midpoint.\n         Pass --sunrise HH:MM --sunset HH:MM for a repeatable run.")
@@ -226,6 +249,12 @@ def _simulate_day(args, cfg: dict, dry: _DryRunWriter | None) -> int:
           f"(~{ticks * args.tick_secs:.0f}s wall){'  [DRY RUN, no sysfs writes]' if dry else ''}")
     print(f"frames: {'no' if args.no_frames else 'yes'}")
     print()
+
+    marks: dict[int, list[str]] = {}
+    for name, t in lm.items():
+        idx = round((t - sim_start) / step)
+        if 0 <= idx < ticks:
+            marks.setdefault(int(idx), []).append(f"{name} {t:%H:%M}")
 
     samples: list[tuple[datetime.datetime, int]] = []
     readback_mismatches: list[str] = []
@@ -257,14 +286,7 @@ def _simulate_day(args, cfg: dict, dry: _DryRunWriter | None) -> int:
 
         samples.append((_SIM_NOW, written))
 
-        mark = ''
-        if sunrise and sunset:
-            if abs((_SIM_NOW - sunrise).total_seconds()) < step.total_seconds() / 2:
-                mark = f"  <- sunrise {sunrise:%H:%M}"
-            elif abs((_SIM_NOW - solar_noon).total_seconds()) < step.total_seconds() / 2:
-                mark = f"  <- solar noon {solar_noon:%H:%M}"
-            elif abs((_SIM_NOW - sunset).total_seconds()) < step.total_seconds() / 2:
-                mark = f"  <- sunset {sunset:%H:%M}"
+        mark = f"  <- {', '.join(marks[i])}" if i in marks else ''
         print(f"{_SIM_NOW:%H:%M}  {written:3d}  |{_bar(written, min_, max_)}|{mark}")
 
         next_deadline += args.tick_secs
@@ -272,11 +294,11 @@ def _simulate_day(args, cfg: dict, dry: _DryRunWriter | None) -> int:
         if remaining > 0:
             time.sleep(remaining)
 
-    return _report(samples, cfg, min_, max_, sunrise, sunset, solar_noon,
+    return _report(samples, cfg, min_, max_, lm,
                    writes, readback_mismatches, step, dry is not None)
 
 
-def _report(samples, cfg, min_, max_, sunrise, sunset, solar_noon,
+def _report(samples, cfg, min_, max_, lm,
             writes, readback_mismatches, step, dry) -> int:
     """Print the summary and the pass/fail checks. Returns an exit code."""
     peak_t, peak_v = max(samples, key=lambda s: s[1])
@@ -297,35 +319,47 @@ def _report(samples, cfg, min_, max_, sunrise, sunset, solar_noon,
     else:
         checks.append((True, "sysfs readback matched every write"))
 
-    if cfg.get('curve') == 'sun' and sunrise and sunset:
-        night = [(t, v) for t, v in samples if t < sunrise or t >= sunset]
-        day_s = [(t, v) for t, v in samples if sunrise <= t < sunset]
+    if cfg.get('curve') == 'sun' and lm:
+        night = [(t, v) for t, v in samples if t < lm['ramp start'] or t >= lm['ramp end']]
+        plateau = [(t, v) for t, v in samples if lm['peak start'] <= t < lm['peak end']]
+        rising = [v for t, v in samples if lm['ramp start'] <= t <= lm['peak start']]
+        falling = [v for t, v in samples if lm['peak end'] <= t <= lm['ramp end']]
 
         bad_night = [f"{t:%H:%M}={v}" for t, v in night if v != min_]
         checks.append((not bad_night,
-                       f"every night sample == min ({min_})"
+                       f"every sample outside the ramp window == min ({min_})"
                        + (f" -- got {', '.join(bad_night[:5])}" if bad_night else "")))
 
-        # With discrete steps the peak sample can sit up to half a step off
-        # solar noon, so compare against the curve's value there, not max_.
-        daylight = (sunset - sunrise).total_seconds()
-        delta = (step.total_seconds() / 2) / daylight
-        floor_v = round(min_ + (max_ - min_) * (1 - math.cos(2 * math.pi * (0.5 + delta))) / 2)
-        checks.append((peak_v >= floor_v,
-                       f"peak {peak_v} reaches the curve maximum (>= {floor_v}, max={max_})"))
+        bad_peak = [f"{t:%H:%M}={v}" for t, v in plateau if v != max_]
+        checks.append((bool(plateau) and not bad_peak,
+                       f"the whole plateau ({lm['peak start']:%H:%M}-{lm['peak end']:%H:%M}) "
+                       f"sits at max ({max_})"
+                       + (f" -- got {', '.join(bad_peak[:5])}" if bad_peak else "")))
 
-        off_noon_min = abs((peak_t - solar_noon).total_seconds()) / 60
-        checks.append((off_noon_min <= step.total_seconds() / 60,
-                       f"peak at {peak_t:%H:%M} is within one step of solar noon "
-                       f"({solar_noon:%H:%M}, off by {off_noon_min:.0f}m) -- a monotonic "
-                       f"sunrise-to-sunset ramp would peak at sunset instead"))
-
-        rising = [v for t, v in day_s if t <= peak_t]
-        falling = [v for t, v in day_s if t >= peak_t]
         checks.append((all(b >= a for a, b in zip(rising, rising[1:])),
-                       "brightness rises monotonically from sunrise to solar noon"))
+                       "brightness rises monotonically through the morning ramp"))
         checks.append((all(b <= a for a, b in zip(falling, falling[1:])),
-                       "brightness falls monotonically from solar noon to sunset"))
+                       "brightness falls monotonically through the evening ramp"))
+
+        at_max = [t for t, v in samples if v == max_]
+        if at_max:
+            mid_max = at_max[0] + (at_max[-1] - at_max[0]) / 2
+            off_noon = abs((mid_max - lm['solar noon']).total_seconds()) / 60
+            checks.append((off_noon <= step.total_seconds() / 60,
+                           f"the max plateau ({at_max[0]:%H:%M}-{at_max[-1]:%H:%M}) is centred "
+                           f"on solar noon ({lm['solar noon']:%H:%M}, off by {off_noon:.0f}m) -- "
+                           f"a monotonic all-day ramp would only reach max at sunset"))
+            daylight_ticks = [t for t, _ in samples if lm['sunrise'] <= t < lm['sunset']]
+            day_frac = len(at_max) / max(len(daylight_ticks), 1)
+            expected = 1 - 2 * backlight.PEAK_FRACTION  # the plateau's share of daylight
+            floor_frac = expected - step.total_seconds() / max(
+                (lm['sunset'] - lm['sunrise']).total_seconds(), 1)
+            checks.append((day_frac >= floor_frac,
+                           f"at max for {day_frac:.0%} of daylight "
+                           f"({len(at_max)}/{len(daylight_ticks)} ticks, expected ~{expected:.0%}) "
+                           f"-- the point of the shape"))
+        else:
+            checks.append((False, f"never reached max ({max_})"))
     elif cfg.get('schedule'):
         values = {int(e['value']) for e in cfg['schedule']}
         values.add(round((min_ + max_) / 2))  # uncovered-time fallback

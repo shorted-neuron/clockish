@@ -436,14 +436,36 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
 - `resolve_scheduled_value(schedule, min_, max_, now)` -- pure function, no I/O. Matches `now`
   against each entry's `start`/`end` (inclusive both ends; `end < start` wraps past midnight).
   Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`).
-- `resolve_sun_curve_value(sunrise, sunset, min_, max_, now)` -- pure function for `curve: sun`.
-  `min_` below the horizon; above it, a full-period cosine bump
-  (`min_ + (max_-min_) * (1 - cos(2*pi*t)) / 2`, `t` = fraction of daylight elapsed) that's `min_`
-  at sunrise/sunset with zero slope (no kink against the flat night level either side) and peaks
-  at `max_` exactly at solar noon (`t=0.5`). A **half**-period cosine (`1 - cos(pi*t)`) was tried
-  first and is wrong -- it's a monotonic sunrise-to-sunset ramp, not a peak-at-noon bump; if this
-  curve ever looks like it's just ramping up all day instead of peaking at noon, that's this exact
-  mistake creeping back in.
+- `resolve_sun_curve_value(sunrise, sunset, min_, max_, now, twilight_minutes, peak_fraction)` --
+  pure function for `curve: sun`. An **eased trapezoid**, not a bump: the display should sit at
+  `max_` for most of the day and pass through the in-between levels as briefly as looks natural.
+
+  ```
+  min_ ______/^^^^^^^^^^^^^^^^^^^^^\______ min_
+            ^         plateau       ^
+  sunrise - twilight             sunset + twilight
+  ```
+
+  - `min_` before `sunrise - TWILIGHT_MINUTES` and from `sunset + TWILIGHT_MINUTES` on.
+  - Ramp up from there to `max_` at `PEAK_FRACTION` of the way from sunrise to sunset;
+    mirrored ramp down over the last `PEAK_FRACTION`, finishing at `min_` past sunset.
+  - Flat `max_` in between -- the middle 50% of daylight at the defaults.
+
+  `TWILIGHT_MINUTES = 50` (module constant, overridable per call): the sky is already usefully
+  light before the sun clears the horizon and still light after it drops below, so a backlight
+  keyed strictly to sunrise/sunset lags the actual room. Roughly the end of nautical twilight at
+  mid latitudes. `PEAK_FRACTION = 0.25` gives the half-day plateau; it's clamped below `0.5`,
+  where the two ramps would cross and there'd be no plateau left.
+
+  Each ramp is a **half**-period cosine (`(1 - cos(pi*u)) / 2`, `u` = fraction of THAT RAMP
+  elapsed), which has zero slope at both ends -- leaving the flat night level and meeting the
+  flat plateau with no visible kink at either junction. Applying that same half-period cosine
+  across the whole sunrise-to-sunset span instead of per ramp is the classic mistake here: it
+  yields a monotonic all-day climb that only reaches `max_` at sunset. An earlier version used a
+  full-period cosine bump across all of daylight (`1 - cos(2*pi*t)`, peaking at solar noon) --
+  correct-looking but it holds `max_` for about a minute a day, which is not what the feature is
+  for. If this curve ever looks like a smooth hill rather than a flat-topped plateau, one of
+  those two shapes has crept back in.
 - `curve: sun` needs today's sunrise/sunset. Rather than importing `display.py` (circular --
   it already imports `backlight.py` -- and it'd pull in hardware-driver code this module has no
   business depending on), `start_backlight(display_cfg, get_sun_times=...)` takes a callable;
@@ -476,9 +498,9 @@ real panel in ~2.5 minutes -- one wall-second per tick, each tick advancing a si
 simulated minutes (the worker's own cadence), running the REAL `backlight._apply()` + sysfs write
 for that moment AND a REAL `display.show_rows()` frame with the simulated time injected, so the
 clock on screen agrees with the brightness being watched. Prints a per-tick bar, then checks the
-collected samples (night == min, peak within one step of solar noon, monotonic either side, every
-sysfs readback matched) and exits non-zero on failure -- the solar-noon check is what catches the
-half-period-cosine regression described above.
+collected samples (night == min, a flat `max` plateau centred on solar noon and covering ~50% of
+daylight, monotonic ramps either side, every sysfs readback matched) and exits non-zero on failure
+-- the plateau checks are what catch the wrong-curve-shape regressions described above.
 
 ```bash
 python3 scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware

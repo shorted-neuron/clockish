@@ -40,6 +40,20 @@ _get_sun_times: GetSunTimes | None = None
 
 _CHECK_INTERVAL_SECS = 600  # 10 minutes -- see AGENTS.md, no need for finer granularity
 
+#: `curve: sun` shape (see resolve_sun_curve_value()).
+#:
+#: TWILIGHT_MINUTES -- how long before sunrise the ramp up starts, and how
+#: long after sunset the ramp down finishes. 50 minutes is roughly the end of
+#: nautical twilight at mid latitudes: it is already meaningfully light before
+#: the sun clears the horizon and still light after it drops below, so a
+#: backlight that only moves between sunrise and sunset lags the actual room.
+#:
+#: PEAK_FRACTION -- fraction of the sunrise-to-sunset span spent ramping up to
+#: max (mirrored at the other end). 0.25 means full brightness for the middle
+#: half of the day, which is the point of the shape.
+TWILIGHT_MINUTES = 50
+PEAK_FRACTION = 0.25
+
 _backlight_thread: threading.Thread | None = None
 _backlight_stop_event = threading.Event()
 _backlight_wake_event = threading.Event()
@@ -86,31 +100,68 @@ def resolve_sun_curve_value(
     min_: int,
     max_: int,
     now: datetime.datetime | None = None,
+    twilight_minutes: int = TWILIGHT_MINUTES,
+    peak_fraction: float = PEAK_FRACTION,
 ) -> int:
-    """Return the brightness value (int) for a sun-following `curve: sun`.
+    r"""Return the brightness value (int) for a sun-following `curve: sun`.
 
-    Below the horizon (before sunrise or at/after sunset): `min_` -- see
-    AGENTS.md for why night uses min rather than off_value or a separate key.
-    Above the horizon: a cosine ease from `min_` at sunrise/sunset up to
-    `max_` at solar noon (the midpoint between sunrise and sunset), so
-    brightness changes smoothly with no visible slope kinks.
+    An eased trapezoid, not a bump -- the point is to sit at `max_` for most
+    of the day and spend as little time as possible in between:
+
+        min_ ______/^^^^^^^^^^^^^^^^^^^^^\______ min_
+                  ^         plateau       ^
+        sunrise - twilight             sunset + twilight
+
+      - `min_` at night: before sunrise - twilight_minutes, and at/after
+        sunset + twilight_minutes (see AGENTS.md for why night uses min
+        rather than off_value or a separate key)
+      - ramping up from there to `max_` at `peak_fraction` of the way from
+        sunrise to sunset (default 25%)
+      - flat `max_` through the middle of the day, until `peak_fraction`
+        of the daylight is left
+      - mirrored ramp back down, reaching `min_` twilight_minutes past sunset
+
+    Each ramp is a half-period cosine ease over its own span, which has zero
+    slope at BOTH ends -- so it leaves the flat night level and meets the flat
+    plateau without a visible kink at either junction. (Applying that same
+    half-period cosine across the whole sunrise-to-sunset span, rather than
+    per ramp, is the wrong shape: it is a monotonic all-day climb that peaks
+    at sunset. See AGENTS.md.)
     """
     if now is None:
         now = datetime.datetime.now(tz=sunrise.tzinfo) if sunrise.tzinfo is not None else datetime.datetime.now()
-
-    if now < sunrise or now >= sunset:
-        return min_
 
     daylight_secs = (sunset - sunrise).total_seconds()
     if daylight_secs <= 0:
         return min_
 
-    t = (now - sunrise).total_seconds() / daylight_secs  # 0 at sunrise, 1 at sunset
-    # Full-period cosine bump: 0 at t=0 and t=1 (matches the flat min_ region
-    # either side with zero slope, so there's no kink at sunrise/sunset), 1 at
-    # t=0.5 (solar noon). A half-period (1 - cos(pi*t))/2 would be a monotonic
-    # sunrise-to-sunset ramp instead -- not what "peaks at solar noon" means.
-    return round(min_ + (max_ - min_) * (1 - math.cos(2 * math.pi * t)) / 2)
+    # A peak_fraction of 0.5 or more would leave no plateau at all (the two
+    # ramps would cross); clamp so the shape stays well defined.
+    peak_fraction = min(max(peak_fraction, 0.0), 0.5)
+    shoulder = datetime.timedelta(seconds=daylight_secs * peak_fraction)
+    twilight = datetime.timedelta(minutes=max(twilight_minutes, 0))
+
+    ramp_start = sunrise - twilight
+    peak_start = sunrise + shoulder
+    peak_end = sunset - shoulder
+    ramp_end = sunset + twilight
+
+    if now < ramp_start or now >= ramp_end:
+        return min_
+    if peak_start <= now < peak_end:
+        return max_
+
+    if now < peak_start:
+        span = (peak_start - ramp_start).total_seconds()
+        elapsed = (now - ramp_start).total_seconds()
+    else:
+        span = (ramp_end - peak_end).total_seconds()
+        elapsed = (ramp_end - now).total_seconds()
+    if span <= 0:  # zero-length ramp (twilight 0 and peak_fraction 0)
+        return max_
+
+    u = elapsed / span  # 0 at the night end of the ramp, 1 at the plateau end
+    return round(min_ + (max_ - min_) * (1 - math.cos(math.pi * u)) / 2)
 
 
 def _write_sysfs(device: str, value: int) -> bool:

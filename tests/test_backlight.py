@@ -75,36 +75,100 @@ SUNSET = _at(19, 0)
 
 
 class TestResolveSunCurveValue:
-    def test_before_sunrise_is_min(self):
-        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=_at(5, 0)) == 40
+    """The `curve: sun` trapezoid: min at night, eased ramp starting
+    TWILIGHT_MINUTES before sunrise, flat max across the middle half of
+    daylight, mirrored ramp ending TWILIGHT_MINUTES after sunset.
 
-    def test_at_and_after_sunset_is_min(self):
-        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=SUNSET) == 40
-        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=_at(21, 0)) == 40
+    With SUNRISE 07:00 / SUNSET 19:00 and the defaults (50m, 0.25) that is:
+    ramp 06:10 -> 10:00, max 10:00-16:00, ramp 16:00 -> 19:50.
+    """
 
-    def test_at_sunrise_is_min(self):
-        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=SUNRISE) == 40
+    RAMP_START = _at(6, 10)
+    PEAK_START = _at(10, 0)
+    PEAK_END = _at(16, 0)
+    RAMP_END = _at(19, 50)
 
-    def test_at_solar_noon_is_max(self):
-        solar_noon = SUNRISE + (SUNSET - SUNRISE) / 2
-        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=solar_noon) == 255
+    def _v(self, now, **kw):
+        return resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=now, **kw)
+
+    def test_deep_night_is_min(self):
+        assert self._v(_at(3, 0)) == 40
+        assert self._v(_at(22, 0)) == 40
+
+    def test_min_up_to_the_start_of_the_ramp(self):
+        assert self._v(self.RAMP_START - datetime.timedelta(minutes=1)) == 40
+        assert self._v(self.RAMP_START) == 40  # ramp leaves min with zero slope
+
+    def test_already_climbing_before_sunrise(self):
+        """The whole point of the twilight offset: it is getting light before
+        the sun clears the horizon, so the panel is already on its way up."""
+        assert 40 < self._v(_at(6, 40)) < 255
+
+    def test_sunrise_is_partway_up_the_ramp(self):
+        assert 40 < self._v(SUNRISE) < 255
+
+    def test_plateau_sits_at_max(self):
+        for t in (self.PEAK_START, _at(13, 0), self.PEAK_END - datetime.timedelta(minutes=1)):
+            assert self._v(t) == 255
+
+    def test_below_max_just_before_the_plateau(self):
+        assert self._v(self.PEAK_START - datetime.timedelta(minutes=10)) < 255
+
+    def test_plateau_is_half_of_daylight(self):
+        """peak_fraction 0.25 either side -> max for the middle 50%."""
+        daylight = SUNSET - SUNRISE
+        assert self.PEAK_START == SUNRISE + daylight * 0.25
+        assert self.PEAK_END == SUNSET - daylight * 0.25
+        # peak_end is still max (the ramp leaves it with zero slope); the
+        # descent shows up just after.
+        assert self._v(self.PEAK_END) == 255
+        assert self._v(self.PEAK_END + datetime.timedelta(minutes=10)) < 255
+
+    def test_sunset_is_partway_down_the_ramp(self):
+        assert 40 < self._v(SUNSET) < 255
+
+    def test_min_again_from_the_end_of_the_ramp(self):
+        assert self._v(self.RAMP_END) == 40
+        assert self._v(self.RAMP_END + datetime.timedelta(minutes=10)) == 40
 
     def test_curve_is_symmetric_around_solar_noon(self):
         solar_noon = SUNRISE + (SUNSET - SUNRISE) / 2
-        offset = datetime.timedelta(hours=2)
-        before = resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=solar_noon - offset)
-        after = resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=solar_noon + offset)
-        assert before == after
+        for offset in (datetime.timedelta(hours=2), datetime.timedelta(hours=4),
+                       datetime.timedelta(hours=6)):
+            assert self._v(solar_noon - offset) == self._v(solar_noon + offset)
 
-    def test_curve_rises_monotonically_toward_noon(self):
-        values = [
-            resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=_at(h, 0))
-            for h in (7, 9, 11, 13)
-        ]
-        assert values == sorted(values)
+    def test_ramps_are_monotonic(self):
+        rising = [self._v(_at(6, 10) + datetime.timedelta(minutes=10 * i)) for i in range(24)]
+        assert rising == sorted(rising)
+        falling = [self._v(_at(16, 0) + datetime.timedelta(minutes=10 * i)) for i in range(24)]
+        assert falling == sorted(falling, reverse=True)
+
+    def test_twilight_minutes_is_overridable(self):
+        # No twilight offset: the ramp starts exactly at sunrise.
+        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255,
+                                       now=SUNRISE, twilight_minutes=0) == 40
+        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255,
+                                       now=_at(6, 40), twilight_minutes=0) == 40
+
+    def test_peak_fraction_is_overridable(self):
+        # 10% shoulders -> max reached by sunrise + 1h12m instead of + 3h.
+        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255,
+                                       now=_at(8, 30), peak_fraction=0.1) == 255
+        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255,
+                                       now=_at(8, 30), peak_fraction=0.25) < 255
+
+    def test_peak_fraction_clamped_below_half(self):
+        """>= 0.5 would make the two ramps cross; it degenerates to a single
+        point at solar noon instead of producing nonsense."""
+        solar_noon = SUNRISE + (SUNSET - SUNRISE) / 2
+        assert resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255,
+                                       now=solar_noon, peak_fraction=0.9) == 255
+
+    def test_defaults_match_the_module_constants(self):
+        assert (backlight.TWILIGHT_MINUTES, backlight.PEAK_FRACTION) == (50, 0.25)
 
     def test_value_is_int(self):
-        assert isinstance(resolve_sun_curve_value(SUNRISE, SUNSET, min_=40, max_=255, now=_at(10, 0)), int)
+        assert isinstance(self._v(_at(8, 0)), int)
 
     def test_zero_length_daylight_is_min(self):
         assert resolve_sun_curve_value(SUNRISE, SUNRISE, min_=40, max_=255, now=SUNRISE) == 40
