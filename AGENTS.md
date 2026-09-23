@@ -97,6 +97,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 | `display.py`          | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, divider, debug. |
 | `render_preview.py`   | PNG export (any platform). Stubs hardware; runs render pipeline offline.                                                        |
 | `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based.                                                |
+| `backlight.py`        | Optional `display.backlight:` brightness scheduler -- background thread, sysfs writer.                                          |
 | `drivers/`            | Abstract `DisplayDriver` + three concrete implementations (ili9486, st7789, framebuffer).                                       |
 | `colors.py`           | Named color palette lookup.                                                                                                     |
 | `transforms.py`       | Value-transform registry (`upper`/`round`/`camelcase`/etc.) applied to panel text.                                              |
@@ -391,6 +392,67 @@ Tests: `tests/test_location.py`. Any test that could reach the network
 monkeypatches `_fetch_url_raw` and asserts the recorded call list is empty --
 keep that pattern, or "makes no network call" stops being a real assertion.
 
+### Backlight scheduling
+
+Optional `backlight:` block under a display profile's `display:` section (see
+`configs/display/framebuffer.yaml` for a full worked example). Runs a background daemon thread
+(`clockish/backlight.py`) that checks a simple time-of-day `schedule:` roughly every 10 minutes
+and writes the resulting brightness level to the backlight hardware -- decoupled from the render
+loop the same way `cached-facts` is.
+
+```yaml
+display:
+  backlight:
+    method: sysfs        # how the backlight is driven; only 'sysfs' exists today
+    device: 10-0045      # folder under /sys/class/backlight/ -- NOT a full path
+    logging: true        # optional; log every actual brightness change, default false
+    off_value: 0         # fully off. NOT named 'off' -- see gotcha below
+    min:       40
+    max:       255
+    schedule:
+      - name: night
+        start: "22:00"   # 24h "HH:MM"; end < start wraps past midnight
+        end:   "06:59"
+        value: 42
+      - name: day
+        start: "07:00"
+        end:   "19:59"
+        value: 255
+```
+
+**Why `off_value` and not `off`**: an unquoted `off:` YAML key is parsed under YAML 1.1 (PyYAML's
+default) as the boolean `False`, not the string `"off"` -- silently corrupting the config (the
+dict ends up with a `False` key instead of `'off'`). This isn't a style preference; it's the same
+class of gotcha as `yes`/`no`/`on`/`off`/`true`/`false` all being reserved boolean words. Never
+add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote it or rename it.
+
+**Mechanics** (`backlight.py`):
+- `resolve_scheduled_value(schedule, min_, max_, now)` -- pure function, no I/O. Matches `now`
+  against each entry's `start`/`end` (inclusive both ends; `end < start` wraps past midnight).
+  Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`).
+- `method:` is a dispatch key (`_METHODS` dict) so other control schemes (GPIO pin toggle,
+  PWM, etc.) can be added later without reshaping the module -- only `'sysfs'` is implemented
+  today, which writes the integer to `/sys/class/backlight/<device>/brightness`.
+- `_backlight_worker()` mirrors `display.py`'s `_sun_times_worker()` threading pattern exactly:
+  a daemon thread looping on `event.wait(timeout=600)`, woken early by config reload.
+- `start_backlight(display_cfg)` (called from `_init_layout()`, so it re-applies on every config
+  reload too) applies the current scheduled value **synchronously before returning** -- a restart
+  never leaves the backlight at a stale level (e.g. full brightness at 2am) until the first
+  10-minute tick.
+- Writes are de-duplicated: `_apply()` only touches sysfs (and only logs, if `logging: true`)
+  when the computed value actually changed since the last write.
+- `config_validator.py` validates the whole block: required keys, `method` enum, 0-255 ranges,
+  `min <= max`, `HH:MM` format, and schedule-entry overlap (midnight-wrap aware).
+
+**TODO -- other backlight control methods**: `st7789` (and other non-sysfs displays) need a
+different brightness-control mechanism (GPIO pin? different sysfs path?) -- untested, needs a
+real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extension point.
+
+**TODO -- sun-following brightness curve**: replace the fixed two-entry schedule with a
+continuous ramp keyed off `display.py`'s `_SUN_TIMES` (sunrise/sunset), so brightness eases from
+`min` at dawn up to `max` through the day and back down at dusk -- still on the same ~10-minute
+worker cadence (no photocell sensor, so this is the best approximation available).
+
 ### Display drivers
 
 Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.dimensions` property.
@@ -622,6 +684,12 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
    (duplicated on purpose -- see font_behavior section above)
 2. Implement the drawing logic in `_draw_text_line()` in `display.py`
 3. Test in `test_display_fonts.py` + `test_config_validator.py::TestFontBehavior`
+
+**Add a backlight control method** (currently only `sysfs` exists):
+1. Add name to `KNOWN_BACKLIGHT_METHODS` in `config_validator.py`
+2. Write a `_write_<method>(device, value) -> bool` function in `backlight.py`, add it to
+   `_METHODS`
+3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklight`
 
 ---
 
