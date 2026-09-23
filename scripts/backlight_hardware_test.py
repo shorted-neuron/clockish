@@ -209,6 +209,93 @@ def _wait_for_sun_times(day: datetime.date, timeout_s: float) -> bool:
     return bool(display._SUN_TIMES.get(day.isoformat()))
 
 
+def _location_setting_origin() -> tuple[object, str]:
+    """The location SETTING and where it came from, mirroring display.py's
+    precedence: config `location:` > user-owned location.yaml > runtime cache
+    > disabled."""
+    cfg_value = (display._config or {}).get('location') if isinstance(display._config, dict) else None
+    if cfg_value is not None:
+        return cfg_value, (display._args.config if display._args else 'config')
+    user_value = display._read_user_location_setting()
+    if user_value is not None:
+        return user_value, display._LOCATION_YAML_PATH
+    return None, 'nothing set (falls through to the runtime cache, else disabled)'
+
+
+def _format_location_setting(value: object) -> str:
+    """Render a location SETTING for printing, at the same precision as
+    display's own debug output -- a setting can itself be coordinates (a
+    "lat,lon" string, or a mapping straight out of location.yaml), and those
+    are exactly what --debug-location gates."""
+    if isinstance(value, dict):
+        text = display._loc_debug(value)
+        # A setting carries no 'source' stamp of its own -- that belongs to the
+        # RESOLVED location below; don't print a bare "[source: ?]" here.
+        return text.replace(' [source: ?]', '') if not value.get('source') else text
+    if isinstance(value, str) and ',' in value and not display.DEBUG_LOCATION:
+        try:
+            lat, lon = (float(part) for part in value.split(',', 1))
+        except ValueError:
+            return repr(value)
+        return f"~{lat:.1f},{lon:.1f} (rounded)"
+    return repr(value)
+
+
+def _print_location_provenance(args, day: datetime.date) -> None:
+    """Show WHERE the location came from and what it resolved to.
+
+    `curve: sun` is only as good as the sun times behind it, and those come
+    from a resolution chain that is deliberately quiet (privacy-first: no
+    lookup unless asked). Print the whole chain so a replay can never leave
+    you guessing whether it used your actual location or a fallback.
+
+    Coordinates honour display.py's gating: rounded to ~11 km unless
+    --debug-location was passed (exact values are the operator's to ask for).
+    """
+    print()
+    print("--- location ---")
+    if args.no_frames:
+        print("  not resolved -- --no-frames skips display init entirely")
+    else:
+        setting, origin = _location_setting_origin()
+        print(f"  setting:    {_format_location_setting(setting)}   <- {origin}")
+        if display._OFFLINE:
+            print("  offline:    yes -- every location/sun-times fetch is short-circuited")
+        loc = display._SYSTEM_LOCATION
+        hint = '' if (display.DEBUG_LOCATION or not loc) else '   (--debug-location for exact coords)'
+        print(f"  resolved:   {display._loc_debug(loc)}{hint}")
+        if loc:
+            print("              [source: ...] is how the coordinates were obtained -- config "
+                  "(taken verbatim\n              from the setting), ipwho (GeoIP), airport, "
+                  "open-meteo (geocoded), sample.")
+        if not display._location_enabled():
+            print("  location is OFF -- no sun times, so curve: sun falls back to the "
+                  "min/max midpoint.\n"
+                  "  Pass --sunrise HH:MM --sunset HH:MM to replay a real shape anyway.")
+        cached, _flat = display._load_location_document(display._LOCATION_CACHE_PATH)
+        if isinstance(cached, dict):
+            print(f"  cache file: {display._LOCATION_CACHE_PATH} "
+                  f"(source={cached.get('source')}, resolved_at={cached.get('resolved_at')})")
+        elif cached is not None:
+            print(f"  cache file: {display._LOCATION_CACHE_PATH} ({cached!r})")
+        else:
+            print(f"  cache file: {display._LOCATION_CACHE_PATH} -- absent")
+
+    entry = display._SUN_TIMES.get(day.isoformat()) or {}
+    sr, ss = _naive(entry.get('sunrise')), _naive(entry.get('sunset'))
+    if args.sunrise:
+        print(f"  sun times:  {sr:%H:%M} / {ss:%H:%M} INJECTED via --sunrise/--sunset "
+              f"(location not consulted)")
+    elif sr and ss:
+        fetched = entry.get('fetched_at')
+        print(f"  sun times:  {day.isoformat()}  sunrise {sr:%H:%M}  sunset {ss:%H:%M}  "
+              f"(from Open-Meteo for the resolved coordinates"
+              f"{f', fetched {fetched:%H:%M:%S}' if fetched else ''})")
+    else:
+        print(f"  sun times:  none for {day.isoformat()}")
+    print()
+
+
 # ---------------------------------------------------------------------------
 # the day simulation
 # ---------------------------------------------------------------------------
@@ -450,6 +537,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument('--dry-run', action='store_true', help="never write sysfs; record the values instead")
     p.add_argument('--checks-only', action='store_true', help="run the old unit-level hardware checks and exit")
     p.add_argument('--loop', action='store_true', help="repeat the day until Ctrl-C")
+    p.add_argument('--debug-location', action='store_true',
+                   help="pass --debug-location to clockish: exact coordinates instead of ~11km")
     args = p.parse_args(argv)
     args.device_override = any(a == '--device' or a.startswith('--device=') for a in argv)
     if not args.config and not (args.no_frames or args.checks_only):
@@ -507,6 +596,8 @@ def main(argv: list[str] | None = None) -> int:
             # whole real startup: driver, fonts, layout, location + sun-times
             # worker, backlight thread.
             sys.argv = ['clockish', args.config]
+            if args.debug_location:
+                sys.argv.append('--debug-location')
             display._init()
             inited = True
             display_cfg = display._resolved_display_config
@@ -526,6 +617,8 @@ def main(argv: list[str] | None = None) -> int:
         # already wired it up, but --no-frames never called start_backlight().
         if backlight._get_sun_times is None:
             backlight._get_sun_times = display._get_today_sun_times
+
+        _print_location_provenance(args, day)
 
         if not args.no_frames:
             _install_time_patches()

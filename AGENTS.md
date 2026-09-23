@@ -502,6 +502,14 @@ collected samples (night == min, a flat `max` plateau centred on solar noon and 
 daylight, monotonic ramps either side, every sysfs readback matched) and exits non-zero on failure
 -- the plateau checks are what catch the wrong-curve-shape regressions described above.
 
+Before the replay it prints a **location provenance block** -- the setting and which file it came
+from (config > `~/.config/clockish/location.yaml` > runtime cache), what it resolved to and by
+which method, the cache file's own stamp, and the sun times in use (fetched, or injected via
+`--sunrise/--sunset`). `curve: sun` is only as good as the sun times behind it, and the resolution
+chain is deliberately quiet, so a replay should never leave you guessing which location it used.
+Coordinates follow the same gating as the rest of clockish: ~11 km rounding unless
+`--debug-location` is passed.
+
 ```bash
 python3 scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware
 python3 scripts/backlight_hardware_test.py --dry-run --no-frames \
