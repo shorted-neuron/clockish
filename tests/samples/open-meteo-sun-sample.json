@@ -1,10 +1,10 @@
 {
   "latitude": 41.30456,
   "longitude": -105.58805,
-  "generationtime_ms": 0.005841255187988281,
-  "utc_offset_seconds": 0,
-  "timezone": "GMT",
-  "timezone_abbreviation": "GMT",
+  "generationtime_ms": 0.012040138244628906,
+  "utc_offset_seconds": -21600,
+  "timezone": "America/Denver",
+  "timezone_abbreviation": "GMT-6",
   "elevation": 2186.0,
   "daily_units": {
     "time": "iso8601",
@@ -13,16 +13,16 @@
   },
   "daily": {
     "time": [
-      "2026-09-01",
-      "2026-09-02"
+      "2026-09-14",
+      "2026-09-15"
     ],
     "sunrise": [
-      "2026-09-01T12:29",
-      "2026-09-02T12:30"
+      "2026-09-14T06:41",
+      "2026-09-15T06:42"
     ],
     "sunset": [
-      "2026-09-02T01:35",
-      "2026-09-03T01:33"
+      "2026-09-14T19:12",
+      "2026-09-15T19:11"
     ]
   }
 }

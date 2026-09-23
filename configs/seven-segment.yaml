@@ -63,7 +63,7 @@ rows:
       - type: date
         justify: left
         timezone: US/Mountain
-        date_format: "%a, %B %-d"
+        date_format: "%a, %b %-d"
         color: darkorange
         font_size: normal
       - type: clock

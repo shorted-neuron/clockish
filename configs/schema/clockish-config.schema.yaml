@@ -95,7 +95,7 @@ properties:
           description: 'HTTP request timeout, seconds. Default: 5.'
         verify_ssl:
           type: boolean
-          description: 'TLS certificate verification for https:// URLs. Default: false.'
+          description: 'TLS certificate verification for https:// URLs. Default: true.'
         preview_response:
           type: string
           description: |

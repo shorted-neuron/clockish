@@ -48,6 +48,7 @@ def main():
     ipwho_path = os.path.join(samples_dir, 'ipwho-sample.json')
     with open(ipwho_path, 'w', encoding='utf-8') as fh:
         json.dump(ipwho, fh, indent=2, ensure_ascii=False)
+        fh.write('\n')
     print('Wrote', ipwho_path)
 
     # ipwho may return 'latitude'/'longitude' or 'lat'/'lon'
@@ -77,7 +78,10 @@ def main():
 
     om_url = (
         f'https://api.open-meteo.com/v1/forecast?latitude={latf}&longitude={lonf}'
-        f'&daily=sunrise,sunset&start_date={start}&end_date={end}&timezone=UTC'
+        # timezone=auto matches what display.py::_fetch_and_store_sun_times
+        # requests; fetching in UTC produced a fixture whose wall times did not
+        # line up with what the runtime parses.
+        f'&daily=sunrise,sunset&start_date={start}&end_date={end}&timezone=auto'
     )
     print('Fetching', om_url)
     try:
@@ -89,6 +93,7 @@ def main():
     om_path = os.path.join(samples_dir, 'open-meteo-sun-sample.json')
     with open(om_path, 'w', encoding='utf-8') as fh:
         json.dump(om, fh, indent=2, ensure_ascii=False)
+        fh.write('\n')
     print('Wrote', om_path)
 
     # Fetch airport samples from FreeAirportDB API for KEGE (ICAO) and DEN (IATA).
@@ -112,6 +117,7 @@ def main():
         # Write raw JSON response as-is
         with open(out_path, 'w', encoding='utf-8') as fh:
             json.dump(data, fh, indent=2, ensure_ascii=False)
+            fh.write('\n')
         print('Wrote', out_path)
 
 
