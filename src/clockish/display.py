@@ -388,7 +388,7 @@ def _color(name: str) -> str:
 # ---------------------------------------------------------------------------
 def _resolve_colors(cfg: dict) -> None:
     """Resolve all color fields in the config tree in-place."""
-    COLOR_KEYS = {'color', 'background'}
+    COLOR_KEYS = {'color', 'background', 'on_color', 'off_color'}
 
     def _walk(obj):
         if isinstance(obj, dict):
@@ -3007,6 +3007,93 @@ def _render_wifi_graphic_panel(p: dict, px: int, py: int, pw: int, ph: int,
         d.line((xe, ys, xs, ye), fill=_color('RED'), width=cross_w)
 
 
+_BIT_CLOCK_DEFAULT_BITS = 32
+_UNIX_EPOCH = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+
+
+def _bit_clock_epoch(raw: object) -> datetime.datetime:
+    """Resolve a bit_clock ``epoch:`` value to an aware datetime (UTC if naive).
+
+    YAML hands over a ``date`` for ``2000-01-01``, a ``datetime`` for
+    ``2000-01-01T00:00:00Z``, or a string if quoted. Anything unparseable falls
+    back to the Unix epoch (the validator warns about it).
+    """
+    if raw is None:
+        return _UNIX_EPOCH
+    if isinstance(raw, datetime.datetime):
+        dt = raw
+    elif isinstance(raw, datetime.date):
+        dt = datetime.datetime(raw.year, raw.month, raw.day)
+    elif isinstance(raw, str):
+        try:
+            dt = datetime.datetime.fromisoformat(raw.strip())
+        except ValueError:
+            return _UNIX_EPOCH
+    else:
+        return _UNIX_EPOCH
+    return dt if dt.tzinfo else dt.replace(tzinfo=datetime.timezone.utc)
+
+
+def _positive_int(raw: object, default: int) -> int:
+    """``raw`` if it's a positive int (not bool), else ``default``."""
+    if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 1:
+        return raw
+    return default
+
+
+def _render_bit_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
+                            now: datetime.datetime, d: ImageDraw.ImageDraw) -> None:
+    """Draw whole seconds since ``epoch:`` as a row (or grid) of on/off bits.
+
+    Panel config keys:
+      bits       - number of bits shown (default 32); value wraps mod 2**bits
+      bit_order  - 'msb' (default: most significant bit first) or 'lsb'
+      bit_rows   - wrap the bits into this many rows, row-major (default 1)
+      shape      - 'circle' (default), 'square' (circle-sized), or 'rect' (fills the cell)
+      on_color   - lit bit (default CRIMSON)
+      off_color  - unlit bit (default DIMRED)
+      epoch      - ISO-8601 date/datetime counted from (default 1970-01-01 UTC)
+    """
+    bits = _positive_int(p.get('bits'), _BIT_CLOCK_DEFAULT_BITS)
+    rows = min(_positive_int(p.get('bit_rows'), 1), bits)
+    cols = -(-bits // rows)   # ceil
+    lsb_first = str(p.get('bit_order', 'msb')).lower() == 'lsb'
+    shape = str(p.get('shape', 'circle')).lower()
+    on_c = p.get('on_color') or _color('CRIMSON')
+    off_c = p.get('off_color') or _color('DIMRED')
+
+    # Naive datetimes are local time -- .timestamp() handles both.
+    seconds = int(now.timestamp() - _bit_clock_epoch(p.get('epoch')).timestamp())
+    value = seconds % (1 << bits)
+
+    cw = pw / cols
+    ch = ph / rows
+    gap = max(1, int(min(cw, ch) * 0.1))
+    # One diameter for every circle/square: per-cell sizing would alternate between
+    # int(cw) and int(cw)+1 whenever pw isn't a multiple of cols.
+    dia = max(1, int(min(cw, ch)) - 2 * gap)
+    for i in range(bits):
+        bit = i if lsb_first else bits - 1 - i
+        lit = (value >> bit) & 1
+        r, c = divmod(i, cols)
+        x0 = px + int(c * cw)
+        y0 = py + int(r * ch)
+        x1 = px + int((c + 1) * cw) - 1
+        y1 = py + int((r + 1) * ch) - 1
+        fill = on_c if lit else off_c
+        if shape == 'rect':
+            box = (x0 + gap, y0 + gap, max(x0 + gap, x1 - gap), max(y0 + gap, y1 - gap))
+            d.rectangle(box, fill=fill)
+            continue
+        left = px + int((c + 0.5) * cw) - dia // 2
+        top = py + int((r + 0.5) * ch) - dia // 2
+        box = (left, top, left + dia - 1, top + dia - 1)
+        if shape == 'square':
+            d.rectangle(box, fill=fill)
+        else:
+            d.ellipse(box, fill=fill)
+
+
 def _render_divider_panel(p: dict, px: int, py: int, pw: int, ph: int,
                            d: ImageDraw.ImageDraw) -> None:
     clr    = p.get('color', _C_DARKGREY)
@@ -3074,6 +3161,9 @@ def _dispatch_panel(p: dict, px: int, py: int, pw: int, ph: int,
         _render_divider_panel(p, px, py, pw, ph, target_draw)
     elif pt == 'wifi_graphic':
         _render_wifi_graphic_panel(p, px, py, pw, ph, target_draw)
+    elif pt == 'bit_clock':
+        _render_bit_clock_panel(p, px, py, pw, ph,
+                                tz_cache.get('local') or _now_in_tz('local'), target_draw)
     elif pt == 'debug':
         _render_debug_panel(p, px, py, pw, ph, timings, t0, target_draw)
     # 'blank'  --  space reserved, nothing to draw
@@ -3182,7 +3272,8 @@ def show_rows():
         tz_cache: dict[str, datetime.datetime] = {}
         for r, _ry, _rh in _LAYOUT:
             for p in r.get('panels', []):
-                if p.get('type') in ('clock', 'date'):
+                if p.get('type') in ('clock', 'date', 'bit_clock'):
+                    # bit_clock has no timezone (epoch seconds) -- takes 'local'.
                     tz = p.get('timezone', 'local')
                     if tz not in tz_cache:
                         tz_cache[tz] = _now_in_tz(tz)

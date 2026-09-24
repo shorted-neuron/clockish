@@ -228,7 +228,31 @@ properties:
               type:
                 type: string
                 description: 'Panel renderer. Known types:
-                  clock, date, fact, text, divider, wifi_graphic, debug, blank.'
+                  clock, date, fact, text, divider, wifi_graphic, bit_clock, debug, blank.'
+              bits:
+                type: integer
+                minimum: 1
+                description: "bit_clock only: number of bits shown (default 32); value wraps mod 2**bits."
+              bit_order:
+                type: string
+                enum: [msb, lsb]
+                description: "bit_clock only: 'msb' (default) puts the most significant bit first."
+              bit_rows:
+                type: integer
+                minimum: 1
+                description: "bit_clock only: wrap the bits into this many rows, row-major (default 1)."
+              shape:
+                type: string
+                enum: [circle, square, rect]
+                description: "bit_clock only: bit shape -- circle (default), square (circle-sized), rect (fills the cell)."
+              on_color:
+                type: string
+                description: "bit_clock only: lit bit color (default crimson)."
+              off_color:
+                type: string
+                description: "bit_clock only: unlit bit color (default dimred)."
+              epoch:
+                description: "bit_clock only: ISO-8601 date/datetime counted from (default 1970-01-01, UTC if no offset)."
               json_path:
                 type: string
                 description: |

@@ -165,6 +165,7 @@ Each panel has a `type` and type-specific keys:
 | `date`         | Current date with a `strftime`-style format string                                                       |
 | `fact`         | A live system value: `ip`, `hostname`, `uptime`, `cpu`, `mem`, `disk`, `temp`, `ntp_status`, `wifi_*`, … |
 | `wifi_graphic` | Animated Wi-Fi signal-strength arcs                                                                      |
+| `bit_clock`    | Seconds since an epoch (default Unix, 32 bits) as a row/grid of LED-style bits — see `configs/bit-clock.yaml` |
 | `text`         | Static label                                                                                             |
 | `divider`      | Horizontal rule                                                                                          |
 | `debug`        | Per-frame render timings (development aid)                                                               |

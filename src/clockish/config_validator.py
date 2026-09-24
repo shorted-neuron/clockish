@@ -42,6 +42,7 @@ Required:
 from __future__ import annotations
 
 import argparse
+import datetime
 import os
 import re
 import sys
@@ -114,8 +115,12 @@ def _is_valid_interval(interval_str: str) -> bool:
 
 #: Panel types recognised by the display engine.
 KNOWN_PANEL_TYPES: frozenset[str] = frozenset({
-    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'debug', 'blank',
+    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'bit_clock', 'debug', 'blank',
 })
+
+#: ``bit_order:`` / ``shape:`` values for ``type: bit_clock`` panels.
+KNOWN_BIT_ORDERS: frozenset[str] = frozenset({'msb', 'lsb'})
+KNOWN_BIT_SHAPES: frozenset[str] = frozenset({'circle', 'square', 'rect'})
 
 #: Valid ``source:`` values for ``type: fact`` panels. A ``fact`` panel may
 #: ALSO use ``source: cached-facts.<name>`` to pull from a top-level
@@ -380,6 +385,10 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     }),
     'wifi_graphic': frozenset({
         'type', 'color', 'width', 'background', 'padding',
+    }),
+    'bit_clock': frozenset({
+        'type', 'width', 'background', 'padding', 'bits', 'bit_order', 'bit_rows',
+        'shape', 'on_color', 'off_color', 'epoch',
     }),
     'debug': frozenset({
         'type', 'color', 'font', 'font_size', 'width', 'background', 'padding',
@@ -964,6 +973,34 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                 for key in panel:
                     if key not in allowed and key not in _DEPRECATED_PANEL_KEYS:
                         warn(ploc, f"unexpected key '{key}' on '{ptype}' panel")
+
+            # 5b. bit_clock: every bad value falls back to its default at render time
+            if ptype == 'bit_clock':
+                for key in ('bits', 'bit_rows'):
+                    val = panel.get(key)
+                    if val is not None and (
+                        not isinstance(val, int) or isinstance(val, bool) or val < 1
+                    ):
+                        warn(ploc, f"'{key}: {val!r}' must be a positive integer")
+                for key, known in (('bit_order', KNOWN_BIT_ORDERS),
+                                   ('shape', KNOWN_BIT_SHAPES)):
+                    val = panel.get(key)
+                    if val is not None and val not in known:
+                        warn(
+                            ploc,
+                            f"'{key}: {val!r}' is not a valid value "
+                            f"(expected one of: {', '.join(sorted(known))})",
+                        )
+                epoch = panel.get('epoch')
+                if epoch is not None and not isinstance(epoch, datetime.date):
+                    try:
+                        datetime.datetime.fromisoformat(str(epoch).strip())
+                    except ValueError:
+                        warn(
+                            ploc,
+                            f"'epoch: {epoch!r}' is not an ISO-8601 date/datetime "
+                            "-- falls back to 1970-01-01 UTC",
+                        )
 
             # 6. fact panel: source required (runtime crash without it) + must be recognised
             if ptype == 'fact':
