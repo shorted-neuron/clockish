@@ -1,0 +1,112 @@
+---
+# bit-clock35.yaml  --  clockish config
+# ---------------------------------------------------------------------------
+# Emulates the hardware bit clock in docs/more-clocks.jpeg: a cast-metal
+# case around a smoked red window, red 7-segment HH:MM:SS, and below it a
+# row of 35 red LEDs counting seconds since 1970, MSB first.
+#
+# Requires the DSEG7 font (see configs/seven-segment.yaml for install notes).
+# ---------------------------------------------------------------------------
+
+orientation: landscape
+
+# 3.5" ILI9486 in landscape; keeps the PNG preview honest.
+preview_size: "480x320"
+
+fonts:
+  dseg7:
+    file: DSEG7Classic-Regular.ttf
+
+rows:
+  - name: case-top
+    height: 9%
+    background: "5a5a56"
+    panels:
+      - type: blank
+
+  - name: window-top
+    height: 16%
+    background: "140000"
+    panels:
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+      - type: blank
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+
+  - name: digits
+    height: 28%
+    background: "140000"
+    panels:
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+      - type: clock
+        width: 58%
+        time_format: "%H:%M:"
+        justify: right
+        color: red
+        font: dseg7
+        font_size: auto
+        font_behavior: scale_numeric
+      - type: clock
+        time_format: "%S"
+        justify: left
+        color: red
+        font: dseg7
+        font_size: auto
+        font_behavior: scale_numeric
+        padding: 9
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+
+  - name: window-mid
+    height: 12%
+    background: "140000"
+    panels:
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+      - type: blank
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+
+  # 35 bits of Unix time, MSB first -- rolls over 3058-10-26.
+  - name: leds
+    height: 8%
+    background: "140000"
+    panels:
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+      - type: bit_clock
+        bits: 35
+        bit_order: msb
+        on_color: red
+        off_color: dimred
+        padding: 4
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+
+  - name: window-bottom
+    height: 18%
+    background: "140000"
+    panels:
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+      - type: blank
+      - type: blank
+        width: 7%
+        background: "5a5a56"
+
+  - name: case-bottom
+    height: 9%
+    background: "5a5a56"
+    panels:
+      - type: blank
