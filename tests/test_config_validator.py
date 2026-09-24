@@ -23,6 +23,7 @@ from clockish.config_validator import (
     KNOWN_FACT_SOURCES,
     KNOWN_FONT_BEHAVIORS,
     KNOWN_PANEL_TYPES,
+    SUN_SCHEDULE_VALUES,
     ValidationResult,
     validate_config_dict,
     validate_config_file,
@@ -1045,11 +1046,13 @@ class TestBacklight:
         assert result.has_errors
         assert any('min' in i.message and 'max' in i.message for i in result.errors)
 
-    def test_unexpected_key_warns(self) -> None:
-        # Schema also rejects it (additionalProperties: false), same as cached-facts entries.
+    def test_unexpected_key_errors(self) -> None:
+        # An error in the semantic walker too, not just the schema's
+        # additionalProperties: false -- see test_curve_key_is_an_error_without_jsonschema.
         cfg = _backlight_config(brightness=42)
         result = validate_config_dict(cfg)
-        assert any('brightness' in i.message for i in result.warnings)
+        assert any('brightness' in i.message for i in result.errors)
+        assert not any('brightness' in i.message for i in result.warnings)
 
     def test_empty_schedule_errors(self) -> None:
         cfg = _backlight_config(schedule=[])
@@ -1093,38 +1096,47 @@ class TestBacklight:
         assert any('overlap' in i.message.lower() for i in result.errors)
 
 
-def _curve_backlight_config(curve: str = 'sun', **overrides) -> dict:
-    """A minimal valid config with a 'curve:' backlight block (no schedule:)."""
-    cfg = _backlight_config(curve=curve, **overrides)
-    del cfg['display']['backlight']['schedule']
-    return cfg
+class TestBacklightSunSchedule:
+    """'schedule:' as a scalar naming the sun curve, instead of a list."""
 
+    @pytest.mark.parametrize('spelling', sorted(SUN_SCHEDULE_VALUES))
+    def test_every_sun_spelling_ok(self, spelling: str) -> None:
+        result = validate_config_dict(_backlight_config(schedule=spelling))
+        assert result.ok, f"expected no issues for '{spelling}', got: {result.issues}"
 
-class TestBacklightCurve:
-    """Tests for 'curve: sun' as an alternative to a fixed 'schedule:'."""
-
-    def test_valid_curve_config_ok(self) -> None:
-        result = validate_config_dict(_curve_backlight_config())
-        assert result.ok, f"expected no issues, got: {result.issues}"
-
-    def test_unknown_curve_errors(self) -> None:
-        cfg = _curve_backlight_config(curve='moon')
-        result = validate_config_dict(cfg)
+    def test_unknown_scalar_errors(self) -> None:
+        result = validate_config_dict(_backlight_config(schedule='moon'))
         assert result.has_errors
-        assert any('curve' in i.message.lower() for i in result.errors)
+        assert any('moon' in i.message for i in result.errors)
 
-    def test_both_schedule_and_curve_errors(self) -> None:
-        cfg = _backlight_config(curve='sun')  # _backlight_config already sets schedule:
-        result = validate_config_dict(cfg)
-        assert result.has_errors
-        assert any('both' in i.message.lower() for i in result.errors)
-
-    def test_neither_schedule_nor_curve_errors(self) -> None:
+    def test_missing_schedule_errors(self) -> None:
         cfg = _backlight_config()
         del cfg['display']['backlight']['schedule']
         result = validate_config_dict(cfg)
         assert result.has_errors
-        assert any('schedule' in i.message.lower() and 'curve' in i.message.lower() for i in result.errors)
+        assert any('schedule' in i.message.lower() for i in result.errors)
+
+    def test_empty_list_errors(self) -> None:
+        result = validate_config_dict(_backlight_config(schedule=[]))
+        assert result.has_errors
+        assert any('schedule' in i.message.lower() for i in result.errors)
+
+    def test_curve_key_is_an_error(self) -> None:
+        cfg = _backlight_config(schedule='sun')
+        cfg['display']['backlight']['curve'] = 'sun'
+        result = validate_config_dict(cfg)
+        assert result.has_errors
+        assert any("'curve'" in i.message for i in result.errors)
+
+    def test_curve_key_is_an_error_without_jsonschema(self, monkeypatch) -> None:
+        """The schema layer is skipped when jsonschema is missing; the semantic
+        walker must still reject the key on its own, not merely warn."""
+        import clockish.config_validator as cv
+        monkeypatch.setattr(cv, '_JSONSCHEMA_AVAILABLE', False)
+        cfg = _backlight_config(schedule='sun')
+        cfg['display']['backlight']['curve'] = 'sun'
+        result = validate_config_dict(cfg)
+        assert any("'curve'" in i.message for i in result.errors)
 
 
 # ---------------------------------------------------------------------------

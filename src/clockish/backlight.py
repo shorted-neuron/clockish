@@ -1,9 +1,9 @@
 """Backlight brightness control -- optional `display.backlight:` config block.
 
-Runs a background thread that computes the current brightness level -- from
-EITHER a fixed day/night `schedule:` list OR a sun-following `curve: sun`
-(mutually exclusive; see config_validator.py) -- and writes it to the
-display's backlight control device. See AGENTS.md ("backlight") and
+Runs a background thread that computes the current brightness level from the
+`schedule:` key -- EITHER a fixed day/night list of entries, OR one of the
+scalars in SUN_SCHEDULE_VALUES for a sun-following curve -- and writes it to
+the display's backlight control device. See AGENTS.md ("backlight") and
 configs/display/framebuffer.yaml for the config shape and worked examples.
 
 Only one control `method` exists today: 'sysfs' (writes an integer 0-255 to
@@ -13,7 +13,7 @@ per-method dispatch table (`_METHODS` below) exist so other methods (e.g. a
 GPIO on/off pin, or PWM) can be added later without reshaping this module --
 none of that is implemented yet.
 
-`curve: sun` needs today's sunrise/sunset, which display.py's background
+A sun schedule needs today's sunrise/sunset, which display.py's background
 `_sun_times_worker` already fetches into its own `_SUN_TIMES` global --
 rather than importing display.py here (circular import; it already imports
 this module, plus it pulls in hardware-driver code this module has no
@@ -40,7 +40,13 @@ _get_sun_times: GetSunTimes | None = None
 
 _CHECK_INTERVAL_SECS = 600  # 10 minutes -- see AGENTS.md, no need for finer granularity
 
-#: `curve: sun` shape (see resolve_sun_curve_value()).
+#: `schedule:` scalars that mean "follow the sun" instead of a fixed list of
+#: time-of-day entries. Three spellings of one thing, so a config reads however
+#: its author thinks of it. config_validator.py imports this -- the single
+#: definition (this module is stdlib-only, so the import is cheap and one-way).
+SUN_SCHEDULE_VALUES: frozenset[str] = frozenset({'sun', 'follow-sun', 'sun-curve'})
+
+#: Sun-curve shape (see resolve_sun_curve_value()).
 #:
 #: TWILIGHT_MINUTES -- how long before sunrise the ramp up starts, and how
 #: long after sunset the ramp down finishes. 50 minutes is roughly the end of
@@ -108,7 +114,7 @@ def resolve_sun_curve_value(
     twilight_minutes: int = TWILIGHT_MINUTES,
     peak_fraction: float = PEAK_FRACTION,
 ) -> int:
-    r"""Return the brightness value (int) for a sun-following `curve: sun`.
+    r"""Return the brightness value (int) for a sun-following schedule.
 
     An eased trapezoid, not a bump -- the point is to sit at `max_` for most
     of the day and spend as little time as possible in between:
@@ -239,24 +245,30 @@ def current_percent() -> str | None:
 
 
 def _resolve_value(cfg: dict, now: datetime.datetime | None = None) -> int:
-    """Dispatch to the fixed schedule or the sun-following curve, whichever `cfg` uses.
+    """Resolve `cfg['schedule']` -- a sun scalar or a list of entries -- to a value.
 
     `now` defaults to the real current time; pass one to resolve the value
     for an arbitrary moment (scripts/backlight_hardware_test.py simulates a
     whole day this way).
     """
     min_, max_ = cfg.get('min', 0), cfg.get('max', 255)
+    schedule = cfg.get('schedule')
+    midpoint = round((min_ + max_) / 2)
 
-    if cfg.get('curve') == 'sun':
+    if isinstance(schedule, str):
+        if schedule not in SUN_SCHEDULE_VALUES:
+            if DEBUG:
+                print(f"DEBUG: backlight: unknown schedule {schedule!r}, using midpoint")
+            return midpoint
         sun_times = _get_sun_times() if _get_sun_times is not None else None
         if sun_times is None:
             if DEBUG:
-                print("DEBUG: backlight: curve: sun but sun times not available yet, using midpoint")
-            return round((min_ + max_) / 2)
+                print(f"DEBUG: backlight: schedule: {schedule} but sun times not known yet, using midpoint")
+            return midpoint
         sunrise, sunset = sun_times
         return resolve_sun_curve_value(sunrise, sunset, min_=min_, max_=max_, now=now)
 
-    return resolve_scheduled_value(cfg.get('schedule', []), min_=min_, max_=max_, now=now)
+    return resolve_scheduled_value(schedule or [], min_=min_, max_=max_, now=now)
 
 
 def _apply(cfg: dict, now: datetime.datetime | None = None) -> None:
@@ -310,7 +322,7 @@ def start_backlight(display_cfg: dict, get_sun_times: GetSunTimes | None = None)
     restart never leaves the backlight at a stale level (e.g. full brightness
     at 2am) until the first background tick.
 
-    `get_sun_times` is only needed for `curve: sun` configs -- see the
+    `get_sun_times` is only needed for sun-schedule configs -- see the
     module docstring for why it's a callable instead of an import.
     """
     global _backlight_thread, _get_sun_times, _active_cfg

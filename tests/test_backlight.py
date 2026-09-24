@@ -2,7 +2,7 @@
 
 Tests for the pure brightness-resolution functions in clockish/backlight.py:
   - resolve_scheduled_value() -- fixed day/night `schedule:` list
-  - resolve_sun_curve_value() -- sun-following `curve: sun` cosine ease
+  - resolve_sun_curve_value() -- the sun-following `schedule: sun` curve
   - _apply(cfg, now=...) -- the `now` injection point the simulated-day
     runner (scripts/backlight_hardware_test.py) drives a whole day through
   - current_percent() -- the `backlight` fact source's value
@@ -76,7 +76,7 @@ SUNSET = _at(19, 0)
 
 
 class TestResolveSunCurveValue:
-    """The `curve: sun` trapezoid: min at night, eased ramp starting
+    """The `schedule: sun` trapezoid: min at night, eased ramp starting
     TWILIGHT_MINUTES before sunrise, flat max across the middle half of
     daylight, mirrored ramp ending TWILIGHT_MINUTES after sunset.
 
@@ -200,7 +200,7 @@ class TestApplyNowInjection:
     }
     CURVE_CFG = {
         'method': 'sysfs', 'device': 'test-dev',
-        'min': 40, 'max': 255, 'curve': 'sun',
+        'min': 40, 'max': 255, 'schedule': 'sun',
     }
 
     def test_schedule_writes_value_due_at_the_given_moment(self, recorder):
@@ -315,3 +315,38 @@ class TestCurrentPercent:
             backlight.stop_backlight()
         assert backlight._active_cfg is None
         assert backlight.current_percent() is None
+
+
+class TestScheduleDispatch:
+    """`schedule:` is either a sun scalar or a list of time-of-day entries;
+    _resolve_value() tells them apart by type."""
+
+    BASE = {'method': 'sysfs', 'device': 'test-dev', 'min': 40, 'max': 255}
+
+    @pytest.fixture(autouse=True)
+    def _sun(self, monkeypatch):
+        monkeypatch.setattr(backlight, '_get_sun_times', lambda: (SUNRISE, SUNSET))
+
+    @pytest.mark.parametrize('spelling', sorted(backlight.SUN_SCHEDULE_VALUES))
+    def test_every_sun_spelling_follows_the_sun(self, spelling):
+        solar_noon = SUNRISE + (SUNSET - SUNRISE) / 2
+        cfg = dict(self.BASE, schedule=spelling)
+        assert backlight._resolve_value(cfg, now=solar_noon) == 255
+        assert backlight._resolve_value(cfg, now=_at(2, 0)) == 40
+
+    def test_list_schedule_still_resolves_by_time_of_day(self):
+        cfg = dict(self.BASE, schedule=SCHEDULE)
+        assert backlight._resolve_value(cfg, now=_at(12, 0)) == 255
+        assert backlight._resolve_value(cfg, now=_at(23, 30)) == 42
+
+    def test_unknown_scalar_falls_back_to_midpoint(self):
+        cfg = dict(self.BASE, schedule='moon')
+        assert backlight._resolve_value(cfg, now=_at(12, 0)) == 148
+
+    def test_missing_schedule_falls_back_to_midpoint(self):
+        assert backlight._resolve_value(dict(self.BASE), now=_at(12, 0)) == 148
+
+    def test_sun_without_sun_times_falls_back_to_midpoint(self, monkeypatch):
+        monkeypatch.setattr(backlight, '_get_sun_times', lambda: None)
+        cfg = dict(self.BASE, schedule='sun')
+        assert backlight._resolve_value(cfg, now=_at(12, 0)) == 148

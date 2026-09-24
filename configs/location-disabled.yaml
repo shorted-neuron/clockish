@@ -141,7 +141,7 @@ rows:
         justify: left
 
   # Unrelated to location, but it is the other thing driven by sun times when
-  # they exist: with location disabled a `curve: sun` backlight has none, so it
+  # they exist: with location disabled a `schedule: sun` backlight has none, so it
   # holds the min/max midpoint. This reads the level whatever set it.
   - name: backlight
     height: 5%

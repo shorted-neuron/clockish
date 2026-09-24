@@ -397,9 +397,9 @@ keep that pattern, or "makes no network call" stops being a real assertion.
 
 Optional `backlight:` block under a display profile's `display:` section (see
 `configs/display/framebuffer.yaml` for a full worked example). Runs a background daemon thread
-(`clockish/backlight.py`) that computes a brightness level roughly every 10 minutes -- from
-EITHER a fixed time-of-day `schedule:` OR a sun-following `curve: sun` (mutually exclusive, pick
-one) -- and writes it to the backlight hardware, decoupled from the render loop the same way
+(`clockish/backlight.py`) that computes a brightness level roughly every 10 minutes from
+`schedule:` -- EITHER a fixed list of time-of-day entries OR a scalar naming the sun-following
+curve -- and writes it to the backlight hardware, decoupled from the render loop the same way
 `cached-facts` is.
 
 ```yaml
@@ -412,7 +412,7 @@ display:
     min:       40
     max:       255
 
-    # EITHER a fixed schedule:
+    # EITHER a fixed list of time-of-day entries:
     schedule:
       - name: night
         start: "22:00"   # 24h "HH:MM"; end < start wraps past midnight
@@ -423,9 +423,20 @@ display:
         end:   "19:59"
         value: 255
 
-    # OR a sun-following curve (mutually exclusive with schedule: above):
-    # curve: sun
+    # OR the sun-following curve, as a scalar:
+    # schedule: sun          # 'follow-sun' and 'sun-curve' are accepted spellings
 ```
+
+**One key, two shapes**: `schedule:` is the only way to say how brightness moves through the day.
+A list means fixed times; a string means follow the sun. `_resolve_value()` tells them apart with
+one `isinstance(schedule, str)` -- which is why there is no second `curve:` key to keep mutually
+exclusive with it, and no "exactly one of" rule to validate. The accepted scalars live in
+`SUN_SCHEDULE_VALUES` in `backlight.py`, **imported** by `config_validator.py` -- unlike
+`KNOWN_FONT_BEHAVIORS`, no duplication: `backlight.py` is stdlib-only, so the import is cheap and
+one-way. An unknown scalar, or no `schedule:` at all, falls back to the `min`/`max` midpoint at
+runtime and is an error at validation time. Any key not in `_BACKLIGHT_ATTRS` (e.g. a stray
+`curve:`) is an **error** in the semantic walker, not a warning -- it has to hold even when
+jsonschema is missing and the schema layer (`additionalProperties: false`) is skipped.
 
 **Why `off_value` and not `off`**: an unquoted `off:` YAML key is parsed under YAML 1.1 (PyYAML's
 default) as the boolean `False`, not the string `"off"` -- silently corrupting the config (the
@@ -438,7 +449,7 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
   against each entry's `start`/`end` (inclusive both ends; `end < start` wraps past midnight).
   Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`).
 - `resolve_sun_curve_value(sunrise, sunset, min_, max_, now, twilight_minutes, peak_fraction)` --
-  pure function for `curve: sun`. An **eased trapezoid**, not a bump: the display should sit at
+  pure function for a sun schedule. An **eased trapezoid**, not a bump: the display should sit at
   `max_` for most of the day and pass through the in-between levels as briefly as looks natural.
 
   ```
@@ -467,12 +478,12 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
   correct-looking but it holds `max_` for about a minute a day, which is not what the feature is
   for. If this curve ever looks like a smooth hill rather than a flat-topped plateau, one of
   those two shapes has crept back in.
-- `curve: sun` needs today's sunrise/sunset. Rather than importing `display.py` (circular --
+- A sun schedule needs today's sunrise/sunset. Rather than importing `display.py` (circular --
   it already imports `backlight.py` -- and it'd pull in hardware-driver code this module has no
   business depending on), `start_backlight(display_cfg, get_sun_times=...)` takes a callable;
   `display.py`'s `_get_today_sun_times()` reads its own `_SUN_TIMES` global and is passed in at
   the call site. Returns `None` before the first sunrise/sunset fetch completes, in which case
-  `_apply()` falls back to the `min`/`max` midpoint (same fallback shape as a schedule gap).
+  `_apply()` falls back to the `min`/`max` midpoint (same shape as a gap in a list schedule).
 - `method:` is a dispatch key (`_METHODS` dict) so other control schemes (GPIO pin toggle,
   PWM, etc.) can be added later without reshaping the module -- only `'sysfs'` is implemented
   today, which writes the integer to `/sys/class/backlight/<device>/brightness`.
@@ -485,8 +496,8 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
 - Writes are de-duplicated: `_apply()` only touches sysfs (and only logs, if `logging: true`)
   when the computed value actually changed since the last write.
 - `config_validator.py` validates the whole block: required keys, `method` enum, 0-255 ranges,
-  `min <= max`, exactly one of `schedule`/`curve` present, `curve` enum, `HH:MM` format, and
-  schedule-entry overlap (midnight-wrap aware).
+  `min <= max`, `schedule` present and either a known sun scalar or a non-empty list, `HH:MM`
+  format, and schedule-entry overlap (midnight-wrap aware).
 
 **`fact: backlight`**: `current_percent()` reports where the panel sits in its own configured
 `min`..`max` span -- `min` is 0%, `max` is 100%, whole numbers only (`min: 2`, `max: 255`, level
@@ -517,7 +528,7 @@ daylight, monotonic ramps either side, every sysfs readback matched) and exits n
 Before the replay it prints a **location provenance block** -- the setting and which file it came
 from (config > `~/.config/clockish/location.yaml` > runtime cache), what it resolved to and by
 which method, the cache file's own stamp, and the sun times in use (fetched, or injected via
-`--sunrise/--sunset`). `curve: sun` is only as good as the sun times behind it, and the resolution
+`--sunrise/--sunset`). A sun schedule is only as good as the sun times behind it, and the resolution
 chain is deliberately quiet, so a replay should never leave you guessing which location it used.
 Coordinates follow the same gating as the rest of clockish: ~11 km rounding unless
 `--debug-location` is passed.
@@ -778,11 +789,12 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
    `_METHODS`
 3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklight`
 
-**Add a backlight curve** (currently only `curve: sun` exists, alongside fixed `schedule:`):
-1. Add name to `KNOWN_BACKLIGHT_CURVES` in `config_validator.py`
+**Add a backlight curve** (currently only the sun curve exists, alongside a list `schedule:`):
+1. Add its scalar name to `SUN_SCHEDULE_VALUES` in `backlight.py` (the validator imports it) --
+   or, for a genuinely different curve, a new set alongside it, imported the same way
 2. Write a `resolve_<name>_curve_value(..., min_, max_, now) -> int` pure function in
-   `backlight.py`, wire it into `_resolve_value()`'s `cfg.get('curve')` dispatch
-3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklightCurve`
+   `backlight.py`, wire it into `_resolve_value()`'s scalar-`schedule` branch
+3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklightSunSchedule`
 
 ---
 

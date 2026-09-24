@@ -21,7 +21,7 @@ advances a simulated clock by 10 simulated minutes; at every tick it
   3. prints the value, a bar, and a sysfs readback.
 
 So a 24h day at defaults = 144 ticks ~= 2.5 minutes of watching the panel
-walk from midnight to midnight. `curve: sun` uses the device's genuinely
+walk from midnight to midnight. A sun schedule uses the device's genuinely
 resolved location and today's real sunrise/sunset (or `--sunrise/--sunset`
 for a repeatable offline run).
 
@@ -36,7 +36,7 @@ dim and brighten for the duration.
 Modes
 -----
     --checks-only   the old unit-level hardware checks (direct _write_sysfs,
-                    start/stop lifecycle for schedule and curve), no day sim
+                    start/stop lifecycle, list and sun schedules), no day sim
     --no-frames     backlight only; no config/display/driver init, no panel
     --dry-run       never touch sysfs; print what would have been written
                     (lets the whole thing be exercised on a dev box)
@@ -95,9 +95,15 @@ def _read_sysfs(device: str) -> int | None:
         return None
 
 
+def _follows_sun(cfg: dict) -> bool:
+    """Whether this backlight block follows the sun (a scalar `schedule:`)
+    rather than a fixed list of time-of-day entries."""
+    return isinstance(cfg.get('schedule'), str)
+
+
 def _curve_landmarks(sunrise: datetime.datetime,
                      sunset: datetime.datetime) -> dict[str, datetime.datetime]:
-    """The six moments that define the `curve: sun` trapezoid, in order.
+    """The six moments that define the sun-schedule trapezoid, in order.
 
     Derived from backlight's own TWILIGHT_MINUTES/PEAK_FRACTION so this
     script follows the shipped shape instead of hard-coding a second copy.
@@ -176,12 +182,12 @@ def _install_time_patches() -> None:
 # setup: config + backlight block + sun times
 # ---------------------------------------------------------------------------
 def _backlight_cfg_from_config(display_cfg: dict, args) -> dict:
-    """The config's `display.backlight:` block, or a synthetic curve: sun one."""
+    """The config's `display.backlight:` block, or a synthetic sun-schedule one."""
     cfg = dict(display_cfg.get('backlight') or {})
     if not cfg:
-        print("No display.backlight: block in config -- synthesizing a curve: sun one "
+        print("No display.backlight: block in config -- synthesizing a 'schedule: sun' one "
               f"(device={args.device}, min={args.min}, max={args.max}).")
-        cfg = {'method': 'sysfs', 'device': args.device, 'curve': 'sun',
+        cfg = {'method': 'sysfs', 'device': args.device, 'schedule': 'sun',
                'min': args.min, 'max': args.max, 'off_value': 0}
     if args.device_override:
         cfg['device'] = args.device
@@ -269,7 +275,7 @@ def _format_location_setting(value: object) -> str:
 def _print_location_provenance(args, day: datetime.date) -> None:
     """Show WHERE the location came from and what it resolved to.
 
-    `curve: sun` is only as good as the sun times behind it, and those come
+    A sun schedule is only as good as the sun times behind it, and those come
     from a resolution chain that is deliberately quiet (privacy-first: no
     lookup unless asked). Print the whole chain so a replay can never leave
     you guessing whether it used your actual location or a fallback.
@@ -294,7 +300,7 @@ def _print_location_provenance(args, day: datetime.date) -> None:
             why = _SOURCE_EXPLANATIONS.get(source, 'unrecognised source stamp')
             print(f"  looked up:  {source} -- {why}")
         if not display._location_enabled():
-            print("  location is OFF -- no sun times, so curve: sun falls back to the "
+            print("  location is OFF -- no sun times, so a sun schedule falls back to the "
                   "min/max midpoint.\n"
                   "  Pass --sunrise HH:MM --sunset HH:MM to replay a real shape anyway.")
         cached, _flat = display._load_location_document(display._LOCATION_CACHE_PATH)
@@ -348,14 +354,14 @@ def _simulate_day(args, cfg: dict, dry: _DryRunWriter | None) -> int:
 
     print()
     print(f"device={device}  min={min_}  max={max_}  "
-          f"mode={'curve:' + str(cfg.get('curve')) if cfg.get('curve') else 'schedule'}")
+          f"mode={'schedule: ' + cfg['schedule'] if _follows_sun(cfg) else 'fixed schedule'}")
     if lm:
         print(f"sunrise={lm['sunrise']:%H:%M}  sunset={lm['sunset']:%H:%M}  "
               f"(twilight {backlight.TWILIGHT_MINUTES}m, peak fraction {backlight.PEAK_FRACTION})")
         print(f"ramp up {lm['ramp start']:%H:%M} -> {lm['peak start']:%H:%M},  "
               f"max until {lm['peak end']:%H:%M},  ramp down to {lm['ramp end']:%H:%M}")
-    elif cfg.get('curve') == 'sun':
-        print("WARNING: no sun times available -- curve: sun will flatten to the min/max "
+    elif _follows_sun(cfg):
+        print("WARNING: no sun times available -- a sun schedule will flatten to the min/max "
               "midpoint.\n         Pass --sunrise HH:MM --sunset HH:MM for a repeatable run.")
     print(f"{ticks} ticks x {args.step_mins} simulated min, {args.tick_secs}s apart "
           f"(~{ticks * args.tick_secs:.0f}s wall){'  [DRY RUN, no sysfs writes]' if dry else ''}")
@@ -431,7 +437,7 @@ def _report(samples, cfg, min_, max_, lm,
     else:
         checks.append((True, "sysfs readback matched every write"))
 
-    if cfg.get('curve') == 'sun' and lm:
+    if _follows_sun(cfg) and lm:
         night = [(t, v) for t, v in samples if t < lm['ramp start'] or t >= lm['ramp end']]
         plateau = [(t, v) for t, v in samples if lm['peak start'] <= t < lm['peak end']]
         rising = [v for t, v in samples if lm['ramp start'] <= t <= lm['peak start']]
@@ -518,17 +524,17 @@ def _run_checks_only(device: str) -> int:
     backlight.stop_backlight()
     time.sleep(1)
 
-    print("\n--- curve: sun: full lifecycle with a synthetic sunrise/sunset ---")
+    print("\n--- schedule: sun: full lifecycle with a synthetic sunrise/sunset ---")
     sunrise = now - datetime.timedelta(hours=6)
     sunset = now + datetime.timedelta(hours=6)
     curve_cfg = {
         'method': 'sysfs', 'device': device, 'logging': True,
-        'off_value': 0, 'min': 40, 'max': 255, 'curve': 'sun',
+        'off_value': 0, 'min': 40, 'max': 255, 'schedule': 'sun',
     }
     expected = backlight.resolve_sun_curve_value(sunrise, sunset, min_=40, max_=255)
     backlight.start_backlight({'backlight': curve_cfg}, get_sun_times=lambda: (sunrise, sunset))
     readback = _read_sysfs(device)
-    print(f"after start_backlight (curve) readback={readback} (expected {expected})")
+    print(f"after start_backlight (sun) readback={readback} (expected {expected})")
     assert readback == expected
     backlight.stop_backlight()
 
@@ -634,11 +640,11 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.sunrise:
             _inject_sun_times(day, args.sunrise, args.sunset)
-        elif cfg.get('curve') == 'sun' and not args.no_frames:
+        elif _follows_sun(cfg) and not args.no_frames:
             if not _wait_for_sun_times(day, args.sun_wait):
                 print(f"WARNING: sun times not resolved within {args.sun_wait:.0f}s "
                       "(location off, offline, or slow API).")
-        # curve: sun resolves sun times through this callable; display._init()
+        # A sun schedule resolves sun times through this callable; display._init()
         # already wired it up, but --no-frames never called start_backlight().
         if backlight._get_sun_times is None:
             backlight._get_sun_times = display._get_today_sun_times
