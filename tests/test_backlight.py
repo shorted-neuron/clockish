@@ -5,6 +5,7 @@ Tests for the pure brightness-resolution functions in clockish/backlight.py:
   - resolve_sun_curve_value() -- sun-following `curve: sun` cosine ease
   - _apply(cfg, now=...) -- the `now` injection point the simulated-day
     runner (scripts/backlight_hardware_test.py) drives a whole day through
+  - current_percent() -- the `backlight` fact source's value
 """
 import datetime
 
@@ -238,3 +239,79 @@ class TestApplyNowInjection:
         monkeypatch.setattr(backlight, '_get_sun_times', lambda: (SUNRISE, SUNSET))
         solar_noon = SUNRISE + (SUNSET - SUNRISE) / 2
         assert backlight._resolve_value(self.CURVE_CFG, now=solar_noon) == 255
+
+
+class TestCurrentPercent:
+    """`fact: backlight` -- where the panel's percentage comes from."""
+
+    CFG = {'method': 'sysfs', 'device': 'test-dev', 'min': 2, 'max': 255}
+
+    @pytest.fixture
+    def active(self, monkeypatch):
+        """Pretend start_backlight() ran with CFG, with a readable device."""
+        level = {'value': 129}
+        monkeypatch.setattr(backlight, '_active_cfg', self.CFG)
+        monkeypatch.setattr(backlight, '_last_written_value', None)
+        monkeypatch.setitem(backlight._READERS, 'sysfs', lambda device: level['value'])
+        return level
+
+    def test_midpoint_of_the_configured_span(self, active):
+        # 129 sits halfway between min 2 and max 255, not halfway up 0..255
+        assert backlight.current_percent() == '50%'
+
+    def test_min_is_zero_percent(self, active):
+        active['value'] = 2
+        assert backlight.current_percent() == '0%'
+
+    def test_max_is_hundred_percent(self, active):
+        active['value'] = 255
+        assert backlight.current_percent() == '100%'
+
+    def test_no_decimal_places(self, active):
+        active['value'] = 100
+        assert backlight.current_percent() == '39%'  # 98/253 = 38.7%
+
+    def test_below_min_clamps_to_zero(self, active):
+        active['value'] = 0  # e.g. off_value, or set externally
+        assert backlight.current_percent() == '0%'
+
+    def test_above_max_clamps_to_hundred(self, active):
+        active['value'] = 300
+        assert backlight.current_percent() == '100%'
+
+    def test_unreadable_device_falls_back_to_last_written(self, monkeypatch):
+        monkeypatch.setattr(backlight, '_active_cfg', self.CFG)
+        monkeypatch.setattr(backlight, '_last_written_value', 255)
+        monkeypatch.setitem(backlight._READERS, 'sysfs', lambda device: None)
+        assert backlight.current_percent() == '100%'
+
+    def test_unknown_level_is_none(self, monkeypatch):
+        monkeypatch.setattr(backlight, '_active_cfg', self.CFG)
+        monkeypatch.setattr(backlight, '_last_written_value', None)
+        monkeypatch.setitem(backlight._READERS, 'sysfs', lambda device: None)
+        assert backlight.current_percent() is None
+
+    def test_no_backlight_configured_is_none(self, monkeypatch):
+        monkeypatch.setattr(backlight, '_active_cfg', None)
+        assert backlight.current_percent() is None
+        assert backlight.current_value() is None
+
+    def test_zero_width_span_is_none(self, monkeypatch):
+        monkeypatch.setattr(backlight, '_active_cfg', {'method': 'sysfs', 'min': 40, 'max': 40})
+        monkeypatch.setitem(backlight._READERS, 'sysfs', lambda device: 40)
+        assert backlight.current_percent() is None
+
+    def test_start_and_stop_track_the_active_config(self, monkeypatch):
+        written = []
+        monkeypatch.setitem(backlight._METHODS, 'sysfs',
+                            lambda device, value: written.append(value) or True)
+        monkeypatch.setattr(backlight, '_last_written_value', None)
+        cfg = dict(self.CFG, schedule=[{'name': 'all', 'start': '00:00',
+                                        'end': '23:59', 'value': 129}])
+        backlight.start_backlight({'backlight': cfg})
+        try:
+            assert backlight._active_cfg is cfg
+        finally:
+            backlight.stop_backlight()
+        assert backlight._active_cfg is None
+        assert backlight.current_percent() is None

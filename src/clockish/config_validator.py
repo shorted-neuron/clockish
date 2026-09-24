@@ -124,7 +124,7 @@ KNOWN_FACT_SOURCES: frozenset[str] = frozenset({
     'ip', 'hostname', 'uptime', 'version', 'config_file',
     'cpu', 'cpu_load', 'mem', 'disk', 'temp',
     'ntp_status', 'ntp_upstream', 'ntp_all',
-    'wireguard',
+    'wireguard', 'backlight',
     'wifi_status', 'wifi_ssid', 'wifi_signal', 'wifi_quality', 'wifi_all',
     # new built-in facts
     'location', 'daytime', 'nighttime',

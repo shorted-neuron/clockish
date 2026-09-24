@@ -673,6 +673,7 @@ def _get_fact(source: str, options: dict | None = None) -> str:
         'wifi_signal':  lambda: get_wifi_info()[2],
         'wifi_quality': lambda: get_wifi_info()[3],
         'wifi_all':     lambda: "  ".join(get_wifi_info()),
+        'backlight':    lambda: backlight.current_percent() or '',
         # system location + day/night facts
         'location':       get_system_location,
         'daytime':        get_daytime,
@@ -697,6 +698,7 @@ _FACT_DEFAULT_LABELS: dict[str, str] = {
     'ntp_upstream': 'ntp sources ',
     'ntp_all':      'ntp ',
     'wireguard':    'wg ',
+    'backlight':    'bl ',
     'wifi_status':  'wifi ',
     'wifi_ssid':    'ssid ',
     'wifi_signal':  'signal ',

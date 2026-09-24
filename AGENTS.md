@@ -285,6 +285,7 @@ background-thread-fetched raw value:
 | `ntp_status`   | synchronized/unsync (chronyc/timedatectl)                        |
 | `ntp_upstream` | number of upstream sources                                       |
 | `wireguard`    | wg status (stubbed if no wg)                                     |
+| `backlight`    | current brightness as a whole % of the configured `min`..`max`   |
 | `wifi_*`       | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
 | `location`     | resolved location as "City, Country (lat,lon)"; empty when disabled |
 | `location.*`   | one field of it (`city`, `region`, `country_code`, `lat`, ...)    |
@@ -486,6 +487,17 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
 - `config_validator.py` validates the whole block: required keys, `method` enum, 0-255 ranges,
   `min <= max`, exactly one of `schedule`/`curve` present, `curve` enum, `HH:MM` format, and
   schedule-entry overlap (midnight-wrap aware).
+
+**`fact: backlight`**: `current_percent()` reports where the panel sits in its own configured
+`min`..`max` span -- `min` is 0%, `max` is 100%, whole numbers only (`min: 2`, `max: 255`, level
+129 -> `50%`). Deliberately NOT a percentage of 0..255: the useful range is what was configured,
+and a display whose `min: 40` is its dimmest legible level should read 0% there, not 16%.
+`current_value()` reads the level back from the device (`_READERS`, the read-side twin of
+`_METHODS`) rather than trusting `_last_written_value`, so a level changed outside clockish shows
+up honestly; it falls back to the last written value when the device can't be read. Levels outside
+the span clamp to 0/100%. The panel renders empty when no `backlight:` block is configured --
+`_active_cfg` (set by `start_backlight()`, cleared by `stop_backlight()`) is what the fact reads
+min/max/device from.
 
 **Verified against real hardware** (SSH to a Pi with a `/sys/class/backlight/10-0045/brightness`
 DSI panel): `_write_sysfs()` and the full `start_backlight()`/`stop_backlight()` lifecycle both

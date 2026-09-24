@@ -140,6 +140,20 @@ rows:
         font_size: 12px
         justify: left
 
+  # Unrelated to location, but it is the other thing driven by sun times when
+  # they exist: with location disabled a `curve: sun` backlight has none, so it
+  # holds the min/max midpoint. This reads the level whatever set it.
+  - name: backlight
+    height: 5%
+    background: black
+    panels:
+      - type: fact
+        source: backlight
+        label: "Backlight: "
+        color: orange
+        font_size: 12px
+        justify: left
+
   # The clock is unaffected: local time comes from the system clock and the TZ
   # database, never from the location feature. Disabling location does not stop
   # clockish telling the time.

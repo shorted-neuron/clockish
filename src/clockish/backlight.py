@@ -54,6 +54,11 @@ _CHECK_INTERVAL_SECS = 600  # 10 minutes -- see AGENTS.md, no need for finer gra
 TWILIGHT_MINUTES = 50
 PEAK_FRACTION = 0.25
 
+#: The `backlight:` block currently driving the display, set by
+#: start_backlight(). Kept so current_percent() can report against the same
+#: min/max/device the scheduler is writing to.
+_active_cfg: dict | None = None
+
 _backlight_thread: threading.Thread | None = None
 _backlight_stop_event = threading.Event()
 _backlight_wake_event = threading.Event()
@@ -176,9 +181,61 @@ def _write_sysfs(device: str, value: int) -> bool:
         return False
 
 
+def _read_sysfs(device: str) -> int | None:
+    """Read /sys/class/backlight/<device>/brightness. None if unreadable."""
+    try:
+        with open(f"/sys/class/backlight/{device}/brightness") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
 _METHODS = {
     'sysfs': _write_sysfs,
 }
+
+_READERS = {
+    'sysfs': _read_sysfs,
+}
+
+
+def current_value() -> int | None:
+    """The brightness the hardware is actually at, or None if unknown.
+
+    Read back from the device rather than trusting `_last_written_value`, so a
+    level changed outside clockish (someone echoing into sysfs) is reported
+    honestly. Falls back to the last written value when the device can't be
+    read -- and to None when no backlight is configured at all.
+    """
+    cfg = _active_cfg
+    if not cfg:
+        return None
+    read_fn = _READERS.get(cfg.get('method'))
+    value = read_fn(cfg.get('device', '')) if read_fn else None
+    return value if value is not None else _last_written_value
+
+
+def current_percent() -> str | None:
+    """Current brightness as a whole percentage of the configured min..max span.
+
+    min..max is the useful range the display was configured for, not 0..255, so
+    this answers "how far up its own range is the panel" -- min reads 0%, max
+    reads 100%. Values outside the span (set externally, or an `off_value`
+    below min) clamp rather than reporting a negative or >100%.
+
+    Returns None when there is no backlight config or the level is unknown;
+    the fact panel renders that as an empty string.
+    """
+    cfg = _active_cfg
+    value = current_value()
+    if not cfg or value is None:
+        return None
+    min_, max_ = cfg.get('min', 0), cfg.get('max', 255)
+    span = max_ - min_
+    if span <= 0:
+        return None
+    pct = round((value - min_) / span * 100)
+    return f"{min(max(pct, 0), 100)}%"
 
 
 def _resolve_value(cfg: dict, now: datetime.datetime | None = None) -> int:
@@ -256,13 +313,14 @@ def start_backlight(display_cfg: dict, get_sun_times: GetSunTimes | None = None)
     `get_sun_times` is only needed for `curve: sun` configs -- see the
     module docstring for why it's a callable instead of an import.
     """
-    global _backlight_thread, _get_sun_times
+    global _backlight_thread, _get_sun_times, _active_cfg
     cfg = display_cfg.get('backlight')
     if not cfg:
         return
 
     _get_sun_times = get_sun_times
-    stop_backlight()
+    stop_backlight()          # clears _active_cfg; re-set it below
+    _active_cfg = cfg
     _backlight_stop_event.clear()
     _backlight_wake_event.clear()
 
@@ -274,7 +332,8 @@ def start_backlight(display_cfg: dict, get_sun_times: GetSunTimes | None = None)
 
 
 def stop_backlight() -> None:
-    global _backlight_thread
+    global _backlight_thread, _active_cfg
+    _active_cfg = None
     try:
         _backlight_stop_event.set()
         _backlight_wake_event.set()  # wake to let it exit quickly
