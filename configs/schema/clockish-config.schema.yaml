@@ -250,7 +250,7 @@ properties:
                 description: "bit_clock only: lit bit color (default crimson)."
               off_color:
                 type: string
-                description: "bit_clock only: unlit bit color (default dimred)."
+                description: "bit_clock: unlit bit color (default dimred). clock: dim color for unlit segments, drawn under the time as 8s (7-segment fonts such as DSEG7); default none."
               epoch:
                 description: "bit_clock only: ISO-8601 date/datetime counted from (default 1970-01-01, UTC if no offset)."
               json_path:

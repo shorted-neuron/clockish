@@ -366,6 +366,7 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'clock': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
         'background', 'label', 'timezone', 'time_format', 'transform', 'padding',
+        'off_color',
     }),
     'date': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',

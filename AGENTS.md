@@ -133,6 +133,7 @@ rows:
       - type: clock | date | fact | text | divider | wifi_graphic | bit_clock | debug | blank
         # common: color, font_size, font, font_behavior, width, background, justify, padding
         # clock/date: timezone, time_format / date_format
+        # clock: off_color -- dim 8s under the time, so unlit segments of a DSEG7 font show
         # fact: source (required) -- built-in (ip, cpu, mem, ...) or 'cached-facts.<name>'
         # fact + cached-facts source: json_path or pattern (exactly one) to extract a field
         # text: label
@@ -161,7 +162,10 @@ Custom fonts (`font: my_font`) resolved at init; `font_size` determines final si
 
 All renderers: `(panel_dict, px, py, pw, ph, ...)` → draw on `ImageDraw`.
 
-- **clock, date**: render time/date string centered or justified in rect
+- **clock, date**: render time/date string centered or justified in rect. Clock `off_color:` draws
+  the time with every digit as `8` in that colour first, then the real time over it; both passes
+  are placed from the 8s (`_draw_text_line(place_text=)`), since justify uses ink extent and
+  `1` inks narrower than `8`. Needs a monospace segment font (DSEG7); not honoured by `stretch_x`.
 - **fact**: query system info (ip, hostname, cpu%, mem, disk, temp, ntp, wifi_*) OR extract a
   field (via `json_path`/`pattern`) from a `cached-facts.<name>` background-fetched source,
   format with label

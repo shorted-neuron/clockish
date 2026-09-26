@@ -2682,7 +2682,8 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
                     x_offset: int = 0, justify: str = 'center',
                     behavior: str = 'default',
                     img: 'Image.Image | None' = None,
-                    measure_text: str | None = None) -> None:
+                    measure_text: str | None = None,
+                    place_text: str | None = None) -> None:
     """Draw a single line of text within the panel rect.
 
     Vertical placement: always centred within [py, py+ph).
@@ -2710,6 +2711,10 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
     per-frame value, so the fitted point size doesn't jitter frame-to-frame
     just because e.g. an hour crossed a 1-digit/2-digit boundary. *text*
     itself is still what's actually drawn and positioned.
+
+    `place_text`, if given, is used INSTEAD OF *text* for horizontal
+    placement only -- lets two draws of different strings share one origin
+    (clock `off_color:` draws unlit 8s, then the real digits over them).
     """
     if behavior == 'stretch_x':
         if img is not None:
@@ -2739,9 +2744,9 @@ def _draw_text_line(d: ImageDraw.ImageDraw, px: int, py: int, pw: int, ph: int,
         # were the wider advance box, undoing the whole point of fitting to
         # real ink (text would visibly fall short of the edge it was sized
         # to reach).
-        left_off, text_w = _ink_extent(f, text)
+        left_off, text_w = _ink_extent(f, place_text or text)
     else:
-        left_off, text_w = 0, f.getbbox(text)[2]   # unchanged: advance width
+        left_off, text_w = 0, f.getbbox(place_text or text)[2]   # unchanged: advance width
 
     if justify == 'right':
         tx = px + pw - text_w - left_off
@@ -2780,8 +2785,18 @@ def _render_clock_panel(p: dict, px: int, py: int, pw: int, ph: int,
     measure_text = None
     if behavior in ('scale', 'scale_numeric', 'stretch_y') and getattr(time_f, 'path', None):
         measure_text = _clock_reference_text(fmt, str(time_f.path), p.get('transform'))
+    # off_color: unlit segments. Draw every digit as a dim 8 first, then the
+    # real time on top; both placed from the 8s so monospace segment fonts
+    # (DSEG7) line up segment-for-segment.
+    off_color = p.get('off_color')
+    place: dict = {}
+    if off_color:
+        place['place_text'] = re.sub(r'\d', '8', time_str)
+        _draw_text_line(d, px, py, pw, ph, place['place_text'], time_f, off_color,
+                         justify=justify, behavior=behavior, img=img,
+                         measure_text=measure_text, **place)
     _draw_text_line(d, px, py, pw, ph, time_str, time_f, color, justify=justify,
-                     behavior=behavior, img=img, measure_text=measure_text)
+                     behavior=behavior, img=img, measure_text=measure_text, **place)
 
     if label_str:
         time_w = int(time_f.getbbox(time_str)[2])
