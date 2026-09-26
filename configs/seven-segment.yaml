@@ -41,6 +41,7 @@ rows:
     height: "50%"
     panels:
       - type: clock
+        off_color: "3f0000"
         justify: center
         timezone: US/Mountain
         time_format: "%-I:%M"
@@ -67,6 +68,7 @@ rows:
         color: darkorange
         font_size: normal
       - type: clock
+        off_color: "281000"
         justify: right
         timezone: US/Mountain
         time_format: 24hs
