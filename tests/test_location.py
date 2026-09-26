@@ -397,15 +397,18 @@ class TestContribPreview:
 class TestDayNight:
 
     def _set_sun(self, monkeypatch, sunrise_hour, sunset_hour):
+        # Hours count from today's midnight, so 24 is tomorrow 00:00.
         today = datetime.date.today()
+        midnight = datetime.datetime.combine(today, datetime.time(0, 0))
         monkeypatch.setattr(cd, '_SUN_TIMES', {today.isoformat(): {
-            'sunrise': datetime.datetime.combine(today, datetime.time(sunrise_hour, 0)),
-            'sunset': datetime.datetime.combine(today, datetime.time(sunset_hour, 0)),
+            'sunrise': midnight + datetime.timedelta(hours=sunrise_hour),
+            'sunset': midnight + datetime.timedelta(hours=sunset_hour),
             'fetched_at': datetime.datetime.now(),
         }})
 
     def test_midday_is_daytime(self, monkeypatch):
-        self._set_sun(monkeypatch, 0, 23)
+        # Sunset 24 (tomorrow midnight), not 23: at 23:xx a 23:00 sunset has passed.
+        self._set_sun(monkeypatch, 0, 24)
 
         assert cd.get_daytime() == 'true'
         assert cd.get_nighttime() == 'false'

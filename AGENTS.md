@@ -94,7 +94,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 
 | File                  | Role                                                                                                                            |
 |-----------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| `display.py`          | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, divider, debug. |
+| `display.py`          | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, bit_clock, divider, debug. |
 | `render_preview.py`   | PNG export (any platform). Stubs hardware; runs render pipeline offline.                                                        |
 | `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based.                                                |
 | `backlight.py`        | Optional `display.backlight:` brightness scheduler -- background thread, sysfs writer.                                          |
@@ -130,12 +130,14 @@ rows:
     background: navy  # optional; default black
     font_behavior: default  # optional row-level default: default|scale|scale_numeric|stretch_y|stretch_x
     panels:
-      - type: clock | date | fact | text | divider | wifi_graphic | debug | blank
+      - type: clock | date | fact | text | divider | wifi_graphic | bit_clock | debug | blank
         # common: color, font_size, font, font_behavior, width, background, justify, padding
         # clock/date: timezone, time_format / date_format
+        # clock: off_color -- dim 8s under the time, so unlit segments of a DSEG7 font show
         # fact: source (required) -- built-in (ip, cpu, mem, ...) or 'cached-facts.<name>'
         # fact + cached-facts source: json_path or pattern (exactly one) to extract a field
         # text: label
+        # bit_clock: bits, bit_order (msb|lsb), bit_rows, shape (circle|square|rect), on_color, off_color, epoch
         # clock/date/fact/text: transform (see below)
 
 display:  # optional here; search display.yaml alongside config or ~/.config/clockish/
@@ -160,13 +162,22 @@ Custom fonts (`font: my_font`) resolved at init; `font_size` determines final si
 
 All renderers: `(panel_dict, px, py, pw, ph, ...)` → draw on `ImageDraw`.
 
-- **clock, date**: render time/date string centered or justified in rect
+- **clock, date**: render time/date string centered or justified in rect. Clock `off_color:` draws
+  the time with every digit as `8` in that colour first, then the real time over it; both passes
+  are placed from the 8s (`_draw_text_line(place_text=)`), since justify uses ink extent and
+  `1` inks narrower than `8`. Needs a monospace segment font (DSEG7); not honoured by `stretch_x`.
 - **fact**: query system info (ip, hostname, cpu%, mem, disk, temp, ntp, wifi_*) OR extract a
   field (via `json_path`/`pattern`) from a `cached-facts.<name>` background-fetched source,
   format with label
 - **text**: static label
 - **divider**: horizontal line
 - **wifi_graphic**: arc-based signal-strength display (0–4 bars + dot)
+- **bit_clock**: whole seconds since `epoch:` (default 1970-01-01 UTC) mod `2**bits` (default 32),
+  one cell per bit, row-major across `bit_rows:` rows; `bit_order: msb` (default) puts the high
+  bit first. `circle`/`square` share one size (fits the smallest cell); `rect` fills its cell; `on_color`/`off_color` (default `CRIMSON`/`DIMRED`; both resolved by
+  `_resolve_colors()`). Time comes from `tz_cache['local']`, so preview mock/time-samples and the
+  simulated-day runner's injected clock drive it like clock panels. Bad values fall back to
+  defaults at render time (validator warns).
 - **debug**: per-frame timings (prep, ntp, tz, draw, display ms)
 - **blank**: reserved space, no draw
 
@@ -285,6 +296,7 @@ background-thread-fetched raw value:
 | `ntp_status`   | synchronized/unsync (chronyc/timedatectl)                        |
 | `ntp_upstream` | number of upstream sources                                       |
 | `wireguard`    | wg status (stubbed if no wg)                                     |
+| `backlight`    | current brightness as a whole % of the configured `min`..`max`   |
 | `wifi_*`       | from `get_wifi_info()` tuple (status, ssid, signal_dbm, quality) |
 | `location`     | resolved location as "City, Country (lat,lon)"; empty when disabled |
 | `location.*`   | one field of it (`city`, `region`, `country_code`, `lat`, ...)    |
@@ -396,9 +408,10 @@ keep that pattern, or "makes no network call" stops being a real assertion.
 
 Optional `backlight:` block under a display profile's `display:` section (see
 `configs/display/framebuffer.yaml` for a full worked example). Runs a background daemon thread
-(`clockish/backlight.py`) that checks a simple time-of-day `schedule:` roughly every 10 minutes
-and writes the resulting brightness level to the backlight hardware -- decoupled from the render
-loop the same way `cached-facts` is.
+(`clockish/backlight.py`) that computes a brightness level roughly every 10 minutes from
+`schedule:` -- EITHER a fixed list of time-of-day entries OR a scalar naming the sun-following
+curve -- and writes it to the backlight hardware, decoupled from the render loop the same way
+`cached-facts` is.
 
 ```yaml
 display:
@@ -409,6 +422,8 @@ display:
     off_value: 0         # fully off. NOT named 'off' -- see gotcha below
     min:       40
     max:       255
+
+    # EITHER a fixed list of time-of-day entries:
     schedule:
       - name: night
         start: "22:00"   # 24h "HH:MM"; end < start wraps past midnight
@@ -418,7 +433,21 @@ display:
         start: "07:00"
         end:   "19:59"
         value: 255
+
+    # OR the sun-following curve, as a scalar:
+    # schedule: sun          # 'follow-sun' and 'sun-curve' are accepted spellings
 ```
+
+**One key, two shapes**: `schedule:` is the only way to say how brightness moves through the day.
+A list means fixed times; a string means follow the sun. `_resolve_value()` tells them apart with
+one `isinstance(schedule, str)` -- which is why there is no second `curve:` key to keep mutually
+exclusive with it, and no "exactly one of" rule to validate. The accepted scalars live in
+`SUN_SCHEDULE_VALUES` in `backlight.py`, **imported** by `config_validator.py` -- unlike
+`KNOWN_FONT_BEHAVIORS`, no duplication: `backlight.py` is stdlib-only, so the import is cheap and
+one-way. An unknown scalar, or no `schedule:` at all, falls back to the `min`/`max` midpoint at
+runtime and is an error at validation time. Any key not in `_BACKLIGHT_ATTRS` (e.g. a stray
+`curve:`) is an **error** in the semantic walker, not a warning -- it has to hold even when
+jsonschema is missing and the schema layer (`additionalProperties: false`) is skipped.
 
 **Why `off_value` and not `off`**: an unquoted `off:` YAML key is parsed under YAML 1.1 (PyYAML's
 default) as the boolean `False`, not the string `"off"` -- silently corrupting the config (the
@@ -430,28 +459,108 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
 - `resolve_scheduled_value(schedule, min_, max_, now)` -- pure function, no I/O. Matches `now`
   against each entry's `start`/`end` (inclusive both ends; `end < start` wraps past midnight).
   Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`).
+- `resolve_sun_curve_value(sunrise, sunset, min_, max_, now, twilight_minutes, peak_fraction)` --
+  pure function for a sun schedule. An **eased trapezoid**, not a bump: the display should sit at
+  `max_` for most of the day and pass through the in-between levels as briefly as looks natural.
+
+  ```
+  min_ ______/^^^^^^^^^^^^^^^^^^^^^\______ min_
+            ^         plateau       ^
+  sunrise - twilight             sunset + twilight
+  ```
+
+  - `min_` before `sunrise - TWILIGHT_MINUTES` and from `sunset + TWILIGHT_MINUTES` on.
+  - Ramp up from there to `max_` at `PEAK_FRACTION` of the way from sunrise to sunset;
+    mirrored ramp down over the last `PEAK_FRACTION`, finishing at `min_` past sunset.
+  - Flat `max_` in between -- the middle 50% of daylight at the defaults.
+
+  `TWILIGHT_MINUTES = 50` (module constant, overridable per call): the sky is already usefully
+  light before the sun clears the horizon and still light after it drops below, so a backlight
+  keyed strictly to sunrise/sunset lags the actual room. Roughly the end of nautical twilight at
+  mid latitudes. `PEAK_FRACTION = 0.25` gives the half-day plateau; it's clamped below `0.5`,
+  where the two ramps would cross and there'd be no plateau left.
+
+  Each ramp is a **half**-period cosine (`(1 - cos(pi*u)) / 2`, `u` = fraction of THAT RAMP
+  elapsed), which has zero slope at both ends -- leaving the flat night level and meeting the
+  flat plateau with no visible kink at either junction. Applying that same half-period cosine
+  across the whole sunrise-to-sunset span instead of per ramp is the classic mistake here: it
+  yields a monotonic all-day climb that only reaches `max_` at sunset. An earlier version used a
+  full-period cosine bump across all of daylight (`1 - cos(2*pi*t)`, peaking at solar noon) --
+  correct-looking but it holds `max_` for about a minute a day, which is not what the feature is
+  for. If this curve ever looks like a smooth hill rather than a flat-topped plateau, one of
+  those two shapes has crept back in.
+- A sun schedule needs today's sunrise/sunset. Rather than importing `display.py` (circular --
+  it already imports `backlight.py` -- and it'd pull in hardware-driver code this module has no
+  business depending on), `start_backlight(display_cfg, get_sun_times=...)` takes a callable;
+  `display.py`'s `_get_today_sun_times()` reads its own `_SUN_TIMES` global and is passed in at
+  the call site. Returns `None` before the first sunrise/sunset fetch completes, in which case
+  `_apply()` falls back to the `min`/`max` midpoint (same shape as a gap in a list schedule).
 - `method:` is a dispatch key (`_METHODS` dict) so other control schemes (GPIO pin toggle,
   PWM, etc.) can be added later without reshaping the module -- only `'sysfs'` is implemented
   today, which writes the integer to `/sys/class/backlight/<device>/brightness`.
 - `_backlight_worker()` mirrors `display.py`'s `_sun_times_worker()` threading pattern exactly:
   a daemon thread looping on `event.wait(timeout=600)`, woken early by config reload.
-- `start_backlight(display_cfg)` (called from `_init_layout()`, so it re-applies on every config
-  reload too) applies the current scheduled value **synchronously before returning** -- a restart
-  never leaves the backlight at a stale level (e.g. full brightness at 2am) until the first
-  10-minute tick.
+- `start_backlight(display_cfg, get_sun_times=None)` (called from `_init_layout()`, so it
+  re-applies on every config reload too) applies the current value **synchronously before
+  returning** -- a restart never leaves the backlight at a stale level (e.g. full brightness at
+  2am) until the first 10-minute tick.
 - Writes are de-duplicated: `_apply()` only touches sysfs (and only logs, if `logging: true`)
   when the computed value actually changed since the last write.
 - `config_validator.py` validates the whole block: required keys, `method` enum, 0-255 ranges,
-  `min <= max`, `HH:MM` format, and schedule-entry overlap (midnight-wrap aware).
+  `min <= max`, `schedule` present and either a known sun scalar or a non-empty list, `HH:MM`
+  format, and schedule-entry overlap (midnight-wrap aware).
+
+**`fact: backlight`**: `current_percent()` reports where the panel sits in its own configured
+`min`..`max` span -- `min` is 0%, `max` is 100%, whole numbers only (`min: 2`, `max: 255`, level
+129 -> `50%`). Deliberately NOT a percentage of 0..255: the useful range is what was configured,
+and a display whose `min: 40` is its dimmest legible level should read 0% there, not 16%.
+`current_value()` reads the level back from the device (`_READERS`, the read-side twin of
+`_METHODS`) rather than trusting `_last_written_value`, so a level changed outside clockish shows
+up honestly; it falls back to the last written value when the device can't be read. Levels outside
+the span clamp to 0/100%. The panel renders empty when no `backlight:` block is configured --
+`_active_cfg` (set by `start_backlight()`, cleared by `stop_backlight()`) is what the fact reads
+min/max/device from.
+
+**Verified against real hardware** (SSH to a Pi with a `/sys/class/backlight/10-0045/brightness`
+DSI panel): `_write_sysfs()` and the full `start_backlight()`/`stop_backlight()` lifecycle both
+confirmed working against the actual sysfs file (readback matched every write), including the
+`logging: true` message. No `sudo` needed -- the `video` group already has write access to the
+brightness file.
+
+**Simulated-day runner** (`scripts/backlight_hardware_test.py`): replays a whole day against the
+real panel in ~2.5 minutes -- one wall-second per tick, each tick advancing a simulated clock by 10
+simulated minutes (the worker's own cadence), running the REAL `backlight._apply()` + sysfs write
+for that moment AND a REAL `display.show_rows()` frame with the simulated time injected, so the
+clock on screen agrees with the brightness being watched. Prints a per-tick bar, then checks the
+collected samples (night == min, a flat `max` plateau centred on solar noon and covering ~50% of
+daylight, monotonic ramps either side, every sysfs readback matched) and exits non-zero on failure
+-- the plateau checks are what catch the wrong-curve-shape regressions described above.
+
+Before the replay it prints a **location provenance block** -- the setting and which file it came
+from (config > `~/.config/clockish/location.yaml` > runtime cache), what it resolved to and by
+which method, the cache file's own stamp, and the sun times in use (fetched, or injected via
+`--sunrise/--sunset`). A sun schedule is only as good as the sun times behind it, and the resolution
+chain is deliberately quiet, so a replay should never leave you guessing which location it used.
+Coordinates follow the same gating as the rest of clockish: ~11 km rounding unless
+`--debug-location` is passed.
+
+```bash
+python3 scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware
+python3 scripts/backlight_hardware_test.py --dry-run --no-frames \
+        --tick-secs 0 --sunrise 06:22 --sunset 19:48            # instant, offline, dev box
+python3 scripts/backlight_hardware_test.py --checks-only        # old unit-level hw checks
+```
+
+Time injection lives entirely in that script (it monkeypatches `display._now_in_tz`,
+`get_daytime`, `get_nighttime`, and hands `display._init()` a synthetic `sys.argv`). The only
+accommodation in shipped source is the optional `now` parameter on `backlight._apply()` /
+`_resolve_value()` -- defaulting to `None` (= real now), so `_backlight_worker` is unchanged.
+Keep it that way: a new backlight behaviour should stay drivable by passing a `now`, not by
+patching module-level `datetime`.
 
 **TODO -- other backlight control methods**: `st7789` (and other non-sysfs displays) need a
 different brightness-control mechanism (GPIO pin? different sysfs path?) -- untested, needs a
 real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extension point.
-
-**TODO -- sun-following brightness curve**: replace the fixed two-entry schedule with a
-continuous ramp keyed off `display.py`'s `_SUN_TIMES` (sunrise/sunset), so brightness eases from
-`min` at dawn up to `max` through the day and back down at dusk -- still on the same ~10-minute
-worker cadence (no photocell sensor, so this is the best approximation available).
 
 ### Display drivers
 
@@ -690,6 +799,13 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 2. Write a `_write_<method>(device, value) -> bool` function in `backlight.py`, add it to
    `_METHODS`
 3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklight`
+
+**Add a backlight curve** (currently only the sun curve exists, alongside a list `schedule:`):
+1. Add its scalar name to `SUN_SCHEDULE_VALUES` in `backlight.py` (the validator imports it) --
+   or, for a genuinely different curve, a new set alongside it, imported the same way
+2. Write a `resolve_<name>_curve_value(..., min_, max_, now) -> int` pure function in
+   `backlight.py`, wire it into `_resolve_value()`'s scalar-`schedule` branch
+3. Test in `test_backlight.py` + `test_config_validator.py::TestBacklightSunSchedule`
 
 ---
 

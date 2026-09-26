@@ -63,10 +63,18 @@ display:
     min:       40
     max:       255
 
-    # Time-of-day schedule. Each entry's `start`/`end` is a 24h "HH:MM" local
-    # time; `end` before `start` (like "night" below) wraps past midnight.
-    # Entries must not overlap (checked at validation time). Any time of day
-    # NOT covered by an entry uses the midpoint between min and max.
+    # schedule: is EITHER a fixed list of time-of-day entries (below) OR the
+    # scalar `sun` (`follow-sun` / `sun-curve` mean the same thing): min at
+    # night, an eased ramp starting before sunrise, flat max across the middle
+    # of the day, mirrored ramp ending after sunset. A sun schedule needs a
+    # location -- see AGENTS.md "location".
+    #
+    #   schedule: sun
+    #
+    # As a list: each entry's `start`/`end` is a 24h "HH:MM" local time; `end`
+    # before `start` (like "night" below) wraps past midnight. Entries must not
+    # overlap (checked at validation time). Any time of day NOT covered by an
+    # entry uses the midpoint between min and max.
     schedule:
       - name: night
         start: "22:00"

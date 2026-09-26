@@ -1,0 +1,101 @@
+---
+# bit-clock.yaml  --  clockish config
+# ---------------------------------------------------------------------------
+# Binary clocks: seconds since an epoch, drawn as a row (or grid) of bits.
+# Redrawn every frame (once a second) like any other panel.
+#
+# bit_clock keys (all optional):
+#   bits       number of bits (default 32); value wraps mod 2**bits
+#   bit_order  msb (default, most significant bit leftmost) | lsb
+#   bit_rows   wrap the bits into N rows, row-major (default 1)
+#   shape      circle (default) | square (circle-sized) | rect (fills the cell)
+#   on_color   lit bit   (default crimson)
+#   off_color  unlit bit (default dimred)
+#   epoch      ISO-8601 date/datetime counted from (default 1970-01-01, UTC)
+# ---------------------------------------------------------------------------
+
+orientation: landscape
+
+# 3.5" ILI9486 in landscape; keeps the PNG preview honest.
+preview_size: "480x320"
+
+rows:
+  - name: header
+    height: 12%
+    panels:
+      - type: text
+        width: 65%
+        label: "bit clocks demo"
+        color: grey
+        font_size: auto
+      - type: fact
+        source: version
+        label: "default"
+        color: dimgrey
+        font_size: auto
+
+  # 32-bit Unix time, one line, orange squares.
+  - name: unix-32
+    height: 12%
+    panels:
+      - type: text
+        width: 22%
+        label: "32-bit MSB"
+        color: grey
+        font_behavior: scale
+      - type: bit_clock
+        shape: square
+        on_color: orange
+        off_color: rust
+
+  # 35 bits, MSB first, default epoch -- good until the year 3058.
+  - name: unix-35
+    height: 12%
+    panels:
+      - type: text
+        width: 22%
+        label: "35-bit MSB"
+        color: grey
+        font_behavior: scale
+      - type: bit_clock
+        bits: 35
+        bit_order: msb
+
+  - name: clock
+    height: 22%
+    panels:
+      - type: clock
+        time_format: 24hs
+        color: crimson
+        font_size: auto
+
+  # Same value, LSB first, square LEDs, wrapped into a 4x8 grid.
+  - name: unix-grid
+    height: 27%
+    panels:
+      - type: text
+        width: 22%
+        label: "32-bit LSB"
+        color: grey
+        font_behavior: scale
+      - type: bit_clock
+        bit_order: lsb
+        bit_rows: 4
+        shape: rect
+        on_color: seagreen
+        off_color: darkgreen
+
+  # 16 bits counting from a custom epoch; rolls over every ~18 hours.
+  - name: custom-epoch
+    height: 15%
+    panels:
+      - type: text
+        width: 22%
+        label: "16-bit MSB 2026"
+        color: grey
+        font_behavior: scale
+      - type: bit_clock
+        bits: 16
+        epoch: "2026-01-01T00:00:00Z"
+        on_color: gold
+        off_color: dimgrey

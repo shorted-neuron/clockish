@@ -57,7 +57,7 @@ properties:
         description: |
           Optional backlight brightness scheduler. Omit this whole block if the
           display has no software-controllable backlight. See AGENTS.md
-          ("backlight") and configs/display/framebuffer.yaml for a worked example.
+          "backlight" and configs/display/framebuffer.yaml.
         required: [method, device, off_value, min, max, schedule]
         additionalProperties: false
         properties:
@@ -93,30 +93,40 @@ properties:
             maximum: 255
             description: Full brightness (usually 255, your panel's ceiling).
           schedule:
-            type: array
-            minItems: 1
             description: |
-              Time-of-day brightness schedule. Entries must not overlap. Any time
-              of day not covered by an entry uses the midpoint between min and max.
-            items:
-              type: object
-              required: [name, start, end, value]
-              additionalProperties: false
-              properties:
-                name:
-                  type: string
-                start:
-                  type: string
-                  pattern: '^([01]\d|2[0-3]):[0-5]\d$'
-                  description: 24h "HH:MM" local time. May be later than 'end' to wrap past midnight.
-                end:
-                  type: string
-                  pattern: '^([01]\d|2[0-3]):[0-5]\d$'
-                  description: 24h "HH:MM" local time, inclusive.
-                value:
-                  type: integer
-                  minimum: 0
-                  maximum: 255
+              How brightness is chosen through the day. Either a scalar naming the
+              sun-following curve, or a list of fixed time-of-day entries.
+            oneOf:
+              - type: string
+                enum: [sun, follow-sun, sun-curve]
+                description: |
+                  Follow the sun: 'min' at night, an eased ramp starting before
+                  sunrise, flat 'max' across the middle of the day, mirrored ramp
+                  ending after sunset. All three spellings mean the same thing.
+              - type: array
+                minItems: 1
+                description: |
+                  Fixed time-of-day schedule. Entries must not overlap. Any time of
+                  day not covered by an entry uses the midpoint between min and max.
+                items:
+                  type: object
+                  required: [name, start, end, value]
+                  additionalProperties: false
+                  properties:
+                    name:
+                      type: string
+                    start:
+                      type: string
+                      pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+                      description: 24h "HH:MM" local time. May be later than 'end' to wrap past midnight.
+                    end:
+                      type: string
+                      pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+                      description: 24h "HH:MM" local time, inclusive.
+                    value:
+                      type: integer
+                      minimum: 0
+                      maximum: 255
   preview_size:
     type: string
     pattern: '^\d+x\d+$'
@@ -218,7 +228,31 @@ properties:
               type:
                 type: string
                 description: 'Panel renderer. Known types:
-                  clock, date, fact, text, divider, wifi_graphic, debug, blank.'
+                  clock, date, fact, text, divider, wifi_graphic, bit_clock, debug, blank.'
+              bits:
+                type: integer
+                minimum: 1
+                description: "bit_clock only: number of bits shown (default 32); value wraps mod 2**bits."
+              bit_order:
+                type: string
+                enum: [msb, lsb]
+                description: "bit_clock only: 'msb' (default) puts the most significant bit first."
+              bit_rows:
+                type: integer
+                minimum: 1
+                description: "bit_clock only: wrap the bits into this many rows, row-major (default 1)."
+              shape:
+                type: string
+                enum: [circle, square, rect]
+                description: "bit_clock only: bit shape -- circle (default), square (circle-sized), rect (fills the cell)."
+              on_color:
+                type: string
+                description: "bit_clock only: lit bit color (default crimson)."
+              off_color:
+                type: string
+                description: "bit_clock: unlit bit color (default dimred). clock: dim color for unlit segments, drawn under the time as 8s (7-segment fonts such as DSEG7); default none."
+              epoch:
+                description: "bit_clock only: ISO-8601 date/datetime counted from (default 1970-01-01, UTC if no offset)."
               json_path:
                 type: string
                 description: |

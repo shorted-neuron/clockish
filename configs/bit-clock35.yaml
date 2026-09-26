@@ -1,0 +1,226 @@
+---
+# bit-clock35.yaml  --  clockish config
+# ---------------------------------------------------------------------------
+# Emulates the hardware bit clock in docs/more-clocks.jpeg: red 7-segment
+# HH:MM:SS behind a smoked red window, a small "away" clock above showing UK
+# time (its colon centred over the MM:SS colon), and a row of 35 red LEDs
+# counting seconds since 1970, MSB first.
+#
+# Requires the DSEG7 font (see configs/seven-segment.yaml for install notes).
+# Row heights are pixels, sized for the 480x320 preview.
+# ---------------------------------------------------------------------------
+
+orientation: landscape
+
+# 3.5" ILI9486 in landscape; keeps the PNG preview honest.
+preview_size: "480x320"
+
+cached-facts:
+  - name: sensor-outfront
+    type: url-fact
+    url: http://sensor-outfront.lan/last-json
+    interval: 10m
+    preview_response: '{"tempF": "68.5"}'
+
+  - name: norman-ok-weather
+    type: url-fact
+    url: |-
+      https://api.open-meteo.com/v1/forecast?
+      latitude=35.2&longitude=-97.4
+      &current=temperature_2m
+      &temperature_unit=fahrenheit
+    interval: 15m
+    preview_response: '{"current": {"temperature_2m": 88.2}}'
+
+fonts:
+  dseg7:
+    file: DSEG7Classic-Regular.ttf
+
+rows:
+  - name: top
+    height: 4
+    background: "140000"
+    panels:
+      - type: blank
+
+  # Away clock: digits about one seconds-segment tall.
+  - name: away
+    height: 32
+    background: "140000"
+    panels:
+      - type: blank
+        width: 270
+      - type: clock
+        width: 144
+        timezone: Europe/London
+        time_format: "%H:%M"
+        justify: center
+        color: red
+        font: dseg7
+        off_color: dimred
+        font_size: auto
+        font_behavior: scale_numeric
+      - type: blank
+
+  # About one main-digit height between the away clock and HH:MM.
+  # Away clock to HH:MM, digits to LEDs and LEDs to facts: equal gaps.
+  - name: gap-upper
+    height: 38
+    background: "140000"
+    panels:
+      - type: blank
+
+  - name: digits
+    height: 90
+    background: "140000"
+    panels:
+      - type: blank
+        width: 30
+      - type: clock
+        width: 318
+        time_format: "%H:%M:"
+        justify: right
+        color: red
+        font: dseg7
+        off_color: dimred
+        font_size: auto
+        font_behavior: scale_numeric
+      - type: clock
+        time_format: "%S"
+        justify: left
+        color: red
+        font: dseg7
+        off_color: dimred
+        font_size: auto
+        font_behavior: scale_numeric
+        padding: 15
+
+  - name: gap-lower
+    height: 34
+    background: "140000"
+    panels:
+      - type: blank
+
+  # 35 bits of Unix time, MSB first -- rolls over 3058-10-26.
+  - name: leds
+    height: 22
+    background: "140000"
+    panels:
+      - type: blank
+        width: 4%
+      - type: bit_clock
+        bits: 35
+        bit_order: msb
+        on_color: red
+        off_color: dimred
+        padding: 2
+      - type: blank
+        width: 4%
+
+  - name: gap-facts
+    height: 28
+    background: "140000"
+    panels:
+      - type: blank
+
+  # Last two rows of masterclock.yaml (800x480), font sizes scaled x2/3.
+  # masterclock rust -> dimred; burntsienna/grey -> darkred.
+  - name: row3
+    height: 36
+    background: "140000"
+    panels:
+      - type: wifi_graphic
+        width: 7%
+        color: dimred
+#      - type: fact
+#        width: 15%
+#        source: wifi_status
+#        color: darkred
+#        font_size: small
+      - type: fact
+        width: 43%
+        justify: left
+        source: hostname
+        color: darkred
+        font_size: tiny
+      - type: text
+        width: 35%
+        justify: right
+        label: "outside: "
+        color: dimred
+        font_size: 16px
+
+      - type: fact
+        width: 10%
+        source: cached-facts.sensor-outfront
+        json_path: "tempF"
+        # label: "Outside: "
+        justify: right
+        color: dimred
+        font_size: 27px
+        transform:
+          - round: 0
+
+      - type: text
+        width: 5%
+        label: "°F"
+        color: dimred
+        font_size: 16px
+
+
+  - name: row4
+    height: 36
+    background: "140000"
+    panels:
+      - type: fact
+        width: 15%
+        justify: left
+        source: ip
+        color: dimred
+        font_size: 13px
+      - type: fact
+        justify: center
+        width: 15%
+        source: backlight  # ntp_all
+        color: darkred
+        font_size: 13px
+      - type: fact
+        width: 10%
+        justify: left
+        source: cpu
+        transform: [round]
+        color: dimred
+        font_size: 19px
+
+      - type: text
+        width: 30%
+        justify: right
+        label: "Norman, OK: "
+        color: dimred
+        font_size: 16px
+      - type: clock
+        width: 15%
+        # justify: center
+        timezone: US/Central
+        time_format: "%-I:%M%p"
+        color: dimred
+        font_size: 20px  # masterclock 42px; DejaVu is wider than NixieOne
+        transform:
+          - lower
+          - replace: {from: 'm', to: ''}  # replace am or pm with just a or p
+      - type: fact
+        width: 10%
+        source: cached-facts.norman-ok-weather
+        json_path: "current.temperature_2m"
+        # label: "Norman OK: "
+        justify: right
+        color: dimred
+        font_size: 27px
+        transform:
+          - round: 0
+
+      - type: text
+        width: 5%
+        label: "°F"
+        color: dimred
+        font_size: 16px

@@ -42,6 +42,7 @@ Required:
 from __future__ import annotations
 
 import argparse
+import datetime
 import os
 import re
 import sys
@@ -59,6 +60,7 @@ import yaml
 if __package__ in (None, ''):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from clockish.backlight import SUN_SCHEDULE_VALUES  # noqa: E402
 from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
     NO_ARG_TRANSFORMS,
@@ -113,8 +115,12 @@ def _is_valid_interval(interval_str: str) -> bool:
 
 #: Panel types recognised by the display engine.
 KNOWN_PANEL_TYPES: frozenset[str] = frozenset({
-    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'debug', 'blank',
+    'clock', 'date', 'fact', 'text', 'divider', 'wifi_graphic', 'bit_clock', 'debug', 'blank',
 })
+
+#: ``bit_order:`` / ``shape:`` values for ``type: bit_clock`` panels.
+KNOWN_BIT_ORDERS: frozenset[str] = frozenset({'msb', 'lsb'})
+KNOWN_BIT_SHAPES: frozenset[str] = frozenset({'circle', 'square', 'rect'})
 
 #: Valid ``source:`` values for ``type: fact`` panels. A ``fact`` panel may
 #: ALSO use ``source: cached-facts.<name>`` to pull from a top-level
@@ -124,7 +130,7 @@ KNOWN_FACT_SOURCES: frozenset[str] = frozenset({
     'ip', 'hostname', 'uptime', 'version', 'config_file',
     'cpu', 'cpu_load', 'mem', 'disk', 'temp',
     'ntp_status', 'ntp_upstream', 'ntp_all',
-    'wireguard',
+    'wireguard', 'backlight',
     'wifi_status', 'wifi_ssid', 'wifi_signal', 'wifi_quality', 'wifi_all',
     # new built-in facts
     'location', 'daytime', 'nighttime',
@@ -319,10 +325,12 @@ _CACHED_FACT_ATTRS: frozenset[str] = frozenset({
 #: Only 'sysfs' is implemented today; see clockish.backlight._METHODS.
 KNOWN_BACKLIGHT_METHODS: frozenset[str] = frozenset({'sysfs'})
 
-#: All valid keys for a ``display.backlight:`` mapping.
+#: All valid keys for a ``display.backlight:`` mapping. ``schedule`` is
+#: required -- see clockish.backlight module docstring.
 _BACKLIGHT_ATTRS: frozenset[str] = frozenset({
     'method', 'device', 'logging', 'off_value', 'min', 'max', 'schedule',
 })
+
 
 #: All valid keys for one ``display.backlight.schedule:`` list entry.
 _BACKLIGHT_SCHEDULE_ATTRS: frozenset[str] = frozenset({'name', 'start', 'end', 'value'})
@@ -358,6 +366,7 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     'clock': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
         'background', 'label', 'timezone', 'time_format', 'transform', 'padding',
+        'off_color',
     }),
     'date': frozenset({
         'type', 'justify', 'color', 'font', 'font_size', 'font_behavior', 'width',
@@ -377,6 +386,10 @@ _PANEL_TYPE_ATTRS: dict[str, frozenset[str]] = {
     }),
     'wifi_graphic': frozenset({
         'type', 'color', 'width', 'background', 'padding',
+    }),
+    'bit_clock': frozenset({
+        'type', 'width', 'background', 'padding', 'bits', 'bit_order', 'bit_rows',
+        'shape', 'on_color', 'off_color', 'epoch',
     }),
     'debug': frozenset({
         'type', 'color', 'font', 'font_size', 'width', 'background', 'padding',
@@ -740,9 +753,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
             if not isinstance(backlight_cfg, dict):
                 err('display.backlight', "'backlight' must be a mapping")
             else:
+                # An error, not a warning: matches the schema's additionalProperties:
+                # false, and still fires when jsonschema is missing and that layer is
+                # skipped. A stray `curve:` from the old two-key shape lands here.
                 for key in backlight_cfg:
                     if key not in _BACKLIGHT_ATTRS:
-                        warn('display.backlight', f"unexpected key '{key}' on backlight")
+                        err('display.backlight', f"unknown key '{key}' on backlight")
 
                 method = backlight_cfg.get('method')
                 if not method:
@@ -778,12 +794,24 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                 if min_v is not None and max_v is not None and min_v > max_v:
                     err('display.backlight', f"'min: {min_v}' must not be greater than 'max: {max_v}'")
 
-                schedule = backlight_cfg.get('schedule')
-                if schedule is None:
+                _sun_values = ', '.join(sorted(SUN_SCHEDULE_VALUES))
+                schedule_val = backlight_cfg.get('schedule')
+                if 'schedule' not in backlight_cfg:
                     err('display.backlight', "backlight missing required 'schedule' key")
-                elif not isinstance(schedule, list) or not schedule:
-                    err('display.backlight.schedule', "'schedule' must be a non-empty list of entries")
+                elif isinstance(schedule_val, str):
+                    if schedule_val not in SUN_SCHEDULE_VALUES:
+                        err(
+                            'display.backlight',
+                            f"unknown schedule '{schedule_val}' -- a scalar schedule must be one of "
+                            f"{_sun_values} (or give a list of time-of-day entries)",
+                        )
+                elif not isinstance(schedule_val, list) or not schedule_val:
+                    err(
+                        'display.backlight.schedule',
+                        f"'schedule' must be a non-empty list of entries, or one of {_sun_values}",
+                    )
                 else:
+                    schedule = backlight_cfg['schedule']
                     # (start_min, end_min, entry_label) -- a wraparound entry (end < start)
                     # contributes two pieces so the overlap check below still works.
                     intervals: list[tuple[int, int, str]] = []
@@ -946,6 +974,34 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                 for key in panel:
                     if key not in allowed and key not in _DEPRECATED_PANEL_KEYS:
                         warn(ploc, f"unexpected key '{key}' on '{ptype}' panel")
+
+            # 5b. bit_clock: every bad value falls back to its default at render time
+            if ptype == 'bit_clock':
+                for key in ('bits', 'bit_rows'):
+                    val = panel.get(key)
+                    if val is not None and (
+                        not isinstance(val, int) or isinstance(val, bool) or val < 1
+                    ):
+                        warn(ploc, f"'{key}: {val!r}' must be a positive integer")
+                for key, known in (('bit_order', KNOWN_BIT_ORDERS),
+                                   ('shape', KNOWN_BIT_SHAPES)):
+                    val = panel.get(key)
+                    if val is not None and val not in known:
+                        warn(
+                            ploc,
+                            f"'{key}: {val!r}' is not a valid value "
+                            f"(expected one of: {', '.join(sorted(known))})",
+                        )
+                epoch = panel.get('epoch')
+                if epoch is not None and not isinstance(epoch, datetime.date):
+                    try:
+                        datetime.datetime.fromisoformat(str(epoch).strip())
+                    except ValueError:
+                        warn(
+                            ploc,
+                            f"'epoch: {epoch!r}' is not an ISO-8601 date/datetime "
+                            "-- falls back to 1970-01-01 UTC",
+                        )
 
             # 6. fact panel: source required (runtime crash without it) + must be recognised
             if ptype == 'fact':
