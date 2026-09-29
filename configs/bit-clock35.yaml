@@ -37,42 +37,44 @@ fonts:
     file: DSEG7Classic-Regular.ttf
 
 rows:
-  - name: top
-    height: "1%"
-    background: "140000"
-    panels:
-      - type: blank
-
   # Away clock: digits about one seconds-segment tall.
   - name: away
     height: "10%"
-    background: "140000"
+    background: "black"
     panels:
-      - type: blank
+      - type: date
         width: 56%
+        justify: center
+        timezone: US/Mountain
+        date_format: "%a, %B %-d"
+        color: dimred
+        font_size: auto
       - type: clock
-        width: 30%
+        width: 25%
         timezone: Europe/London
         time_format: "%H:%M"
         justify: center
         color: red
         font: dseg7
-        off_color: dimred
+        off_color: "240000"
         font_size: auto
         font_behavior: scale_numeric
-      - type: blank
+      - type: text
+        label: London
+        color: dimred
+        font_size: auto
 
   # About one main-digit height between the away clock and HH:MM.
   # Away clock to HH:MM, digits to LEDs and LEDs to facts: equal gaps.
   - name: gap-upper
-    height: "12%"
-    background: "140000"
+    height: "10%"
+    background: "black"
     panels:
       - type: blank
 
   - name: digits
-    height: "28%"
-    background: "140000"
+    height: "34%"
+    background: "black"
     panels:
       - type: blank
         width: 6%
@@ -82,7 +84,7 @@ rows:
         justify: right
         color: red
         font: dseg7
-        off_color: dimred
+        off_color: "240000"
         font_size: auto
         font_behavior: scale_numeric
       - type: blank
@@ -94,21 +96,21 @@ rows:
         justify: center
         color: red
         font: dseg7
-        off_color: dimred
+        off_color: "240000"
         font_size: auto
         font_behavior: scale_numeric
       - type: blank
 
   - name: gap-lower
-    height: "11%"
-    background: "140000"
+    height: "10%"
+    background: "black"
     panels:
       - type: blank
 
   # 35 bits of Unix time, MSB first -- rolls over 3058-10-26.
   - name: leds
     height: "7%"
-    background: "140000"
+    background: "black"
     panels:
       - type: blank
         width: 4%
@@ -116,22 +118,20 @@ rows:
         bits: 35
         bit_order: msb
         on_color: red
-        off_color: dimred
+        off_color: "240000"
         padding: 2
       - type: blank
         width: 4%
 
   - name: gap-facts
-    height: "9%"
-    background: "140000"
+    height: "7%"
+    background: "black"
     panels:
       - type: blank
 
-  # Last two rows of masterclock.yaml.
-  # masterclock rust -> dimred; burntsienna/grey -> darkred.
   - name: row3
     height: "11%"
-    background: "140000"
+    background: "black"
     panels:
       - type: wifi_graphic
         width: 7%
@@ -174,30 +174,30 @@ rows:
 
   - name: row4
     height: "11%"
-    background: "140000"
+    background: "black"
     panels:
       - type: fact
-        width: 15%
+        width: 25%
         justify: left
         source: ip
         color: dimred
         font_size: tiny
       - type: fact
         justify: center
-        width: 12%
+        width: 10%
         source: backlight  # ntp_all
-        color: darkred
+        color: dimred
         font_size: tiny
       - type: fact
-        width: 16%
-        justify: left
+        width: 10%
+        justify: center
         source: cpu
         transform: [round]
         color: dimred
         font_size: tiny
 
       - type: text
-        width: 27%
+        width: 25%
         justify: right
         label: "Norman, OK: "
         color: dimred
