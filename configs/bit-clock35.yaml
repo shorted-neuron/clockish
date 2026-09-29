@@ -7,7 +7,7 @@
 # counting seconds since 1970, MSB first.
 #
 # Requires the DSEG7 font (see configs/seven-segment.yaml for install notes).
-# Row heights are pixels, sized for the 480x320 preview.
+# Heights, widths and font sizes are relative, so it scales to any display.
 # ---------------------------------------------------------------------------
 
 orientation: landscape
@@ -38,20 +38,20 @@ fonts:
 
 rows:
   - name: top
-    height: 4
+    height: "1%"
     background: "140000"
     panels:
       - type: blank
 
   # Away clock: digits about one seconds-segment tall.
   - name: away
-    height: 32
+    height: "10%"
     background: "140000"
     panels:
       - type: blank
-        width: 270
+        width: 56%
       - type: clock
-        width: 144
+        width: 30%
         timezone: Europe/London
         time_format: "%H:%M"
         justify: center
@@ -65,19 +65,19 @@ rows:
   # About one main-digit height between the away clock and HH:MM.
   # Away clock to HH:MM, digits to LEDs and LEDs to facts: equal gaps.
   - name: gap-upper
-    height: 38
+    height: "12%"
     background: "140000"
     panels:
       - type: blank
 
   - name: digits
-    height: 90
+    height: "28%"
     background: "140000"
     panels:
       - type: blank
-        width: 30
+        width: 6%
       - type: clock
-        width: 318
+        width: 66%
         time_format: "%H:%M:"
         justify: right
         color: red
@@ -85,25 +85,29 @@ rows:
         off_color: dimred
         font_size: auto
         font_behavior: scale_numeric
+      - type: blank
+        width: 2%
+      # Seconds fit a width share, so they shrink with HH:MM on narrower displays.
       - type: clock
+        width: 18%
         time_format: "%S"
-        justify: left
+        justify: center
         color: red
         font: dseg7
         off_color: dimred
         font_size: auto
         font_behavior: scale_numeric
-        padding: 15
+      - type: blank
 
   - name: gap-lower
-    height: 34
+    height: "11%"
     background: "140000"
     panels:
       - type: blank
 
   # 35 bits of Unix time, MSB first -- rolls over 3058-10-26.
   - name: leds
-    height: 22
+    height: "7%"
     background: "140000"
     panels:
       - type: blank
@@ -118,15 +122,15 @@ rows:
         width: 4%
 
   - name: gap-facts
-    height: 28
+    height: "9%"
     background: "140000"
     panels:
       - type: blank
 
-  # Last two rows of masterclock.yaml (800x480), font sizes scaled x2/3.
+  # Last two rows of masterclock.yaml.
   # masterclock rust -> dimred; burntsienna/grey -> darkred.
   - name: row3
-    height: 36
+    height: "11%"
     background: "140000"
     panels:
       - type: wifi_graphic
@@ -148,7 +152,7 @@ rows:
         justify: right
         label: "outside: "
         color: dimred
-        font_size: 16px
+        font_size: tiny
 
       - type: fact
         width: 10%
@@ -157,7 +161,7 @@ rows:
         # label: "Outside: "
         justify: right
         color: dimred
-        font_size: 27px
+        font_size: small
         transform:
           - round: 0
 
@@ -165,11 +169,11 @@ rows:
         width: 5%
         label: "°F"
         color: dimred
-        font_size: 16px
+        font_size: tiny
 
 
   - name: row4
-    height: 36
+    height: "11%"
     background: "140000"
     panels:
       - type: fact
@@ -177,34 +181,34 @@ rows:
         justify: left
         source: ip
         color: dimred
-        font_size: 13px
+        font_size: tiny
       - type: fact
         justify: center
-        width: 15%
+        width: 12%
         source: backlight  # ntp_all
         color: darkred
-        font_size: 13px
+        font_size: tiny
       - type: fact
-        width: 10%
+        width: 16%
         justify: left
         source: cpu
         transform: [round]
         color: dimred
-        font_size: 19px
+        font_size: tiny
 
       - type: text
-        width: 30%
+        width: 27%
         justify: right
         label: "Norman, OK: "
         color: dimred
-        font_size: 16px
+        font_size: tiny
       - type: clock
         width: 15%
         # justify: center
         timezone: US/Central
         time_format: "%-I:%M%p"
         color: dimred
-        font_size: 20px  # masterclock 42px; DejaVu is wider than NixieOne
+        font_size: tiny  # DejaVu is wider than masterclock's NixieOne
         transform:
           - lower
           - replace: {from: 'm', to: ''}  # replace am or pm with just a or p
@@ -215,7 +219,7 @@ rows:
         # label: "Norman OK: "
         justify: right
         color: dimred
-        font_size: 27px
+        font_size: small
         transform:
           - round: 0
 
@@ -223,4 +227,4 @@ rows:
         width: 5%
         label: "°F"
         color: dimred
-        font_size: 16px
+        font_size: tiny
