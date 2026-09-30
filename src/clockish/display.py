@@ -719,10 +719,13 @@ _TIME_FORMATS = {
     '24hs': '%H:%M:%S',
 }
 
-def _now_in_tz(tz_name: str) -> datetime.datetime:
+def _now_in_tz(tz_name: str, at: float | None = None) -> datetime.datetime:
+    """Wall time in `tz_name`: now, or the epoch-seconds instant `at` if given."""
+    if at is None:
+        at = time.time()
     if tz_name.lower() == 'local':
-        return datetime.datetime.now()
-    return datetime.datetime.now(zoneinfo.ZoneInfo(tz_name))
+        return datetime.datetime.fromtimestamp(at)
+    return datetime.datetime.fromtimestamp(at, zoneinfo.ZoneInfo(tz_name))
 
 
 # ---------------------------------------------------------------------------
@@ -3267,9 +3270,17 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
 # Main display function  --  called once per second
 # ---------------------------------------------------------------------------
 _last_display_ms: float = 0.0
+_avg_display_ms: float | None = None   # smoothed lcd.display() cost; sets push lead
 
-def show_rows():
-    global _last_display_ms
+def show_rows(at: float | None = None, push_at: float | None = None):
+    """Render one frame and push it to the display.
+
+    at:      epoch seconds the clock/date panels depict (None = now).
+    push_at: epoch seconds to start lcd.display(); sleeps until then after
+             rendering (None = push immediately).  Lets main() render the
+             next second ahead of time and land it on the boundary.
+    """
+    global _last_display_ms, _avg_display_ms
     t0 = time.perf_counter()
     timings = {}
 
@@ -3291,7 +3302,9 @@ def show_rows():
                     # bit_clock has no timezone (epoch seconds) -- takes 'local'.
                     tz = p.get('timezone', 'local')
                     if tz not in tz_cache:
-                        tz_cache[tz] = _now_in_tz(tz)
+                        # Bare call when at is None: backlight_hardware_test.py
+                        # swaps in a one-arg _now_in_tz to inject its sim clock.
+                        tz_cache[tz] = _now_in_tz(tz) if at is None else _now_in_tz(tz, at)
 
     layout = _LAYOUT
 
@@ -3301,14 +3314,28 @@ def show_rows():
         for row_idx, (r, ry, rh) in enumerate(layout):
             _render_row(r, row_idx, ry, width, rh, tz_cache, timings, t0)
 
+    render_ms = (time.perf_counter() - t0) * 1000
+    if push_at is not None:
+        delay = push_at - time.time()
+        if delay > 0:
+            time.sleep(delay)
+
+    t_wall = time.time()
     t_disp = time.perf_counter()
     lcd.display(image)
     _last_display_ms = (time.perf_counter() - t_disp) * 1000
+    _avg_display_ms = (_last_display_ms if _avg_display_ms is None
+                       else (_avg_display_ms + _last_display_ms) / 2)
 
     if DEBUG:
-        total_ms = (time.perf_counter() - t0) * 1000
         parts = ", ".join(f"{k}={v*1000:.0f}ms" for k, v in timings.items())
-        print(f"show_rows: total={total_ms:.0f}ms  disp={_last_display_ms:.0f}ms  [{parts}]")
+        tick = ""
+        if at is not None:
+            # Push midpoint vs the second it shows: +late / -early.
+            mid_ms = (t_wall - at) * 1000 + _last_display_ms / 2
+            tick = f"  tick={mid_ms:+.0f}ms"
+        print(f"show_rows: render={render_ms:.0f}ms  disp={_last_display_ms:.0f}ms"
+              f"{tick}  [{parts}]")
 
 
 # ---------------------------------------------------------------------------
@@ -3762,18 +3789,24 @@ def main():
             show_rows()
             DEBUG_LAYOUT = False
 
+        # Tick on the WALL-clock second (NTP-disciplined), not the monotonic
+        # one -- monotonic's phase is arbitrary per boot, so side-by-side
+        # clocks would each tick at their own random offset.  Each pass
+        # renders the NEXT second ahead of time, then starts the push early
+        # by half its measured cost, so the pixels change mid-push on the
+        # boundary whatever the Pi/display speed (fb ~20ms, SPI 100ms+).
+        tick = 0
         while True:
             # Check for config reload request (from watcher or signal handler)
             if _reload_event.is_set():
                 _reload_event.clear()
                 _attempt_config_reload()
 
-            show_rows()
-            # Sleep until the next whole second boundary.
-            now_mono = time.monotonic()
-            sleep_s  = 1.0 - (now_mono % 1.0)
-            if sleep_s > 0.001:
-                time.sleep(sleep_s)
+            # max(): never repeat a second if the last push ended just short
+            # of the boundary; int(now)+1: skip ahead after a stall/reload.
+            tick = max(tick + 1, int(time.time()) + 1)
+            lead_s = (_avg_display_ms or 0.0) / 2000
+            show_rows(at=tick, push_at=tick - lead_s)
 
     except KeyboardInterrupt:
         pass

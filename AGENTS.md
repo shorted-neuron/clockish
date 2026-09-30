@@ -88,7 +88,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 4. **Init hardware** → driver (ili9486/st7789/framebuffer) via `load_driver()`
 5. **Load fonts** → PIL TrueType fonts (DejaVu default; custom via `fonts:` section)
 6. **Pre-compute layout** → `_init_layout()` resolves row/panel widths, font sizes
-7. **Main loop** → `show_rows()` per second until KeyboardInterrupt
+7. **Main loop** → `show_rows()` per second until KeyboardInterrupt, tick-aligned to the wall clock (see below)
 
 ### Key modules
 
@@ -147,6 +147,30 @@ display:  # optional here; search display.yaml alongside config or ~/.config/clo
   rotation: 0 | 90 | 180 | 270
   # driver-specific keys (SPI pins, SKU, etc.) passed to constructor
 ```
+
+### Tick alignment (seconds land on the NTP second)
+
+Goal: several clockish side by side tick the same instant. The target is under 100ms from the
+true top of second on any Pi or display. `main()` loop:
+
+- Ticks on **wall-clock** `time.time()` (chrony-disciplined), never `time.monotonic()`. The
+  monotonic phase is arbitrary per boot, and it was the old bug: every unit ticked at its own
+  random offset.
+- Each pass renders the **next** second ahead of time (`show_rows(at=tick, ...)` → tz_cache via
+  `_now_in_tz(tz, at)`). It then sleeps to `push_at = tick - avg_display/2` and calls
+  `lcd.display()`. Starting the push half its cost early puts the push midpoint on the boundary.
+  That is the right aim for SPI panels, whose pixels change progressively over a 100ms+
+  transfer, and costs about 10ms of lateness on the framebuffer.
+- `_avg_display_ms` = running mean `(avg + last) / 2`, seeded from the first push. Measured,
+  not configured, so the same code adapts to fb / SPI / I2C and to slow Pis.
+- `tick = max(tick + 1, int(time.time()) + 1)`: never repeats a second, and skips ahead after
+  a stall or config reload.
+- Budget: render + push must fit in ~1s. Slower frames just land late and the loop self-heals.
+- `--debug` prints `tick=±Nms` per frame (push midpoint vs the second it shows). Measured on a
+  Pi 4 with an 800x480 DSI framebuffer: steady ±5ms, ±8ms with all 4 cores pegged.
+- `show_rows()` with no args (preview, `backlight_hardware_test.py`) is unchanged: it renders
+  "now" and pushes immediately. `tz_cache` calls `_now_in_tz(tz)` bare when `at is None` because
+  that script swaps in a one-arg `_now_in_tz`.
 
 ### Layout pre-computation
 
