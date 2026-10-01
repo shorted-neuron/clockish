@@ -96,6 +96,12 @@ class SSD1306Driver(DisplayDriver):
         return self
 
     def display(self, image: Image.Image) -> None:
+        self.push(self.prepare(image))
+
+    # prepare() fills the library's own buffer (lcd.image() is a per-pixel
+    # Python loop -- slow on a Zero); push() is just the I2C write (show()).
+    # Relies on prepare/push alternating, which show_rows() guarantees.
+    def prepare(self, image: Image.Image) -> None:
         if self._lcd is None:
             return
 
@@ -111,7 +117,10 @@ class SSD1306Driver(DisplayDriver):
             image_to_send = image_to_send.resize((self._width, self._height), Image.Resampling.NEAREST)
 
         self._lcd.image(image_to_send)
-        self._lcd.show()
+
+    def push(self, frame: None) -> None:
+        if self._lcd is not None:
+            self._lcd.show()
 
     def close(self) -> None:
         if self._i2c is not None and hasattr(self._i2c, "deinit"):

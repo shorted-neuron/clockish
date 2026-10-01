@@ -150,27 +150,26 @@ display:  # optional here; search display.yaml alongside config or ~/.config/clo
 
 ### Tick alignment (seconds land on the NTP second)
 
-Goal: several clockish side by side tick the same instant. The target is under 100ms from the
-true top of second on any Pi or display. `main()` loop:
+Side-by-side units must tick the same instant: under 100ms from the true top of second, any Pi
+or display. Narrative, measurements per board, and ideas not built:
+[docs/how_tick_alignment_works.md](docs/how_tick_alignment_works.md). Rules for agents:
 
-- Ticks on **wall-clock** `time.time()` (chrony-disciplined), never `time.monotonic()`. The
-  monotonic phase is arbitrary per boot, and it was the old bug: every unit ticked at its own
-  random offset.
-- Each pass renders the **next** second ahead of time (`show_rows(at=tick, ...)` → tz_cache via
-  `_now_in_tz(tz, at)`). It then sleeps to `push_at = tick - avg_display/2` and calls
-  `lcd.display()`. Starting the push half its cost early puts the push midpoint on the boundary.
-  That is the right aim for SPI panels, whose pixels change progressively over a 100ms+
-  transfer, and costs about 10ms of lateness on the framebuffer.
-- `_avg_display_ms` = running mean `(avg + last) / 2`, seeded from the first push. Measured,
-  not configured, so the same code adapts to fb / SPI / I2C and to slow Pis.
-- `tick = max(tick + 1, int(time.time()) + 1)`: never repeats a second, and skips ahead after
-  a stall or config reload.
-- Budget: render + push must fit in ~1s. Slower frames just land late and the loop self-heals.
-- `--debug` prints `tick=±Nms` per frame (push midpoint vs the second it shows). Measured on a
-  Pi 4 with an 800x480 DSI framebuffer: steady ±5ms, ±8ms with all 4 cores pegged.
-- `show_rows()` with no args (preview, `backlight_hardware_test.py`) is unchanged: it renders
-  "now" and pushes immediately. `tz_cache` calls `_now_in_tz(tz)` bare when `at is None` because
-  that script swaps in a one-arg `_now_in_tz`.
+- `main()` ticks on **wall-clock** `time.time()`, never `time.monotonic()`. The monotonic
+  phase is arbitrary per boot, which was the original bug.
+- Each pass: `show_rows(at=tick, push_at=tick - avg_push/2)` renders the NEXT second
+  (`_now_in_tz(tz, at)`), runs `lcd.prepare(image)`, sleeps, then `lcd.push(frame)`. That
+  puts the transfer midpoint on the boundary. `tick = max(tick + 1, int(time.time()) + 1)`.
+- `_avg_display_ms` = running mean `(avg + last) / 2` of **`push()` time only**. Never move
+  conversion work back into `push()`: the lead counts it as transfer and pixels land late
+  (ILI9486: +40..+51ms instead of +10..+21ms).
+- `DisplayDriver.prepare()`/`push()` default to pass-through + `display()`. All four shipped
+  drivers split them, and their `display()` is `push(prepare(image))`. `push()` may assume
+  the matching `prepare()` came just before it (SSD1306's prepare fills the library buffer).
+- `show_rows()` with no args (preview, `backlight_hardware_test.py`) renders "now" and pushes
+  immediately. `tz_cache` calls `_now_in_tz(tz)` bare when `at is None` because that script
+  swaps in a one-arg `_now_in_tz`.
+- `--debug` prints `render=`, `disp=` (push), `tick=±Nms` (push midpoint vs second) and
+  `conv=` (prepare) per frame. Use it to re-measure after touching the loop or a driver.
 
 ### Layout pre-computation
 
@@ -589,6 +588,9 @@ real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extensi
 ### Display drivers
 
 Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.dimensions` property.
+Optional `.prepare(PIL_Image) -> frame` / `.push(frame)` split `display()` into conversion and
+transfer for tick alignment (see "Tick alignment" and `docs/how_tick_alignment_works.md`).
+Defaults are pass-through.
 
 **ili9486Driver** (Raspberry Pi SPI):
 - Opens pyili9486 + spidev + rpi-lgpio
@@ -769,7 +771,9 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 ### Extending
 
 **Add display driver**:
-1. Create `src/clockish/drivers/mydriver.py`, subclass `DisplayDriver`
+1. Create `src/clockish/drivers/mydriver.py`, subclass `DisplayDriver`. If its `display()`
+   does real conversion work, split it into `prepare()` (convert) and `push()` (send), and make
+   `display()` = `push(prepare(image))`. Otherwise its ticks land late by the conversion time
 2. Add entry to `_DRIVER_REGISTRY` in `drivers/__init__.py`
 3. Users select via `driver: mydriver` in YAML `display:` section
 

@@ -3270,15 +3270,16 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
 # Main display function  --  called once per second
 # ---------------------------------------------------------------------------
 _last_display_ms: float = 0.0
-_avg_display_ms: float | None = None   # smoothed lcd.display() cost; sets push lead
+_avg_display_ms: float | None = None   # smoothed lcd.push() cost; sets push lead
 
 def show_rows(at: float | None = None, push_at: float | None = None):
     """Render one frame and push it to the display.
 
     at:      epoch seconds the clock/date panels depict (None = now).
-    push_at: epoch seconds to start lcd.display(); sleeps until then after
-             rendering (None = push immediately).  Lets main() render the
-             next second ahead of time and land it on the boundary.
+    push_at: epoch seconds to start lcd.push(); sleeps until then after
+             rendering + lcd.prepare() (None = push immediately).  Lets
+             main() render and convert the next second ahead of time, so
+             only the transfer itself lands on the boundary.
     """
     global _last_display_ms, _avg_display_ms
     t0 = time.perf_counter()
@@ -3314,6 +3315,9 @@ def show_rows(at: float | None = None, push_at: float | None = None):
         for row_idx, (r, ry, rh) in enumerate(layout):
             _render_row(r, row_idx, ry, width, rh, tz_cache, timings, t0)
 
+    with timed_section("conv", timings):
+        frame = lcd.prepare(image)
+
     render_ms = (time.perf_counter() - t0) * 1000
     if push_at is not None:
         delay = push_at - time.time()
@@ -3322,7 +3326,7 @@ def show_rows(at: float | None = None, push_at: float | None = None):
 
     t_wall = time.time()
     t_disp = time.perf_counter()
-    lcd.display(image)
+    lcd.push(frame)
     _last_display_ms = (time.perf_counter() - t_disp) * 1000
     _avg_display_ms = (_last_display_ms if _avg_display_ms is None
                        else (_avg_display_ms + _last_display_ms) / 2)
@@ -3792,9 +3796,10 @@ def main():
         # Tick on the WALL-clock second (NTP-disciplined), not the monotonic
         # one -- monotonic's phase is arbitrary per boot, so side-by-side
         # clocks would each tick at their own random offset.  Each pass
-        # renders the NEXT second ahead of time, then starts the push early
-        # by half its measured cost, so the pixels change mid-push on the
-        # boundary whatever the Pi/display speed (fb ~20ms, SPI 100ms+).
+        # renders + converts (lcd.prepare) the NEXT second ahead of time, then
+        # starts the transfer (lcd.push) early by half its measured cost, so
+        # pixels change mid-transfer on the boundary whatever the Pi/display
+        # speed (fb ~1ms, SPI 40-110ms).
         tick = 0
         while True:
             # Check for config reload request (from watcher or signal handler)

@@ -310,6 +310,10 @@ class FramebufferDriver(DisplayDriver):
     # ------------------------------------------------------------------
     def display(self, image: Image.Image) -> None:
         """Convert a PIL Image to the framebuffer's native pixel format and write it."""
+        self.push(self.prepare(image))
+
+    def prepare(self, image: Image.Image) -> bytes:
+        """Convert a PIL Image to the framebuffer's native pixel bytes."""
         import numpy as np
 
         # Apply software rotation if requested
@@ -335,9 +339,12 @@ class FramebufferDriver(DisplayDriver):
                 (arr[:, :, 1] << self._green_off)  |
                 (arr[:, :, 2] << self._blue_off)
             ).tobytes()
+        return pixels
 
+    def push(self, frame: bytes) -> None:
+        """Copy :meth:`prepare` bytes into the mapped framebuffer."""
         self._mm.seek(0)
-        self._mm.write(pixels)
+        self._mm.write(frame)
 
     def idle(self, state: bool = True) -> None:
         """Blank (``True``) or unblank (``False``) the framebuffer console."""

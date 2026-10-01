@@ -159,7 +159,19 @@ class ST7789Driver(DisplayDriver):
     # ------------------------------------------------------------------
     def display(self, image: Image.Image) -> None:
         """Push a PIL Image frame to the physical display."""
-        self._lcd.display(image)
+        self.push(self.prepare(image))
+
+    # Pimoroni's display() split in two: RGB565 conversion ahead of the tick,
+    # SPI transfer on it.  push() mirrors its 4096-byte chunking.
+    def prepare(self, image: Image.Image) -> bytes:
+        """Convert (and rotate) a frame to the panel's RGB565 bytes."""
+        return self._lcd.image_to_data(image, self._lcd._rotation)
+
+    def push(self, frame: bytes) -> None:
+        """Write :meth:`prepare` bytes to the whole screen."""
+        self._lcd.set_window()
+        for i in range(0, len(frame), 4096):
+            self._lcd.data(frame[i : i + 4096])
 
     def close(self) -> None:
         """Close the internal SPI bus opened by the Pimoroni library."""

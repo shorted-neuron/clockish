@@ -43,10 +43,14 @@ _IMPORTS_OK = False
 
 def _try_import():
     global _IMPORTS_OK, SpiDev, ILI9486, Origin, SKU, RPiLGPIOFacade
+    global PixelFormat, image_to_data, CMD_WRMEM
     try:
+        from pyili9486 import CMD_WRMEM as _CMD_WRMEM
         from pyili9486 import ILI9486 as _ILI9486  # noqa: F401
         from pyili9486 import SKU as _SKU
         from pyili9486 import Origin as _Origin
+        from pyili9486 import PixelFormat as _PixelFormat
+        from pyili9486 import image_to_data as _image_to_data
         from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade as _RPLGF  # noqa: F401
         from spidev import SpiDev as _SpiDev  # noqa: F401
         SpiDev = _SpiDev
@@ -54,6 +58,9 @@ def _try_import():
         Origin = _Origin
         SKU = _SKU
         RPiLGPIOFacade = _RPLGF
+        PixelFormat = _PixelFormat
+        image_to_data = _image_to_data
+        CMD_WRMEM = _CMD_WRMEM
         _IMPORTS_OK = True
     except ImportError as exc:
         raise ImportError(
@@ -89,6 +96,7 @@ class ILI9486Driver(DisplayDriver):
         self._cfg = cfg
         self._spi = None
         self._lcd = None
+        self._pixel_format = None
 
     # ------------------------------------------------------------------
     def begin(self) -> "ILI9486Driver":
@@ -109,6 +117,7 @@ class ILI9486Driver(DisplayDriver):
 
         resolved_sku_name = _SKU_NAMES.get(sku_name, "MPI3501")
         sku = getattr(SKU, resolved_sku_name)
+        self._pixel_format = PixelFormat.from_sku(sku)
 
         gpio = RPiLGPIOFacade(dc_pin=dc_pin, rs_pin=rst_pin)
 
@@ -123,7 +132,19 @@ class ILI9486Driver(DisplayDriver):
     # ------------------------------------------------------------------
     def display(self, image: Image.Image) -> None:
         """Push a PIL Image frame to the physical display."""
-        self._lcd.display(image)
+        self.push(self.prepare(image))
+
+    # pyili9486's display() split in two: RGB666/565 conversion (~60ms on a
+    # Pi 2, no visible change) ahead of the tick, SPI transfer on it.
+    def prepare(self, image: Image.Image) -> list[int]:
+        """Convert a full-screen RGB frame to the panel's pixel bytes."""
+        return image_to_data(image, self._pixel_format)
+
+    def push(self, frame: list[int]) -> None:
+        """Write :meth:`prepare` bytes to the whole screen."""
+        self._lcd.set_window()
+        self._lcd.command(CMD_WRMEM)
+        self._lcd.data(frame)
 
     def idle(self, state: bool = True) -> None:
         """Forward idle-mode request to the underlying ILI9486 object."""
