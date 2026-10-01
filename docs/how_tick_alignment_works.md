@@ -61,12 +61,12 @@ base class defaults are pass-through (`prepare` returns the image, `push` calls
 counts as transfer. All four shipped drivers split, and each one's `display()`
 is now `push(prepare(image))`:
 
-| Driver | `prepare()` | `push()` |
-|---|---|---|
-| framebuffer | rotate + pack to RGB565 / XRGB bytes | `mmap` write |
-| ili9486 | `pyili9486.image_to_data()` (RGB666/565) | `set_window` + `WRMEM` + SPI data |
-| st7789 | Pimoroni `image_to_data()` (rotate + RGB565) | `set_window` + 4096-byte SPI chunks |
-| ssd1306 | convert to 1-bit, `lcd.image()` (slow per-pixel Python loop) | `lcd.show()` (the I2C write) |
+| Driver      | `prepare()`                                                  | `push()`                            |
+|-------------|--------------------------------------------------------------|-------------------------------------|
+| framebuffer | rotate + pack to RGB565 / XRGB bytes                         | `mmap` write                        |
+| ili9486     | `pyili9486.image_to_data()` (RGB666/565)                     | `set_window` + `WRMEM` + SPI data   |
+| st7789      | Pimoroni `image_to_data()` (rotate + RGB565)                 | `set_window` + 4096-byte SPI chunks |
+| ssd1306     | convert to 1-bit, `lcd.image()` (slow per-pixel Python loop) | `lcd.show()` (the I2C write)        |
 
 With the split, the ILI9486 seconds row moved from +40..+51 ms to +10..+21 ms.
 
@@ -76,13 +76,13 @@ Each unit ran for 45 s with its normal config, `--debug`. "Tick offset" is
 the push midpoint relative to the second the frame shows (+ = late). Conversion
 now happens before the sleep, so it no longer affects when pixels land.
 
-| Board / display | Conversion (before the tick) | Push | Tick offset |
-|---|---|---|---|
-| Pi 4, framebuffer 800x480 | 16 ms | 1 ms | +0 ms |
-| Pi 2B, ILI9486 480x320 | 54 ms | ~130 ms | ±4 ms; seconds digits change +10 to +21 ms |
-| Zero 2 W, ST7789 240x240 | 6 ms | ~61 ms | -1 to +4 ms (one 105 ms push spike: +23 ms, then -11 ms the next frame) |
-| Zero v1, ST7789 240x135 | ~22 ms | ~62 ms (was 69-98) | -3 to +9 ms |
-| Pi 2B, SSD1306 I2C 128x64 | 55-65 ms | 96 ms flat | +0 ms every frame |
+| Board / display           | Conversion (before the tick) | Push               | Tick offset                                                             |
+|---------------------------|------------------------------|--------------------|-------------------------------------------------------------------------|
+| Pi 4, framebuffer 800x480 | 16 ms                        | 1 ms               | +0 ms                                                                   |
+| Pi 2B, ILI9486 480x320    | 54 ms                        | ~130 ms            | ±4 ms; seconds digits change +10 to +21 ms                              |
+| Zero 2 W, ST7789 240x240  | 6 ms                         | ~61 ms             | -1 to +4 ms (one 105 ms push spike: +23 ms, then -11 ms the next frame) |
+| Zero v1, ST7789 240x135   | ~22 ms                       | ~62 ms (was 69-98) | -3 to +9 ms                                                             |
+| Pi 2B, SSD1306 I2C 128x64 | 55-65 ms                     | 96 ms flat         | +0 ms every frame                                                       |
 
 Before the split (step 1 only), under load: the Pi 4 stayed within ±8 ms with
 all four cores pegged, and the Zero v1 within ±12 ms with its single core
