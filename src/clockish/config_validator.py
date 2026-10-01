@@ -59,6 +59,7 @@ import yaml
 if __package__ in (None, ''):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from clockish.backlight import SUN_SCHEDULE_VALUES  # noqa: E402
 from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
     NO_ARG_TRANSFORMS,
@@ -124,7 +125,7 @@ KNOWN_FACT_SOURCES: frozenset[str] = frozenset({
     'ip', 'hostname', 'uptime', 'version', 'config_file',
     'cpu', 'cpu_load', 'mem', 'disk', 'temp',
     'ntp_status', 'ntp_upstream', 'ntp_all',
-    'wireguard',
+    'wireguard', 'backlight',
     'wifi_status', 'wifi_ssid', 'wifi_signal', 'wifi_quality', 'wifi_all',
     # new built-in facts
     'location', 'daytime', 'nighttime',
@@ -319,10 +320,12 @@ _CACHED_FACT_ATTRS: frozenset[str] = frozenset({
 #: Only 'sysfs' is implemented today; see clockish.backlight._METHODS.
 KNOWN_BACKLIGHT_METHODS: frozenset[str] = frozenset({'sysfs'})
 
-#: All valid keys for a ``display.backlight:`` mapping.
+#: All valid keys for a ``display.backlight:`` mapping. ``schedule`` is
+#: required -- see clockish.backlight module docstring.
 _BACKLIGHT_ATTRS: frozenset[str] = frozenset({
     'method', 'device', 'logging', 'off_value', 'min', 'max', 'schedule',
 })
+
 
 #: All valid keys for one ``display.backlight.schedule:`` list entry.
 _BACKLIGHT_SCHEDULE_ATTRS: frozenset[str] = frozenset({'name', 'start', 'end', 'value'})
@@ -740,9 +743,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
             if not isinstance(backlight_cfg, dict):
                 err('display.backlight', "'backlight' must be a mapping")
             else:
+                # An error, not a warning: matches the schema's additionalProperties:
+                # false, and still fires when jsonschema is missing and that layer is
+                # skipped. A stray `curve:` from the old two-key shape lands here.
                 for key in backlight_cfg:
                     if key not in _BACKLIGHT_ATTRS:
-                        warn('display.backlight', f"unexpected key '{key}' on backlight")
+                        err('display.backlight', f"unknown key '{key}' on backlight")
 
                 method = backlight_cfg.get('method')
                 if not method:
@@ -778,12 +784,24 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                 if min_v is not None and max_v is not None and min_v > max_v:
                     err('display.backlight', f"'min: {min_v}' must not be greater than 'max: {max_v}'")
 
-                schedule = backlight_cfg.get('schedule')
-                if schedule is None:
+                _sun_values = ', '.join(sorted(SUN_SCHEDULE_VALUES))
+                schedule_val = backlight_cfg.get('schedule')
+                if 'schedule' not in backlight_cfg:
                     err('display.backlight', "backlight missing required 'schedule' key")
-                elif not isinstance(schedule, list) or not schedule:
-                    err('display.backlight.schedule', "'schedule' must be a non-empty list of entries")
+                elif isinstance(schedule_val, str):
+                    if schedule_val not in SUN_SCHEDULE_VALUES:
+                        err(
+                            'display.backlight',
+                            f"unknown schedule '{schedule_val}' -- a scalar schedule must be one of "
+                            f"{_sun_values} (or give a list of time-of-day entries)",
+                        )
+                elif not isinstance(schedule_val, list) or not schedule_val:
+                    err(
+                        'display.backlight.schedule',
+                        f"'schedule' must be a non-empty list of entries, or one of {_sun_values}",
+                    )
                 else:
+                    schedule = backlight_cfg['schedule']
                     # (start_min, end_min, entry_label) -- a wraparound entry (end < start)
                     # contributes two pieces so the overlap check below still works.
                     intervals: list[tuple[int, int, str]] = []

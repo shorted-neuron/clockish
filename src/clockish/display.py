@@ -673,6 +673,7 @@ def _get_fact(source: str, options: dict | None = None) -> str:
         'wifi_signal':  lambda: get_wifi_info()[2],
         'wifi_quality': lambda: get_wifi_info()[3],
         'wifi_all':     lambda: "  ".join(get_wifi_info()),
+        'backlight':    lambda: backlight.current_percent() or '',
         # system location + day/night facts
         'location':       get_system_location,
         'daytime':        get_daytime,
@@ -697,6 +698,7 @@ _FACT_DEFAULT_LABELS: dict[str, str] = {
     'ntp_upstream': 'ntp sources ',
     'ntp_all':      'ntp ',
     'wireguard':    'wg ',
+    'backlight':    'bl ',
     'wifi_status':  'wifi ',
     'wifi_ssid':    'ssid ',
     'wifi_signal':  'signal ',
@@ -2097,6 +2099,21 @@ def _is_daytime_static(now: datetime.datetime | None = None) -> bool:
     return 70000 <= hhmmss <= 185959
 
 
+def _get_today_sun_times() -> tuple[datetime.datetime, datetime.datetime] | None:
+    """Return today's (sunrise, sunset) from `_SUN_TIMES`, or None if not fetched yet.
+
+    Passed to `backlight.start_backlight()` as its `get_sun_times` callable --
+    see backlight.py's module docstring for why it's a callable, not an import.
+    """
+    entry = _SUN_TIMES.get(datetime.datetime.now().date().isoformat())
+    if not entry:
+        return None
+    sr, ss = entry.get('sunrise'), entry.get('sunset')
+    if sr is None or ss is None:
+        return None
+    return sr, ss
+
+
 def get_daytime() -> str:
     """Return 'true'/'false' based on fetched sun-times if available, else static rule."""
     now = datetime.datetime.now()
@@ -2625,7 +2642,7 @@ def _init_layout() -> None:
     # isn't configured). Runs at startup and on config reload; start_backlight()
     # stops any existing thread and applies the current schedule synchronously
     # before returning, so a reload/restart never leaves a stale brightness level.
-    backlight.start_backlight(_display_cfg)
+    backlight.start_backlight(_display_cfg, get_sun_times=_get_today_sun_times)
 
 
 

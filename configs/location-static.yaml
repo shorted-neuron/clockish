@@ -136,6 +136,17 @@ rows:
         font_size: 12px
         justify: left
 
+  - name: backlight
+    height: 5%
+    background: black
+    panels:
+      - type: fact
+        source: backlight
+        label: "Backlight: "
+        color: orange
+        font_size: 12px
+        justify: left
+
   - name: local-clock
     height: 10%
     background: dimred

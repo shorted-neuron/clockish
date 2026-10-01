@@ -139,8 +139,17 @@ rows:
         color: green
         font_size: auto
 
+  - name: backlight
+    height: 5.42%
+    panels:
+      - type: fact
+        source: backlight
+        label: "backlight: "
+        color: orange
+        font_size: auto
+
   - name: debug
-    height: 16.67%
+    height: 11.25%
     panels:
       - type: debug
         width: 65%

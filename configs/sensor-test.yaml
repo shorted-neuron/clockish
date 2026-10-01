@@ -76,3 +76,11 @@ rows:
         label: "Night: "
         color: skyblue
         font_size: small
+  - name: backlight
+    height: 10%
+    panels:
+      - type: fact
+        source: backlight
+        label: "Backlight: "
+        color: orange
+        font_size: small
