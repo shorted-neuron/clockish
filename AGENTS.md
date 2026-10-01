@@ -88,7 +88,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 4. **Init hardware** → driver (ili9486/st7789/framebuffer) via `load_driver()`
 5. **Load fonts** → PIL TrueType fonts (DejaVu default; custom via `fonts:` section)
 6. **Pre-compute layout** → `_init_layout()` resolves row/panel widths, font sizes
-7. **Main loop** → `show_rows()` per second until KeyboardInterrupt
+7. **Main loop** → `show_rows()` per second until KeyboardInterrupt, tick-aligned to the wall clock (see below)
 
 ### Key modules
 
@@ -147,6 +147,29 @@ display:  # optional here; search display.yaml alongside config or ~/.config/clo
   rotation: 0 | 90 | 180 | 270
   # driver-specific keys (SPI pins, SKU, etc.) passed to constructor
 ```
+
+### Tick alignment (seconds land on the NTP second)
+
+Side-by-side units must tick the same instant: under 100ms from the true top of second, any Pi
+or display. Narrative, measurements per board, and ideas not built:
+[docs/how_tick_alignment_works.md](docs/how_tick_alignment_works.md). Rules for agents:
+
+- `main()` ticks on **wall-clock** `time.time()`, never `time.monotonic()`. The monotonic
+  phase is arbitrary per boot, which was the original bug.
+- Each pass: `show_rows(at=tick, push_at=tick - avg_push/2)` renders the NEXT second
+  (`_now_in_tz(tz, at)`), runs `lcd.prepare(image)`, sleeps, then `lcd.push(frame)`. That
+  puts the transfer midpoint on the boundary. `tick = max(tick + 1, int(time.time()) + 1)`.
+- `_avg_display_ms` = running mean `(avg + last) / 2` of **`push()` time only**. Never move
+  conversion work back into `push()`: the lead counts it as transfer and pixels land late
+  (ILI9486: +40..+51ms instead of +10..+21ms).
+- `DisplayDriver.prepare()`/`push()` default to pass-through + `display()`. All four shipped
+  drivers split them, and their `display()` is `push(prepare(image))`. `push()` may assume
+  the matching `prepare()` came just before it (SSD1306's prepare fills the library buffer).
+- `show_rows()` with no args (preview, `backlight_hardware_test.py`) renders "now" and pushes
+  immediately. `tz_cache` calls `_now_in_tz(tz)` bare when `at is None` because that script
+  swaps in a one-arg `_now_in_tz`.
+- `--debug` prints `render=`, `disp=` (push), `tick=±Nms` (push midpoint vs second) and
+  `conv=` (prepare) per frame. Use it to re-measure after touching the loop or a driver.
 
 ### Layout pre-computation
 
@@ -565,6 +588,9 @@ real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extensi
 ### Display drivers
 
 Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.dimensions` property.
+Optional `.prepare(PIL_Image) -> frame` / `.push(frame)` split `display()` into conversion and
+transfer for tick alignment (see "Tick alignment" and `docs/how_tick_alignment_works.md`).
+Defaults are pass-through.
 
 **ili9486Driver** (Raspberry Pi SPI):
 - Opens pyili9486 + spidev + rpi-lgpio
@@ -745,7 +771,9 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 ### Extending
 
 **Add display driver**:
-1. Create `src/clockish/drivers/mydriver.py`, subclass `DisplayDriver`
+1. Create `src/clockish/drivers/mydriver.py`, subclass `DisplayDriver`. If its `display()`
+   does real conversion work, split it into `prepare()` (convert) and `push()` (send), and make
+   `display()` = `push(prepare(image))`. Otherwise its ticks land late by the conversion time
 2. Add entry to `_DRIVER_REGISTRY` in `drivers/__init__.py`
 3. Users select via `driver: mydriver` in YAML `display:` section
 

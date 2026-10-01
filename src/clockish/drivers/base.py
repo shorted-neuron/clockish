@@ -4,14 +4,15 @@ clockish.drivers.base
 Abstract base class for display hardware drivers.
 
 All display backends must subclass :class:`DisplayDriver` and implement the
-abstract methods.  Optional lifecycle hooks (``idle``, ``close``) have
-no-op defaults so minimal drivers need only implement ``begin`` and
+abstract methods.  Optional hooks (``prepare``/``push``, ``idle``, ``close``)
+have pass-through/no-op defaults so minimal drivers need only implement ``begin`` and
 ``display``.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from PIL import Image
 
@@ -33,7 +34,8 @@ class DisplayDriver(ABC):
            driver = MyDriver(display_cfg)
     2. Call :meth:`begin`  --  opens SPI/I2C/USB, sets up GPIO, returns *self*:
            driver = driver.begin()
-    3. Call :meth:`display` once per frame to push a PIL image.
+    3. Call :meth:`display` once per frame to push a PIL image (or
+       :meth:`prepare` + :meth:`push`, to convert ahead of a deadline).
     4. Call :meth:`close` when done to release hardware resources.
 
     Implementations are encouraged (but not required) to honour ``idle`` for
@@ -66,6 +68,22 @@ class DisplayDriver(ABC):
     # ------------------------------------------------------------------
     # Optional hooks  --  subclasses MAY override these
     # ------------------------------------------------------------------
+
+    def prepare(self, image: Image.Image) -> Any:
+        """Convert *image* to the panel's wire format; hand the result to :meth:`push`.
+
+        Split from :meth:`push` so the main loop can do the CPU-bound
+        conversion BEFORE sleeping to the second boundary, leaving only the
+        transfer -- the part during which pixels actually change -- to be
+        timed onto the tick.  Default: no conversion, return *image* as-is.
+        Drivers overriding this must override :meth:`push` too, and should
+        implement :meth:`display` as ``self.push(self.prepare(image))``.
+        """
+        return image
+
+    def push(self, frame: Any) -> None:
+        """Send a :meth:`prepare` result to the panel.  Default: :meth:`display`."""
+        self.display(frame)
 
     def idle(self, state: bool = True) -> None:
         """Enter (``True``) or exit (``False``) low-power idle mode.
