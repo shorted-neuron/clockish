@@ -171,6 +171,20 @@ or display. Narrative, measurements per board, and ideas not built:
 - `--debug` prints `render=`, `disp=` (push), `tick=±Nms` (push midpoint vs second) and
   `conv=` (prepare) per frame. Use it to re-measure after touching the loop or a driver.
 
+### Testbed (multi-host testing)
+
+`scripts/testbed.py` checks out a branch on N SSH-reachable Pis and restarts clockish with a
+per-host config + display profile from an Ansible-style inventory
+(`testbed-inventory.yaml`, gitignored; example in `scripts/testbed-inventory.example.yaml`).
+Setup, inventory vars, usage, sudoers rule and troubleshooting:
+[docs/how_testbed_works.md](docs/how_testbed_works.md). Rules for agents:
+
+- Config switching = symlinks at `~/.config/clockish/{clockish-config,display}.yaml`; the unit
+  runs that fixed path. Never rewrite the unit to switch configs (needs root).
+- Remote service control is `sudo -n systemctl start|stop|restart` only, matched by the exact-command
+  rule from `scripts/setup-testbed-sudoers.sh`. Don't add other privileged calls.
+- Hosts fetch from `origin`; the tool never pushes.
+
 ### Layout pre-computation
 
 `_init_layout()` runs once at startup:
