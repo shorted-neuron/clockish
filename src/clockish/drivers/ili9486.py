@@ -136,11 +136,11 @@ class ILI9486Driver(DisplayDriver):
 
     # pyili9486's display() split in two: RGB666/565 conversion (~60ms on a
     # Pi 2, no visible change) ahead of the tick, SPI transfer on it.
-    def prepare(self, image: Image.Image) -> list[int]:
+    def prepare(self, image: Image.Image) -> bytes | list[int]:
         """Convert a full-screen RGB frame to the panel's pixel bytes."""
         return image_to_data(image, self._pixel_format)
 
-    def push(self, frame: list[int]) -> None:
+    def push(self, frame: bytes | list[int]) -> None:
         """Write :meth:`prepare` bytes to the whole screen."""
         self._lcd.set_window()
         self._lcd.command(CMD_WRMEM)
