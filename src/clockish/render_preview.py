@@ -550,7 +550,7 @@ def render_config(config_path: str, out_path: str, mock: bool,
     tz_cache: dict = {}
     for r in cfg_copy.get("rows", []):
         for p in r.get("panels", []):
-            if p.get("type") in ("clock", "date"):
+            if p.get("type") in ("clock", "date", "bit_clock"):
                 tz = p.get("timezone", "local")
                 if tz not in tz_cache:
                     tz_cache[tz] = _PREVIEW_NOW if mock else _ppd._now_in_tz(tz)

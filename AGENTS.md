@@ -94,7 +94,7 @@ Runs in tight loop: `show_rows()` once/sec, renders rows → panels → PIL Imag
 
 | File                  | Role                                                                                                                            |
 |-----------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| `display.py`          | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, divider, debug. |
+| `display.py`          | Renderer. Loads config, parses args, runs display loop. Panel renderers: clock, date, fact, text, wifi_graphic, bit_clock, divider, debug. |
 | `render_preview.py`   | PNG export (any platform). Stubs hardware; runs render pipeline offline.                                                        |
 | `config_validator.py` | YAML schema + semantic validation. Three entry points: CLI, startup, file-based.                                                |
 | `backlight.py`        | Optional `display.backlight:` brightness scheduler -- background thread, sysfs writer.                                          |
@@ -130,12 +130,14 @@ rows:
     background: navy  # optional; default black
     font_behavior: default  # optional row-level default: default|scale|scale_numeric|stretch_y|stretch_x
     panels:
-      - type: clock | date | fact | text | divider | wifi_graphic | debug | blank
+      - type: clock | date | fact | text | divider | wifi_graphic | bit_clock | debug | blank
         # common: color, font_size, font, font_behavior, width, background, justify, padding
         # clock/date: timezone, time_format / date_format
+        # clock: off_color -- dim 8s under the time, so unlit segments of a DSEG7 font show
         # fact: source (required) -- built-in (ip, cpu, mem, ...) or 'cached-facts.<name>'
         # fact + cached-facts source: json_path or pattern (exactly one) to extract a field
         # text: label
+        # bit_clock: bits, bit_order (msb|lsb), bit_rows, shape (circle|square|rect), on_color, off_color, epoch
         # clock/date/fact/text: transform (see below)
 
 display:  # optional here; search display.yaml alongside config or ~/.config/clockish/
@@ -160,13 +162,22 @@ Custom fonts (`font: my_font`) resolved at init; `font_size` determines final si
 
 All renderers: `(panel_dict, px, py, pw, ph, ...)` → draw on `ImageDraw`.
 
-- **clock, date**: render time/date string centered or justified in rect
+- **clock, date**: render time/date string centered or justified in rect. Clock `off_color:` draws
+  the time with every digit as `8` in that colour first, then the real time over it; both passes
+  are placed from the 8s (`_draw_text_line(place_text=)`), since justify uses ink extent and
+  `1` inks narrower than `8`. Needs a monospace segment font (DSEG7); not honoured by `stretch_x`.
 - **fact**: query system info (ip, hostname, cpu%, mem, disk, temp, ntp, wifi_*) OR extract a
   field (via `json_path`/`pattern`) from a `cached-facts.<name>` background-fetched source,
   format with label
 - **text**: static label
 - **divider**: horizontal line
 - **wifi_graphic**: arc-based signal-strength display (0–4 bars + dot)
+- **bit_clock**: whole seconds since `epoch:` (default 1970-01-01 UTC) mod `2**bits` (default 32),
+  one cell per bit, row-major across `bit_rows:` rows; `bit_order: msb` (default) puts the high
+  bit first. `circle`/`square` share one size (fits the smallest cell); `rect` fills its cell; `on_color`/`off_color` (default `CRIMSON`/`DIMRED`; both resolved by
+  `_resolve_colors()`). Time comes from `tz_cache['local']`, so preview mock/time-samples and the
+  simulated-day runner's injected clock drive it like clock panels. Bad values fall back to
+  defaults at render time (validator warns).
 - **debug**: per-frame timings (prep, ntp, tz, draw, display ms)
 - **blank**: reserved space, no draw
 
