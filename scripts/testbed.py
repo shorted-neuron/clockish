@@ -8,6 +8,7 @@ from an Ansible-style YAML inventory (see scripts/testbed-inventory.example.yaml
     python3 scripts/testbed.py deploy                 # current branch, all hosts
     python3 scripts/testbed.py deploy st7789 pi-a     # hosts and/or groups
     python3 scripts/testbed.py deploy -b sync-seconds --pip
+    python3 scripts/testbed.py deploy -r 4896f2f      # any commit/tag, detached
     python3 scripts/testbed.py status | start | stop | restart [pattern]
     python3 scripts/testbed.py deploy --dry-run       # show the remote script
 
@@ -61,8 +62,11 @@ def _walk_group(name, node, parents_vars, hosts, groups):
 
 
 def load_inventory(path):
-    with open(path) as fh:
-        data = yaml.safe_load(fh) or {}
+    try:
+        with open(path) as fh:
+            data = yaml.safe_load(fh) or {}
+    except FileNotFoundError:
+        sys.exit(f"inventory not found: {path} (copy scripts/testbed-inventory.example.yaml, or pass -i)")
     hosts, groups = {}, {}
     # top-level keys are groups ('all' is the usual root)
     for gname, gnode in data.items():
@@ -100,7 +104,8 @@ def _path(p):
     return shlex.quote(p)
 
 
-def deploy_script(v, branch, pip, validate):
+def deploy_script(v, branch, pip, validate, ref=None):
+    """Remote bash for `deploy`.  `ref` (a full SHA) wins over `branch`."""
     repo = _path(v['clockish_path'])
     svc = shlex.quote(v['clockish_service'])
     cfg = v.get('clockish_config')
@@ -111,10 +116,16 @@ def deploy_script(v, branch, pip, validate):
         f'cd {repo}',
         'test -z "$(git status --porcelain --untracked-files=no)" '
         '|| { echo "ERROR: dirty working tree on host" >&2; exit 3; }',
-        'git fetch --quiet origin',
-        f'git checkout --quiet {shlex.quote(branch)}',
-        f'git merge --ff-only --quiet origin/{shlex.quote(branch)}',
+        'git fetch --quiet --tags origin',
     ]
+    if ref:
+        lines.append(f'git checkout --quiet --detach {shlex.quote(ref)} || '
+                     f'{{ echo "ERROR: {ref[:12]} not on origin (unpushed?)" >&2; exit 6; }}')
+    else:
+        lines += [
+            f'git checkout --quiet {shlex.quote(branch)}',
+            f'git merge --ff-only --quiet origin/{shlex.quote(branch)}',
+        ]
     if pip:
         lines.append('.venv/bin/pip install --quiet -e .')
     lines += [
@@ -183,7 +194,11 @@ def main():
     ap.add_argument('patterns', nargs='*', help='host and/or group names (default: all)')
     ap.add_argument('-i', '--inventory',
                     default=os.environ.get('CLOCKISH_TESTBED_INVENTORY', 'testbed-inventory.yaml'))
-    ap.add_argument('-b', '--branch', help='default: branch checked out here')
+    grp = ap.add_mutually_exclusive_group()
+    grp.add_argument('-b', '--branch', help='default: branch checked out here')
+    grp.add_argument('-r', '--ref',
+                     help='commit, tag or branch to check out detached (no merge); '
+                          'resolved to a SHA here, so it must be on origin')
     ap.add_argument('--pip', action='store_true', help='pip install -e . after checkout')
     ap.add_argument('--no-validate', action='store_true', help='skip clockish-validate')
     ap.add_argument('-j', '--jobs', type=int, default=8)
@@ -194,20 +209,31 @@ def main():
     names = select(hosts, groups, args.patterns)
 
     branch = args.branch
-    if args.action == 'deploy' and not branch:
+    ref_sha = None
+    if args.action == 'deploy' and args.ref:
+        try:
+            ref_sha = subprocess.check_output(
+                ['git', 'rev-parse', '--verify', '--quiet', f'{args.ref}^{{commit}}'],
+                text=True).strip()
+        except subprocess.CalledProcessError:
+            sys.exit(f"cannot resolve ref {args.ref!r} here")
+        branch = args.ref
+    elif args.action == 'deploy' and not branch:
         branch = subprocess.check_output(
             ['git', 'rev-parse', '--abbrev-ref', 'HEAD'], text=True).strip()
         if branch == 'HEAD':
             sys.exit("detached HEAD here; pass -b BRANCH")
     local_head = None
     if args.action == 'deploy':
-        local_head = subprocess.check_output(['git', 'rev-parse', branch], text=True).strip()
-        print(f"deploying {branch} ({local_head[:8]}) to {len(names)} host(s)")
+        local_head = ref_sha or subprocess.check_output(
+            ['git', 'rev-parse', branch], text=True).strip()
+        print(f"deploying {branch} ({local_head[:8]}"
+              f"{', detached' if ref_sha else ''}) to {len(names)} host(s)")
 
     jobs = {}
     for n in names:
         try:
-            jobs[n] = (deploy_script(hosts[n], branch, args.pip, not args.no_validate)
+            jobs[n] = (deploy_script(hosts[n], branch, args.pip, not args.no_validate, ref_sha)
                        if args.action == 'deploy' else service_script(hosts[n], args.action))
         except ValueError as e:
             print(f"[{n}] SKIP: {e}")

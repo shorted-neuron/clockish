@@ -70,9 +70,15 @@ all:
 python3 scripts/testbed.py deploy                       # current branch, every host
 python3 scripts/testbed.py deploy spi pi-dsi            # hosts and/or groups
 python3 scripts/testbed.py deploy -b sync-seconds --pip # explicit branch, reinstall
+python3 scripts/testbed.py deploy -r 4896f2f            # a commit or tag, detached
 python3 scripts/testbed.py deploy --dry-run             # print remote scripts only
 python3 scripts/testbed.py status|start|stop|restart [pattern]
 ```
+
+`-r/--ref` (exclusive with `-b`) checks out a commit, tag or branch **detached**: it is
+resolved to a full SHA on the control host, then `git checkout --detach <sha>` runs on
+each host with no merge step. The SHA must be on `origin`, or the host fails with
+`not on origin (unpushed?)`. A later `-b <branch>` deploy leaves detached HEAD again.
 
 Options: `-i FILE` (or `CLOCKISH_TESTBED_INVENTORY`), `--no-validate`, `-j N`
 parallel jobs (default 8).
@@ -80,7 +86,8 @@ parallel jobs (default 8).
 `deploy` per host:
 
 1. Fail if the checkout has uncommitted tracked changes.
-2. `git fetch origin`, `git checkout <branch>`, `git merge --ff-only origin/<branch>`.
+2. `git fetch --tags origin`, then `git checkout <branch>` + `git merge --ff-only
+   origin/<branch>`, or with `--ref`: `git checkout --detach <sha>`.
 3. `pip install -e .` if `--pip`.
 4. Symlink `~/.config/clockish/clockish-config.yaml` (and `display.yaml`) into
    the checkout. A pre-existing real file is kept once as `*.orig`.
