@@ -3772,6 +3772,23 @@ def _init() -> None:
 
 # ---------------------------------------------------------------------------
 # Entry point  --  called by the `clockish` console script and by __main__.py
+_TICK_MAX_AHEAD_S = 2   # tick this far past now => wall clock stepped back
+
+
+def _next_tick(prev: int, now: float) -> int:
+    """Epoch second the next frame shows, given the last one and time.time().
+
+    max(): never repeat a second if the last push ended just short of the
+    boundary; int(now)+1: skip ahead after a stall/reload.  A wall clock
+    stepped BACK (RTC ahead, chrony makestep, date -s) would leave prev far
+    in the future and show_rows() asleep until it comes round -- resync.
+    """
+    tick = max(prev + 1, int(now) + 1)
+    if tick - now > _TICK_MAX_AHEAD_S:
+        tick = int(now) + 1
+    return tick
+
+
 # ---------------------------------------------------------------------------
 def main():
     """Parse args, initialize hardware, then run the display loop."""
@@ -3807,9 +3824,7 @@ def main():
                 _reload_event.clear()
                 _attempt_config_reload()
 
-            # max(): never repeat a second if the last push ended just short
-            # of the boundary; int(now)+1: skip ahead after a stall/reload.
-            tick = max(tick + 1, int(time.time()) + 1)
+            tick = _next_tick(tick, time.time())
             lead_s = (_avg_display_ms or 0.0) / 2000
             show_rows(at=tick, push_at=tick - lead_s)
 
