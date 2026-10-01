@@ -165,6 +165,9 @@ or display. Narrative, measurements per board, and ideas not built:
 - `DisplayDriver.prepare()`/`push()` default to pass-through + `display()`. All four shipped
   drivers split them, and their `display()` is `push(prepare(image))`. `push()` may assume
   the matching `prepare()` came just before it (SSD1306's prepare fills the library buffer).
+- `_next_tick(prev, now)` picks each frame's second. A tick more than `_TICK_MAX_AHEAD_S` (2s)
+  past `time.time()` means the wall clock stepped back; it resyncs to `int(now) + 1` instead of
+  letting `show_rows()` sleep until the stale tick arrives. Tests: `tests/test_tick_alignment.py`.
 - `show_rows()` with no args (preview, `backlight_hardware_test.py`) renders "now" and pushes
   immediately. `tz_cache` calls `_now_in_tz(tz)` bare when `at is None` because that script
   swaps in a one-arg `_now_in_tz`.
