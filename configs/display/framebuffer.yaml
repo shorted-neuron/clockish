@@ -52,34 +52,41 @@ display:
     # Log every actual brightness change (skips no-op writes). Default: false.
     logging: true
 
-    # off_value/min/max are the three brightness values (integers, 0-255)
-    # you'll reference by name from `schedule:` below.
+    # off_value/min/max are this display's brightness bounds (integers,
+    # 0-255). Tune them to your particular panel:
     #   off_value -- fully off (usually 0). NOT named 'off': an unquoted
     #                'off:' key is parsed by YAML 1.1 as the boolean False,
     #                not the string "off" -- a real gotcha, not a style choice.
     #   min       -- dimmest level where the display is still legible
     #   max       -- full brightness (usually 255, your panel's ceiling)
+    # `schedule: sun` uses min as its night level and max as its daytime
+    # plateau, and `fact: backlight` reports the current level as a percentage
+    # of min..max.
     off_value: 0
     min:       40
     max:       255
 
-    # schedule: is EITHER a fixed list of time-of-day entries (below) OR the
-    # scalar `sun` (`follow-sun` / `sun-curve` mean the same thing): min at
-    # night, an eased ramp starting before sunrise, flat max across the middle
-    # of the day, mirrored ramp ending after sunset. A sun schedule needs a
-    # location -- see AGENTS.md "location".
+    # schedule: is EITHER the scalar `sun` (`follow-sun` / `sun-curve` mean the
+    # same thing): min at night, an eased ramp starting before sunrise, flat
+    # max across the middle of the day, mirrored ramp ending after sunset. A
+    # sun schedule needs a location -- see docs/how_location_works.md. Until
+    # the sunrise/sunset times are known, the level is the midpoint of min and
+    # max.
     #
-    #   schedule: sun
-    #
-    # As a list: each entry's `start`/`end` is a 24h "HH:MM" local time; `end`
-    # before `start` (like "night" below) wraps past midnight. Entries must not
-    # overlap (checked at validation time). Any time of day NOT covered by an
-    # entry uses the midpoint between min and max.
+    # OR a fixed list of time-of-day entries: each entry's `start`/`end` is a
+    # 24h "HH:MM" local time; `end` before `start` (like "night" below) wraps
+    # past midnight. An entry's `value` is a literal level, 0-255 (it does not
+    # have to be min or max). Entries must not overlap (checked at validation
+    # time). Any time of day NOT covered by an entry uses the midpoint between
+    # min and max.
+    # Alternatively, follow the sun instead (needs a location; replace the list
+    # below with this line):
+    #   schedule: follow-sun
     schedule:
       - name: night
         start: "22:00"
         end:   "06:59"
-        value: 42
+        value: 42   # a little above min on purpose: dim, but not at the floor
       - name: day
         start: "07:00"
         end:   "19:59"
