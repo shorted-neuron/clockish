@@ -50,14 +50,16 @@ while IFS='|' read -r NAME TARGET PORT SVC <&3; do
     fi
     if "${SCP[@]}" scripts/setup-testbed-sudoers.sh "$TARGET:$REMOTE" \
        && "${SSH[@]}" -t "$TARGET" "bash $REMOTE $SVC; rc=\$?; rm -f $REMOTE; exit \$rc"; then
-        # Verify without side effects: sudo -n -l lists rules with no password when a
-        # NOPASSWD entry exists.  (-l <command> is useless: it also says yes for
-        # commands allowed only with a password.)
-        if "${SSH[@]}" -o BatchMode=yes "$TARGET" "sudo -n -l" 2>/dev/null \
-               | grep -q "NOPASSWD:.*systemctl restart $SVC"; then
-            echo "  verified: NOPASSWD rule for systemctl restart $SVC is active"
+        # Independent check over a fresh, tty-less session: no cached sudo timestamp, so
+        # sudo -n must work on the rule alone.  New file present, old one gone.
+        CHECK="[ -e /etc/sudoers.d/099_$SVC ] || { echo 'no /etc/sudoers.d/099_$SVC'; exit 1; }; \
+[ ! -e /etc/sudoers.d/$SVC-\$USER ] || { echo 'old /etc/sudoers.d/$SVC-'\$USER' still there'; exit 1; }; \
+O=\$(sudo -n systemctl status $SVC 2>&1 >/dev/null); \
+case \"\$O\" in *'password is required'*|*'not allowed'*) echo 'sudo -n still needs a password'; exit 1;; esac"
+        if OUT="$("${SSH[@]}" -o BatchMode=yes "$TARGET" "$CHECK" 2>&1)"; then
+            echo "  verified: 099_$SVC installed, old file gone, sudo -n works"
         else
-            echo "  NOT VERIFIED: no NOPASSWD rule for systemctl restart $SVC"; FAILED+=("$NAME")
+            echo "  NOT VERIFIED: $OUT"; FAILED+=("$NAME")
         fi
     else
         echo "  FAILED"; FAILED+=("$NAME")

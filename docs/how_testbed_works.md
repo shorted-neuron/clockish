@@ -24,18 +24,28 @@ cp scripts/testbed-inventory.example.yaml testbed-inventory.yaml   # gitignored
    The unit then runs `~/.config/clockish/clockish-config.yaml`. `deploy` swaps
    what that path points at, so the unit never needs rewriting (no root).
    `deploy` checks this and says so if the unit differs.
-3. Passwordless start/stop/restart:
+3. Passwordless service and power commands:
    ```bash
    bash scripts/setup-testbed-sudoers.sh
    ```
-   Writes `/etc/sudoers.d/clockish-<user>`, validated with `visudo -cf` first.
-   Exact commands only (`systemctl start|stop|restart clockish`), no wildcards. For every
-   host at once, from the control host:
+   Writes `/etc/sudoers.d/099_clockish` (validated with `visudo -cf` first) for members of
+   group `users`: `systemctl start|status|stop|restart|enable|disable clockish` plus
+   `reboot`, `shutdown -h now`, `halt`. Exact commands only, no wildcards; the tool itself
+   needs only start/stop/restart. `systemctl` is `/bin/systemctl`: the real path on bookworm,
+   and it resolves on trixie where `/bin` is a symlink to `usr/bin`. The script also removes
+   `/etc/sudoers.d/clockish-<user>` from its earlier version, and ends by proving the rule
+   with `sudo -n` after clearing cached sudo credentials (`timestamp_type=global` is the
+   Debian default here, so a password typed recently in any session would otherwise hide
+   a missing rule).
+
+   For every host at once, from the control host:
    `bash scripts/setup-testbed-sudoers-all.sh [-i inventory] [-n] [host-or-group ...]`.
    It copies the script and runs it with `ssh -t`, so each host prompts for your sudo
-   password once; `-n` is a dry run. It re-checks each host with `sudo -n -l` afterwards.
+   password once; `-n` is a dry run. Afterwards it re-checks each host over a fresh
+   session: new file present, old file gone, `sudo -n` works.
    Reads (`is-active`, `status`, `journalctl`) need no sudo.
-   Check: `ssh -T host 'sudo -n systemctl restart clockish && echo ok'`.
+   Check by hand: `ssh -T host 'sudo -n systemctl status clockish'` must not
+   ask for a password.
 
 ## Inventory
 
@@ -105,8 +115,8 @@ is non-zero if any host failed; the failing hosts are listed at the end.
 ## Troubleshooting
 
 - `sudo: a password is required` / `a terminal is required to read the password`:
-  the NOPASSWD rule is missing, or the command doesn't match it exactly (user,
-  service name, extra flags). Not a tty problem unless sudoers has `requiretty`
+  the NOPASSWD rule is missing, or the command doesn't match it exactly (service
+  name, extra flags), or the user isn't in group `users`. Not a tty problem unless sudoers has `requiretty`
   (not set on Debian/Raspberry Pi OS; if present add `Defaults:<user> !requiretty`).
 - `unit does not run ~/.config/clockish/clockish-config.yaml`: re-run
   `./run-clockish.sh --install-service` with no config argument on that host.
