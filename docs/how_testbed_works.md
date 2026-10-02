@@ -29,7 +29,11 @@ cp scripts/testbed-inventory.example.yaml testbed-inventory.yaml   # gitignored
    bash scripts/setup-testbed-sudoers.sh
    ```
    Writes `/etc/sudoers.d/clockish-<user>`, validated with `visudo -cf` first.
-   Exact commands only (`systemctl start|stop|restart clockish`), no wildcards.
+   Exact commands only (`systemctl start|stop|restart clockish`), no wildcards. For every
+   host at once, from the control host:
+   `bash scripts/setup-testbed-sudoers-all.sh [-i inventory] [-n] [host-or-group ...]`.
+   It copies the script and runs it with `ssh -t`, so each host prompts for your sudo
+   password once; `-n` is a dry run. It re-checks each host with `sudo -n -l` afterwards.
    Reads (`is-active`, `status`, `journalctl`) need no sudo.
    Check: `ssh -T host 'sudo -n systemctl restart clockish && echo ok'`.
 

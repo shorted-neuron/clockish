@@ -184,8 +184,10 @@ Setup, inventory vars, usage, sudoers rule and troubleshooting:
 
 - Config switching = symlinks at `~/.config/clockish/{clockish-config,display}.yaml`; the unit
   runs that fixed path. Never rewrite the unit to switch configs (needs root).
-- Remote service control is `sudo -n systemctl start|stop|restart` only, matched by the exact-command
-  rule from `scripts/setup-testbed-sudoers.sh`. Don't add other privileged calls.
+- The tool's remote service control is `sudo -n systemctl start|stop|restart` only, matched by the
+  exact-command rule from `scripts/setup-testbed-sudoers.sh`. Reads (`status`, `is-active`,
+  `journalctl`) need no sudo. `scripts/setup-testbed-sudoers-all.sh` installs the rule on every
+  host. Don't add other privileged calls.
 - Hosts fetch from `origin`; the tool never pushes.
 
 ### Layout pre-computation

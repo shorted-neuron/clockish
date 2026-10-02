@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # scripts/setup-testbed-sudoers.sh -- let the current user run
 # `sudo systemctl start|stop|restart clockish` without a password, so
-# scripts/testbed.py can drive this host over SSH.  Run once per test host.
+# scripts/testbed.py can drive this host over SSH.  Run once per test host
+# (or from the control host for all of them: scripts/setup-testbed-sudoers-all.sh).
 #
 #   bash scripts/setup-testbed-sudoers.sh [service-name]
 #
 # Exact commands only, no wildcards: a wildcard in sudoers would let the user
-# pass extra arguments.  status/is-active/journalctl need no sudo at all.
+# pass extra arguments.  status/is-active/journalctl need no sudo at all (members
+# of adm can read the journal), so they are not in the rule.
 set -euo pipefail
 [[ "$EUID" -eq 0 ]] && { echo "run as your normal user, not root" >&2; exit 1; }
 
