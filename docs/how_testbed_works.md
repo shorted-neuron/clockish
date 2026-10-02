@@ -108,4 +108,13 @@ is non-zero if any host failed; the failing hosts are listed at the end.
   `./run-clockish.sh --install-service` with no config argument on that host.
 - `dirty working tree on host`: a test host has local edits. Commit or
   `git checkout -- .` there. `--ff-only` also fails on diverged local commits.
+- `git fetch` fails on the host (`Permission denied (publickey)`) but works when you
+  log in by hand: the host's `origin` is an SSH URL and your key has a passphrase.
+  Your login session has an agent holding the unlocked key; the tool's
+  non-interactive `ssh host 'bash -s'` (with `BatchMode=yes`) has none. Targets only
+  fetch, so point `origin` at the public HTTPS URL:
+  `git -C <clockish_path> remote set-url origin https://github.com/shorted-neuron/clockish.git`.
+  Alternatives: `ForwardAgent yes` for that host in `~/.ssh/config` (lends your key to
+  the host; only for hosts you control), or a read-only deploy key without a passphrase.
+  Check what the tool sees: `ssh -o BatchMode=yes host 'cd <clockish_path> && git fetch --tags origin'`.
 - Logs: `ssh host journalctl -u clockish -n 50` (user is in `adm`).
