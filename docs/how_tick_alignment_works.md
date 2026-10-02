@@ -127,8 +127,23 @@ ILI9486 row timings above were measured.
   measured (original Zero, single core pegged) used about 300 ms.
 - A frame that misses the boundary is pushed late, showing the correct second.
   The next pass re-targets from the wall clock, so the loop self-heals.
-- A wall-clock step during the sleep (rare under chrony, which slews) mistimes
-  one frame only.
+- A wall-clock step *forward* during the sleep (rare under chrony, which slews)
+  mistimes one frame only.
+- A wall-clock step *back* (RTC ahead at boot, chrony `makestep`, `date -s`)
+  would leave `tick` far in the future, and `show_rows()` would sleep until the
+  old tick came round -- a frozen display for as long as the step. `_next_tick()`
+  catches it: a tick more than `_TICK_MAX_AHEAD_S` (2 s) past `time.time()` is
+  discarded and the loop restarts from the next real second. Tests:
+  `tests/test_tick_alignment.py`.
+
+### Rendering without a tick
+
+`show_rows()` with no arguments (`at=None`, `push_at=None`) renders "now" and
+pushes immediately, with no lead and no sleep. `clockish-preview`,
+`--debug-layout` and `scripts/backlight_hardware_test.py` use it. The timezone
+cache calls `_now_in_tz(tz)` bare in that case rather than `_now_in_tz(tz, at)`,
+because the backlight script swaps in a one-argument `_now_in_tz` to inject its
+simulated clock. Keep that call shape when touching the cache.
 
 ### Ideas not built
 
