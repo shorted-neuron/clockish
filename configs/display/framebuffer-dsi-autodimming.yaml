@@ -1,0 +1,102 @@
+---
+# Linux framebuffer (/dev/fb0) with an auto-dimming backlight  --  DSI or HDMI
+# ---------------------------------------------------------------------------
+# Same as framebuffer.yaml, but the backlight follows the sun (`schedule:
+# follow-sun`) within bounds tuned for one panel: very dark at night, and
+# never full brightness even in the day. Needs a location -- see
+# docs/how_location_works.md.
+#
+# Works with:
+#   Raspberry Pi Official 7" Touch Display  (2013 original + 2024 v2, 800x480)
+#   HDMI monitors at whatever resolution the Pi initialises at boot
+#   DSI connected displays (e.g. Waveshare 5" DSI, 800x480)
+#   Any other display the kernel exposes as /dev/fb*
+#
+# Prerequisites:
+#   sudo usermod -aG video $USER   (log out and back in)
+#
+# The driver automatically switches the VT to KD_GRAPHICS mode on start,
+# which suppresses the blinking cursor and any console text overlay.
+# Masking getty@tty1 is enough for a clean display:
+#   sudo systemctl mask getty@tty1
+# For a fully silent boot also add to /boot/firmware/cmdline.txt:
+#   quiet logo.nologo vt.global_cursor_default=0
+#
+# width/height are OPTIONAL  --  the driver auto-detects real geometry from
+# the kernel at startup (FBIOGET_VSCREENINFO) and that always wins over
+# whatever's configured here (a mismatch just prints a warning, doesn't
+# fail). Add them anyway if you want `clockish-preview` to render at the
+# right size offline (no real /dev/fb0 to query on a dev machine) -- e.g.:
+#   width:  800
+#   height: 480
+# Check your actual resolution with:
+#   fbset -i
+#   cat /sys/class/graphics/fb0/virtual_size
+# ---------------------------------------------------------------------------
+
+display:
+  driver:   framebuffer
+  device:   /dev/fb0
+  rotation: 0
+  clear_on_exit: false
+
+  # Backlight control -- OPTIONAL. Omit this whole block if your display has
+  # no software-controllable backlight (e.g. always-on panel, or brightness
+  # fixed by a physical knob).
+  backlight:
+    # How the backlight is actually driven. Only 'sysfs' exists today.
+    method: sysfs
+
+    # Backlight device folder name under /sys/class/backlight/ -- NOT a full
+    # path. The driver always writes to:
+    #   /sys/class/backlight/<device>/brightness
+    # Find yours with:
+    #   ls /sys/class/backlight/
+    device: 10-0045
+
+    # Log every actual brightness change (skips no-op writes). Default: false.
+    logging: true
+
+    # off_value/min/max are this display's brightness bounds (integers,
+    # 0-255). Tune them to your particular panel:
+    #   off_value -- fully off (usually 0). NOT named 'off': an unquoted
+    #                'off:' key is parsed by YAML 1.1 as the boolean False,
+    #                not the string "off" -- a real gotcha, not a style choice.
+    #   min       -- dimmest level where the display is still legible
+    #   max       -- full brightness (usually 255, your panel's ceiling)
+    # `schedule: sun` uses min as its night level and max as its daytime
+    # plateau, and `fact: backlight` reports the current level as a percentage
+    # of min..max.
+    # This panel: min is very dark, for night, and max is held below the
+    # panel's ceiling so it is never at full brightness, even in the day. The
+    # `follow-sun` schedule below inherits both bounds.
+    off_value: 0
+    min:       2
+    max:       224
+
+    # schedule: is EITHER the scalar `sun` (`follow-sun` / `sun-curve` mean the
+    # same thing): min at night, an eased ramp starting before sunrise, flat
+    # max across the middle of the day, mirrored ramp ending after sunset. A
+    # sun schedule needs a location -- see docs/how_location_works.md. Until
+    # the sunrise/sunset times are known, the level is the midpoint of min and
+    # max.
+    #
+    # OR a fixed list of time-of-day entries: each entry's `start`/`end` is a
+    # 24h "HH:MM" local time; `end` before `start` (like "night" below) wraps
+    # past midnight. An entry's `value` is a literal level, 0-255 (it does not
+    # have to be min or max). Entries must not overlap (checked at validation
+    # time). Any time of day NOT covered by an entry uses the midpoint between
+    # min and max.
+    schedule: follow-sun
+    #
+    # Alternatively, a fixed list of time-of-day entries (uncomment, and drop the
+    # line above):
+    #   schedule:
+    #     - name: night
+    #       start: "22:00"
+    #       end:   "06:59"
+    #       value: 42
+    #     - name: day
+    #       start: "07:00"
+    #       end:   "19:59"
+    #       value: 255
