@@ -75,6 +75,51 @@ SUNRISE = _at(7, 0)
 SUNSET = _at(19, 0)
 
 
+class TestScheduleLevelNames:
+    """A list entry's `value:` may be `min`, `max` or `off`, which take the
+    backlight block's own bounds (`off` is `off_value`)."""
+
+    @staticmethod
+    def _entry(value):
+        return [{'name': 'all-day', 'start': '00:00', 'end': '23:59', 'value': value}]
+
+    @pytest.mark.parametrize('value, expected', [('min', 7), ('max', 200), ('off', 3)])
+    def test_names_resolve_to_the_blocks_numbers(self, value, expected):
+        got = resolve_scheduled_value(self._entry(value), min_=7, max_=200, now=_at(12, 0), off_value=3)
+        assert got == expected
+
+    def test_unquoted_yaml_off_arrives_as_false_and_means_off(self):
+        # `value: off` is the boolean False under YAML 1.1 (PyYAML's default).
+        got = resolve_scheduled_value(self._entry(False), min_=7, max_=200, now=_at(12, 0), off_value=3)
+        assert got == 3
+
+    def test_off_value_defaults_to_zero(self):
+        assert resolve_scheduled_value(self._entry('off'), min_=7, max_=200, now=_at(12, 0)) == 0
+
+    def test_plain_numbers_are_unchanged(self):
+        assert resolve_scheduled_value(self._entry(42), min_=7, max_=200, now=_at(12, 0), off_value=3) == 42
+        assert resolve_scheduled_value(self._entry(0), min_=7, max_=200, now=_at(12, 0), off_value=3) == 0
+
+    def test_names_mix_with_numbers_across_a_day(self):
+        sched = [
+            {'name': 'night', 'start': '22:00', 'end': '06:59', 'value': 'min'},
+            {'name': 'morning', 'start': '07:00', 'end': '11:59', 'value': 120},
+            {'name': 'day', 'start': '12:00', 'end': '19:59', 'value': 'max'},
+            {'name': 'evening', 'start': '20:00', 'end': '21:59', 'value': 'off'},
+        ]
+        at = lambda h, m: resolve_scheduled_value(sched, min_=5, max_=224, now=_at(h, m), off_value=1)  # noqa: E731
+        assert (at(2, 0), at(9, 0), at(15, 0), at(21, 0)) == (5, 120, 224, 1)
+
+    def test_resolve_level_directly(self):
+        from clockish.backlight import resolve_level
+        assert [resolve_level(v, 2, 224, 0) for v in ('min', 'max', 'off', False, 99)] == [2, 224, 0, 0, 99]
+
+    def test_resolve_value_uses_the_cfg_off_value(self):
+        cfg = {'min': 2, 'max': 224, 'off_value': 1,
+               'schedule': [{'name': 'all', 'start': '00:00', 'end': '23:59', 'value': 'off'}]}
+        assert backlight._resolve_value(cfg, now=_at(12, 0)) == 1
+
+
 class TestResolveSunCurveValue:
     """The `schedule: sun` trapezoid: min at night, eased ramp starting
     TWILIGHT_MINUTES before sunrise, flat max across the middle half of

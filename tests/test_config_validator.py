@@ -1096,6 +1096,20 @@ class TestBacklight:
         assert any('overlap' in i.message.lower() for i in result.errors)
 
 
+    @pytest.mark.parametrize('value', ['min', 'max', 'off', False])
+    def test_schedule_value_may_be_a_level_name(self, value) -> None:
+        # False is an unquoted `off` as YAML 1.1 parses it.
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '07:00', 'end': '19:59', 'value': value}])
+        result = validate_config_dict(cfg)
+        assert result.ok, f"expected no issues for value {value!r}, got: {result.issues}"
+
+    @pytest.mark.parametrize('value', ['dim', 'minimum', 'MAX', ' off', '42', True, 256, -1, 1.5])
+    def test_schedule_value_other_than_number_or_name_errors(self, value) -> None:
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '07:00', 'end': '19:59', 'value': value}])
+        result = validate_config_dict(cfg)
+        assert any('value' in i.message and 'min, max, off' in i.message for i in result.errors)
+
+
 class TestBacklightSunSchedule:
     """'schedule:' as a scalar naming the sun curve, instead of a list."""
 

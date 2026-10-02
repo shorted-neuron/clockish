@@ -46,6 +46,10 @@ _CHECK_INTERVAL_SECS = 600  # 10 minutes -- see AGENTS.md, no need for finer gra
 #: definition (this module is stdlib-only, so the import is cheap and one-way).
 SUN_SCHEDULE_VALUES: frozenset[str] = frozenset({'sun', 'follow-sun', 'sun-curve'})
 
+#: Names a list schedule entry's `value:` may use instead of a number: `min` and
+#: `max` are the backlight block's own bounds, `off` is its `off_value`.
+SCHEDULE_LEVEL_NAMES: tuple[str, ...] = ('min', 'max', 'off')
+
 #: Sun-curve shape (see resolve_sun_curve_value()).
 #:
 #: TWILIGHT_MINUTES -- how long before sunrise the ramp up starts, and how
@@ -84,13 +88,37 @@ def _in_range(now_min: int, start_min: int, end_min: int) -> bool:
     return now_min >= start_min or now_min <= end_min
 
 
+def resolve_level(value: object, min_: int, max_: int, off_value: int = 0) -> int:
+    """Return the number a schedule entry's `value:` stands for.
+
+    A number is used as is.  `min`, `max` and `off` (exact, lowercase) take the
+    backlight block's `min`, `max` and `off_value`, so a schedule follows a
+    display's tuned bounds instead of repeating them.  An unquoted `off` in YAML
+    1.1 arrives here as False (see "Why `off_value` and not `off`" in AGENTS.md),
+    so False means `off` too.
+    """
+    if value is False:
+        return off_value
+    if value == 'min':
+        return min_
+    if value == 'max':
+        return max_
+    if value == 'off':
+        return off_value
+    return int(value)  # type: ignore[call-overload]
+
+
 def resolve_scheduled_value(
     schedule: list[dict],
     min_: int,
     max_: int,
     now: datetime.datetime | None = None,
+    off_value: int = 0,
 ) -> int:
     """Return the brightness value (int, 0-255) the schedule specifies for `now`.
+
+    An entry's `value` is a number, or one of SCHEDULE_LEVEL_NAMES, which
+    resolve_level() replaces with min_, max_ or off_value.
 
     Time not covered by any schedule entry falls back to the midpoint
     between min_ and max_, rounded to the nearest int.
@@ -101,7 +129,7 @@ def resolve_scheduled_value(
         start_min = _parse_hhmm(entry['start'])
         end_min = _parse_hhmm(entry['end'])
         if _in_range(now_min, start_min, end_min):
-            return int(entry['value'])
+            return resolve_level(entry['value'], min_, max_, off_value)
     return round((min_ + max_) / 2)
 
 
@@ -268,7 +296,8 @@ def _resolve_value(cfg: dict, now: datetime.datetime | None = None) -> int:
         sunrise, sunset = sun_times
         return resolve_sun_curve_value(sunrise, sunset, min_=min_, max_=max_, now=now)
 
-    return resolve_scheduled_value(schedule or [], min_=min_, max_=max_, now=now)
+    return resolve_scheduled_value(
+        schedule or [], min_=min_, max_=max_, now=now, off_value=cfg.get('off_value', 0))
 
 
 def _apply(cfg: dict, now: datetime.datetime | None = None) -> None:

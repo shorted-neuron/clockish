@@ -472,14 +472,24 @@ runtime and is an error at validation time. Any key not in `_BACKLIGHT_ATTRS` (e
 `curve:`) is an **error** in the semantic walker, not a warning -- it has to hold even when
 jsonschema is missing and the schema layer (`additionalProperties: false`) is skipped.
 
+**Schedule entry `value:`**: a literal level 0-255, or one of `min` / `max` / `off`
+(`SCHEDULE_LEVEL_NAMES` in `backlight.py`, imported by the validator like `SUN_SCHEDULE_VALUES`), which
+`resolve_level()` replaces with the block's own `min`, `max` and `off_value` -- so a schedule follows a
+display's tuned bounds instead of repeating the numbers. Names are exact lowercase in all three layers
+(driver, semantic validator, `configs/schema/`), never case-folded. `schedule: sun` already inherits
+`min`/`max` the same way. An unquoted `off` value arrives as `False` (below), so `False` is accepted
+as `off`; `True` is an error.
+
 **Why `off_value` and not `off`**: an unquoted `off:` YAML key is parsed under YAML 1.1 (PyYAML's
 default) as the boolean `False`, not the string `"off"` -- silently corrupting the config (the
 dict ends up with a `False` key instead of `'off'`). This isn't a style preference; it's the same
 class of gotcha as `yes`/`no`/`on`/`off`/`true`/`false` all being reserved boolean words. Never
-add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote it or rename it.
+add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote it or rename it. It
+bites values too: in `configs/schema/*.yaml` write `enum: [min, max, 'off']` (a bare `off` there is
+silently `False`), and `value: off` in a config reaches the driver as `False`.
 
 **Mechanics** (`backlight.py`):
-- `resolve_scheduled_value(schedule, min_, max_, now)` -- pure function, no I/O. Matches `now`
+- `resolve_scheduled_value(schedule, min_, max_, now, off_value=0)` -- pure function, no I/O. Matches `now`
   against each entry's `start`/`end` (inclusive both ends; `end < start` wraps past midnight).
   Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`).
 - `resolve_sun_curve_value(sunrise, sunset, min_, max_, now, twilight_minutes, peak_fraction)` --
@@ -531,7 +541,8 @@ add a bare `off:`/`on:`/`yes:`/`no:` key to any clockish config schema -- quote 
   when the computed value actually changed since the last write.
 - `config_validator.py` validates the whole block: required keys, `method` enum, 0-255 ranges,
   `min <= max`, `schedule` present and either a known sun scalar or a non-empty list, `HH:MM`
-  format, and schedule-entry overlap (midnight-wrap aware).
+  format, each entry's `value` (an integer 0-255, or `min`/`max`/`off`), and schedule-entry
+  overlap (midnight-wrap aware).
 
 **`fact: backlight`**: `current_percent()` reports where the panel sits in its own configured
 `min`..`max` span -- `min` is 0%, `max` is 100%, whole numbers only (`min: 2`, `max: 255`, level
