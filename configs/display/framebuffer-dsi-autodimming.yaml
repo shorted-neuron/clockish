@@ -83,10 +83,11 @@ display:
     #
     # OR a fixed list of time-of-day entries: each entry's `start`/`end` is a
     # 24h "HH:MM" local time; `end` before `start` (like "night" below) wraps
-    # past midnight. An entry's `value` is a literal level, 0-255 (it does not
-    # have to be min or max). Entries must not overlap (checked at validation
-    # time). Any time of day NOT covered by an entry uses the midpoint between
-    # min and max.
+    # past midnight. An entry's `value` is a level 0-255, or `min`, `max` or
+    # `off` to use this block's own min, max and off_value (so the schedule
+    # follows your tuned bounds). Entries must not overlap (checked at
+    # validation time). Any time of day NOT covered by an entry uses the
+    # midpoint between min and max.
     schedule: follow-sun
     #
     # Alternatively, a fixed list of time-of-day entries (uncomment, and drop the
@@ -95,8 +96,8 @@ display:
     #     - name: night
     #       start: "22:00"
     #       end:   "06:59"
-    #       value: 42
+    #       value: min
     #     - name: day
     #       start: "07:00"
     #       end:   "19:59"
-    #       value: 255
+    #       value: max
