@@ -1110,6 +1110,27 @@ class TestBacklight:
         assert any('value' in i.message and 'min, max, off' in i.message for i in result.errors)
 
 
+    @pytest.mark.parametrize('bad_name', [False, True, 42, None])
+    def test_non_string_entry_name_errors_instead_of_crashing(self, bad_name) -> None:
+        # `name: off` parses as False under YAML 1.1; the overlap check used to sort it against a
+        # string and die with a TypeError, so the overlap is part of the setup on purpose.
+        cfg = _backlight_config(schedule=[
+            {'name': bad_name, 'start': '00:00', 'end': '12:00', 'value': 100},
+            {'name': 'b', 'start': '11:00', 'end': '23:59', 'value': 200},
+        ])
+        result = validate_config_dict(cfg)
+        assert any("'name:" in i.message and 'must be a string' in i.message for i in result.errors)
+        assert any('overlap' in i.message.lower() for i in result.errors)
+
+    def test_non_string_entry_name_without_overlap_errors(self) -> None:
+        cfg = _backlight_config(schedule=[
+            {'name': False, 'start': '00:00', 'end': '12:00', 'value': 100},
+            {'name': 'b', 'start': '13:00', 'end': '23:59', 'value': 200},
+        ])
+        result = validate_config_dict(cfg)
+        assert any('must be a string' in i.message for i in result.errors)
+
+
 class TestBacklightSunSchedule:
     """'schedule:' as a scalar naming the sun curve, instead of a list."""
 

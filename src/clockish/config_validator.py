@@ -826,6 +826,11 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                 warn(sloc, f"unexpected key '{key}' on schedule entry")
 
                         name = entry.get('name', f'[{si}]')
+                        if not isinstance(name, str):
+                            # An unquoted off/on/yes/no is a YAML 1.1 boolean, not a name; later code sorts names.
+                            err(sloc, f"'name: {name!r}' must be a string "
+                                      "(quote it: an unquoted off/on/yes/no is a YAML boolean)")
+                            name = f'[{si}]'
                         start, end, value = entry.get('start'), entry.get('end'), entry.get('value')
 
                         valid_times = True
