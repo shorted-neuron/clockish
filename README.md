@@ -34,7 +34,8 @@ and each panel shows one thing — a clock, date, system fact, Wi-Fi signal grap
 or static text. Multiple timezones, font sizes, colors, and panel widths are all controlled
 from config with no code changes required.
 
-Target hardware: Raspberry Pi ( original thru pi5, zeros on armv6l, armv7l / aarch64).
+Target hardware: Raspberry Pi ( original thru pi5, zeros on armv6l, armv7l / aarch64; see
+[older boards](#older-boards-raspberry-pi-1-family) for a Pi 1 caveat).
 Target OS: Raspberry Pi OS or Ubuntu, 32 or 64 bit.
 Tested displays:
 - 3.5" ILI9486-based SPI LCD (480x320, 16-bit color).
@@ -45,6 +46,24 @@ Tested displays:
   - DSI displays (like 7" and 10" Raspberry Pi DSI panels)
   - HDMI displays or your TV
 
+#### Older boards (Raspberry Pi 1 family)
+
+The original Pi 1 boards (A, B, A+, B+ and the first compute module) report an old-style board
+revision code. `rpi-lgpio`, the GPIO library current Raspberry Pi OS installs, does not understand
+those codes, and importing it fails with:
+
+```
+NotImplementedError: This module does not understand old-style revision codes
+```
+
+`rpi-lgpio` and the older `RPi.GPIO` both provide the same `RPi.GPIO` module, so only one of them
+can be active in a Python environment, and which one a clockish install ends up with decides
+whether a Pi 1 works. Seen on a Raspberry Pi Model B+ v1.2 (2014 printed on the PCB): with
+`rpi-lgpio` the ILI9486 driver fails with the error above; with `RPi.GPIO` 0.7.1 in the venv the
+ILI9486 driver starts and renders a frame (tested with no panel attached) and an SSD1306 I2C
+display runs normally. Other Pi 1 boards may fail the same way but are untested. Pi 2 and newer,
+and the Pi Zero family, report new-style codes and are not affected. The ST7789 driver uses
+`gpiod`, not `RPi.GPIO`, and the Linux framebuffer driver needs no GPIO library.
 
 ---
 
