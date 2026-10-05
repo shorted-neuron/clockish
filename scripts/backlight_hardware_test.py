@@ -479,7 +479,8 @@ def _report(samples, cfg, min_, max_, lm,
         else:
             checks.append((False, f"never reached max ({max_})"))
     elif cfg.get('schedule'):
-        values = {int(e['value']) for e in cfg['schedule']}
+        off_ = cfg.get('off_value', 0)
+        values = {backlight.resolve_level(e['value'], min_, max_, off_) for e in cfg['schedule']}
         values.add(round((min_ + max_) / 2))  # uncovered-time fallback
         stray = sorted({v for _, v in samples} - values)
         checks.append((not stray,
@@ -637,6 +638,9 @@ def main(argv: list[str] | None = None) -> int:
         backlight.stop_backlight()
 
         cfg = _backlight_cfg_from_config(display_cfg, args)
+        # stop_backlight() also clears _active_cfg, which `fact: backlight` needs; the
+        # worker is what has to stop, so put the block back for the on-screen readout.
+        backlight._active_cfg = cfg
 
         if args.sunrise:
             _inject_sun_times(day, args.sunrise, args.sunset)
