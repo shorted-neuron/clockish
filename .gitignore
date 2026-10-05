@@ -78,3 +78,6 @@ docs/previews/time-samples/
 # Vendored fonts etc. are fetched locally, not committed. Keep only the README.
 third_party/*
 !third_party/README.md
+
+# testbed inventory (hostnames/IPs of test platforms)
+testbed-inventory.yaml

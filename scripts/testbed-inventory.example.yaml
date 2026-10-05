@@ -1,0 +1,30 @@
+---
+# Copy to testbed-inventory.yaml (gitignored) and edit.
+# Ansible-style: all.vars < group vars < host vars; groups nest via children.
+all:
+  vars:
+    # ansible_user: someuser
+    clockish_path: ~/clockish        # checkout on the host
+  hosts:
+    pi-ili-a:
+      ansible_host: 192.168.1.51
+      clockish_config: configs/small.yaml
+      clockish_display: configs/display/ili9486-portrait.yaml
+    pi-ili-b:
+      ansible_host: 192.168.1.52
+      clockish_config: configs/landscape-demo.yaml
+      clockish_display: configs/display/ili9486-landscape.yaml
+    pi-st7789:
+      ansible_host: pi-st7789.local
+      clockish_config: configs/tiny.yaml
+      clockish_display: configs/display/st7789-240x135.yaml
+    pi-dsi:
+      ansible_host: 192.168.1.60
+      clockish_config: configs/bit-clock35.yaml
+      clockish_display: configs/display/framebuffer.yaml
+  children:
+    spi:
+      hosts:
+        pi-ili-a:
+        pi-ili-b:
+        pi-st7789:
