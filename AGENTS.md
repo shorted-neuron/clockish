@@ -165,11 +165,33 @@ or display. Narrative, measurements per board, and ideas not built:
 - `DisplayDriver.prepare()`/`push()` default to pass-through + `display()`. All four shipped
   drivers split them, and their `display()` is `push(prepare(image))`. `push()` may assume
   the matching `prepare()` came just before it (SSD1306's prepare fills the library buffer).
+- `_next_tick(prev, now)` picks each frame's second. A tick more than `_TICK_MAX_AHEAD_S` (2s)
+  past `time.time()` means the wall clock stepped back; it resyncs to `int(now) + 1` instead of
+  letting `show_rows()` sleep until the stale tick arrives. Tests: `tests/test_tick_alignment.py`.
 - `show_rows()` with no args (preview, `backlight_hardware_test.py`) renders "now" and pushes
   immediately. `tz_cache` calls `_now_in_tz(tz)` bare when `at is None` because that script
   swaps in a one-arg `_now_in_tz`.
 - `--debug` prints `render=`, `disp=` (push), `tick=±Nms` (push midpoint vs second) and
   `conv=` (prepare) per frame. Use it to re-measure after touching the loop or a driver.
+
+### Testbed (multi-host testing)
+
+`scripts/testbed.py` checks out a branch on N SSH-reachable Pis and restarts clockish with a
+per-host config + display profile from an Ansible-style inventory
+(`testbed-inventory.yaml`, gitignored; example in `scripts/testbed-inventory.example.yaml`).
+Setup, inventory vars, usage, sudoers rule and troubleshooting:
+[docs/how_testbed_works.md](docs/how_testbed_works.md). Rules for agents:
+
+- Config switching = symlinks at `~/.config/clockish/{clockish-config,display}.yaml`; the unit
+  runs that fixed path. Never rewrite the unit to switch configs (needs root).
+- The tool's remote service control is `sudo -n systemctl start|stop|restart` only, matched by the
+  exact-command rule `/etc/sudoers.d/099_<service>` from `scripts/setup-testbed-sudoers.sh` (group
+  `users`; also allows `status`/`enable`/`disable` and reboot/shutdown/halt for managing the testbed
+  by hand). Reads (`status`, `is-active`, `journalctl`) need no sudo.
+  `scripts/setup-testbed-sudoers-all.sh` installs the rule on every host. Don't add other
+  privileged calls to the tool. Verify a sudoers change with `sudo -K` first: Debian here uses
+  `timestamp_type=global`, so a recently typed password makes `sudo -n` pass without any rule.
+- Hosts fetch from `origin`; the tool never pushes.
 
 ### Layout pre-computation
 
