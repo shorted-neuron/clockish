@@ -60,7 +60,7 @@ import yaml
 if __package__ in (None, ''):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clockish.backlight import SUN_SCHEDULE_VALUES  # noqa: E402
+from clockish.backlight import SCHEDULE_LEVEL_NAMES, SUN_SCHEDULE_VALUES, is_valid_level  # noqa: E402
 from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
     NO_ARG_TRANSFORMS,
@@ -826,6 +826,11 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                 warn(sloc, f"unexpected key '{key}' on schedule entry")
 
                         name = entry.get('name', f'[{si}]')
+                        if not isinstance(name, str):
+                            # An unquoted off/on/yes/no is a YAML 1.1 boolean, not a name; later code sorts names.
+                            err(sloc, f"'name: {name!r}' must be a string "
+                                      "(quote it: an unquoted off/on/yes/no is a YAML boolean)")
+                            name = f'[{si}]'
                         start, end, value = entry.get('start'), entry.get('end'), entry.get('value')
 
                         valid_times = True
@@ -834,10 +839,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                 err(sloc, f"'{field_name}: {field_val!r}' must be a 24h \"HH:MM\" string")
                                 valid_times = False
 
+                        # Same predicate as the driver: unquoted `off` (False) is valid, unquoted `on` (True) is not.
                         if value is None:
                             err(sloc, "schedule entry missing required 'value' key")
-                        elif not _valid_level(value):
-                            err(sloc, f"'value: {value!r}' must be an integer 0-255")
+                        elif not is_valid_level(value):
+                            err(sloc, f"'value: {value!r}' must be an integer 0-255, "
+                                      f"or one of {', '.join(SCHEDULE_LEVEL_NAMES)}")
 
                         if valid_times:
                             start_min, end_min = _hhmm_to_minutes(start), _hhmm_to_minutes(end)

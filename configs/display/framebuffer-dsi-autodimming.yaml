@@ -1,6 +1,11 @@
 ---
-# Linux framebuffer (/dev/fb0)  --  any resolution, DSI or HDMI
+# Linux framebuffer (/dev/fb0) with an auto-dimming backlight  --  DSI or HDMI
 # ---------------------------------------------------------------------------
+# Same as framebuffer.yaml, but the backlight follows the sun (`schedule:
+# follow-sun`) within bounds tuned for one panel: very dark at night, and
+# never full brightness even in the day. Needs a location -- see
+# docs/how_location_works.md.
+#
 # Works with:
 #   Raspberry Pi Official 7" Touch Display  (2013 original + 2024 v2, 800x480)
 #   HDMI monitors at whatever resolution the Pi initialises at boot
@@ -62,9 +67,12 @@ display:
     # `schedule: sun` uses min as its night level and max as its daytime
     # plateau, and `fact: backlight` reports the current level as a percentage
     # of min..max.
+    # This panel: min is very dark, for night, and max is held below the
+    # panel's ceiling so it is never at full brightness, even in the day. The
+    # `follow-sun` schedule below inherits both bounds.
     off_value: 0
-    min:       40
-    max:       255
+    min:       2
+    max:       224
 
     # schedule: is EITHER the scalar `sun` (`follow-sun` / `sun-curve` mean the
     # same thing): min at night, an eased ramp starting before sunrise, flat
@@ -80,15 +88,16 @@ display:
     # follows your tuned bounds). Entries must not overlap (checked at
     # validation time). Any time of day NOT covered by an entry uses the
     # midpoint between min and max.
-    # Alternatively, follow the sun instead (needs a location; replace the list
-    # below with this line):
-    #   schedule: follow-sun
-    schedule:
-      - name: night
-        start: "22:00"
-        end:   "06:59"
-        value: 42   # a little above min on purpose: dim, but not at the floor
-      - name: day
-        start: "07:00"
-        end:   "19:59"
-        value: 255
+    schedule: follow-sun
+    #
+    # Alternatively, a fixed list of time-of-day entries (uncomment, and drop the
+    # line above):
+    #   schedule:
+    #     - name: night
+    #       start: "22:00"
+    #       end:   "06:59"
+    #       value: min
+    #     - name: day
+    #       start: "07:00"
+    #       end:   "19:59"
+    #       value: max

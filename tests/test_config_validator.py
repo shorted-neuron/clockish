@@ -1096,6 +1096,52 @@ class TestBacklight:
         assert any('overlap' in i.message.lower() for i in result.errors)
 
 
+    @pytest.mark.parametrize('value', ['min', 'max', 'off', False])
+    def test_schedule_value_may_be_a_level_name(self, value) -> None:
+        # False is an unquoted `off` as YAML 1.1 parses it.
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '07:00', 'end': '19:59', 'value': value}])
+        result = validate_config_dict(cfg)
+        assert result.ok, f"expected no issues for value {value!r}, got: {result.issues}"
+
+    @pytest.mark.parametrize('value', ['dim', 'minimum', 'MAX', ' off', '42', True, 256, -1, 1.5])
+    def test_schedule_value_other_than_number_or_name_errors(self, value) -> None:
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '07:00', 'end': '19:59', 'value': value}])
+        result = validate_config_dict(cfg)
+        assert any('value' in i.message and 'min, max, off' in i.message for i in result.errors)
+
+
+    @pytest.mark.parametrize('bad_name', [False, True, 42, None])
+    def test_non_string_entry_name_errors_instead_of_crashing(self, bad_name) -> None:
+        # `name: off` parses as False under YAML 1.1; the overlap check used to sort it against a
+        # string and die with a TypeError, so the overlap is part of the setup on purpose.
+        cfg = _backlight_config(schedule=[
+            {'name': bad_name, 'start': '00:00', 'end': '12:00', 'value': 100},
+            {'name': 'b', 'start': '11:00', 'end': '23:59', 'value': 200},
+        ])
+        result = validate_config_dict(cfg)
+        assert any("'name:" in i.message and 'must be a string' in i.message for i in result.errors)
+        assert any('overlap' in i.message.lower() for i in result.errors)
+
+    def test_non_string_entry_name_without_overlap_errors(self) -> None:
+        cfg = _backlight_config(schedule=[
+            {'name': False, 'start': '00:00', 'end': '12:00', 'value': 100},
+            {'name': 'b', 'start': '13:00', 'end': '23:59', 'value': 200},
+        ])
+        result = validate_config_dict(cfg)
+        assert any('must be a string' in i.message for i in result.errors)
+
+
+    @pytest.mark.parametrize('value', [
+        0, 1, 42, 255, 256, -1, 1.5, '42', True, False, 'min', 'max', 'off', 'MAX', ' off', 'dim', [1],
+    ])
+    def test_validator_and_driver_agree_on_schedule_values(self, value) -> None:
+        # One definition (backlight.is_valid_level): what the validator accepts, the driver runs.
+        from clockish import backlight
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '07:00', 'end': '19:59', 'value': value}])
+        value_errors = [i for i in validate_config_dict(cfg).errors if 'value' in i.message]
+        assert (not value_errors) == backlight.is_valid_level(value)
+
+
 class TestBacklightSunSchedule:
     """'schedule:' as a scalar naming the sun curve, instead of a list."""
 

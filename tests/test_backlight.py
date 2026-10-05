@@ -75,6 +75,104 @@ SUNRISE = _at(7, 0)
 SUNSET = _at(19, 0)
 
 
+class TestScheduleLevelNames:
+    """A list entry's `value:` may be `min`, `max` or `off`, which take the
+    backlight block's own bounds (`off` is `off_value`)."""
+
+    @staticmethod
+    def _entry(value):
+        return [{'name': 'all-day', 'start': '00:00', 'end': '23:59', 'value': value}]
+
+    @pytest.mark.parametrize('value, expected', [('min', 7), ('max', 200), ('off', 3)])
+    def test_names_resolve_to_the_blocks_numbers(self, value, expected):
+        got = resolve_scheduled_value(self._entry(value), min_=7, max_=200, now=_at(12, 0), off_value=3)
+        assert got == expected
+
+    def test_unquoted_yaml_off_arrives_as_false_and_means_off(self):
+        # `value: off` is the boolean False under YAML 1.1 (PyYAML's default).
+        got = resolve_scheduled_value(self._entry(False), min_=7, max_=200, now=_at(12, 0), off_value=3)
+        assert got == 3
+
+    def test_off_value_defaults_to_zero(self):
+        assert resolve_scheduled_value(self._entry('off'), min_=7, max_=200, now=_at(12, 0)) == 0
+
+    def test_plain_numbers_are_unchanged(self):
+        assert resolve_scheduled_value(self._entry(42), min_=7, max_=200, now=_at(12, 0), off_value=3) == 42
+        assert resolve_scheduled_value(self._entry(0), min_=7, max_=200, now=_at(12, 0), off_value=3) == 0
+
+    def test_names_mix_with_numbers_across_a_day(self):
+        sched = [
+            {'name': 'night', 'start': '22:00', 'end': '06:59', 'value': 'min'},
+            {'name': 'morning', 'start': '07:00', 'end': '11:59', 'value': 120},
+            {'name': 'day', 'start': '12:00', 'end': '19:59', 'value': 'max'},
+            {'name': 'evening', 'start': '20:00', 'end': '21:59', 'value': 'off'},
+        ]
+        at = lambda h, m: resolve_scheduled_value(sched, min_=5, max_=224, now=_at(h, m), off_value=1)  # noqa: E731
+        assert (at(2, 0), at(9, 0), at(15, 0), at(21, 0)) == (5, 120, 224, 1)
+
+    def test_resolve_level_directly(self):
+        from clockish.backlight import resolve_level
+        assert [resolve_level(v, 2, 224, 0) for v in ('min', 'max', 'off', False, 99)] == [2, 224, 0, 0, 99]
+
+    def test_resolve_value_uses_the_cfg_off_value(self):
+        cfg = {'min': 2, 'max': 224, 'off_value': 1,
+               'schedule': [{'name': 'all', 'start': '00:00', 'end': '23:59', 'value': 'off'}]}
+        assert backlight._resolve_value(cfg, now=_at(12, 0)) == 1
+
+
+class TestInvalidScheduleValue:
+    """A schedule entry whose value the validator rejects must not crash clockish or write a
+    stray level: it degrades to the midpoint (like a gap in the schedule), with one warning."""
+
+    BAD = [True, 1.5, '42', 256, -1, 'dim', 'MAX', ' off', None, [1]]
+
+    @pytest.fixture(autouse=True)
+    def _fresh_warnings(self):
+        backlight._warned_bad_levels.clear()
+        yield
+        backlight._warned_bad_levels.clear()
+
+    @staticmethod
+    def _entry(value):
+        return [{'name': 'all-day', 'start': '00:00', 'end': '23:59', 'value': value}]
+
+    @pytest.mark.parametrize('value', BAD)
+    def test_scheduler_falls_back_to_the_midpoint_instead_of_raising(self, value):
+        got = resolve_scheduled_value(self._entry(value), min_=40, max_=255, now=_at(12, 0), off_value=0)
+        assert got == 148
+
+    @pytest.mark.parametrize('value', BAD)
+    def test_resolve_level_rejects_them(self, value):
+        with pytest.raises(ValueError, match='min, max, off'):
+            backlight.resolve_level(value, 40, 255, 0)
+
+    def test_true_is_not_read_as_one(self):
+        # int(True) == 1 would have written level 1: dark on a panel that is off below 40.
+        assert resolve_scheduled_value(self._entry(True), min_=40, max_=255, now=_at(12, 0)) != 1
+
+    def test_false_is_still_off(self):
+        assert resolve_scheduled_value(self._entry(False), min_=40, max_=255, now=_at(12, 0), off_value=3) == 3
+
+    def test_warns_once_per_entry_and_value(self, capsys):
+        for _ in range(3):
+            resolve_scheduled_value(self._entry(True), min_=40, max_=255, now=_at(12, 0))
+        out = capsys.readouterr().out
+        assert out.count('WARNING: backlight') == 1
+        assert "'all-day'" in out and 'True' in out and '148' in out
+
+    def test_start_backlight_survives_a_bad_value(self, monkeypatch):
+        # start_backlight() applies synchronously during startup: raising there kills clockish.
+        written = []
+        monkeypatch.setitem(backlight._METHODS, 'sysfs', lambda dev, val: written.append(val) or True)
+        cfg = {'method': 'sysfs', 'device': 'x', 'min': 40, 'max': 255, 'off_value': 0,
+               'schedule': [{'name': 'all-day', 'start': '00:00', 'end': '23:59', 'value': 'dim'}]}
+        backlight.start_backlight({'backlight': cfg})
+        try:
+            assert written[-1] == 148
+        finally:
+            backlight.stop_backlight()
+
+
 class TestResolveSunCurveValue:
     """The `schedule: sun` trapezoid: min at night, eased ramp starting
     TWILIGHT_MINUTES before sunrise, flat max across the middle half of

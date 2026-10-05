@@ -124,9 +124,18 @@ properties:
                       pattern: '^([01]\d|2[0-3]):[0-5]\d$'
                       description: 24h "HH:MM" local time, inclusive.
                     value:
-                      type: integer
-                      minimum: 0
-                      maximum: 255
+                      description: |
+                        Brightness for this entry: a literal level 0-255, or one of
+                        min / max / off, which take this backlight block's own
+                        'min', 'max' and 'off_value'. An unquoted 'off' is parsed by
+                        YAML 1.1 as false, so false is accepted and means 'off'.
+                      oneOf:
+                        - type: integer
+                          minimum: 0
+                          maximum: 255
+                        - type: string
+                          enum: [min, max, 'off']   # quoted: bare off is false in YAML 1.1
+                        - const: false
   preview_size:
     type: string
     pattern: '^\d+x\d+$'
