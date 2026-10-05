@@ -500,7 +500,13 @@ jsonschema is missing and the schema layer (`additionalProperties: false`) is sk
 display's tuned bounds instead of repeating the numbers. Names are exact lowercase in all three layers
 (driver, semantic validator, `configs/schema/`), never case-folded. `schedule: sun` already inherits
 `min`/`max` the same way. An unquoted `off` value arrives as `False` (below), so `False` is accepted
-as `off`; `True` is an error.
+as `off`; an unquoted `on`/`yes`/`true` is `True`, which is **not** a level (`int(True)` would write 1,
+dark on a panel that is off below 40). `backlight.is_valid_level()` is the one definition of a valid
+`value:` -- the validator imports it, so the two cannot disagree. An invalid value is a validator ERROR,
+and at runtime it is **not** an exception: `resolve_scheduled_value()` treats the matching entry like a
+gap (the `min`/`max` midpoint) and prints one `WARNING` per entry+value, because startup validation errors
+are non-fatal and `start_backlight()` applies synchronously -- raising there would kill clockish at
+startup, or the worker thread later. `resolve_level()` itself is strict and raises `ValueError`.
 
 **Why `off_value` and not `off`**: an unquoted `off:` YAML key is parsed under YAML 1.1 (PyYAML's
 default) as the boolean `False`, not the string `"off"` -- silently corrupting the config (the
@@ -513,7 +519,8 @@ silently `False`), and `value: off` in a config reaches the driver as `False`.
 **Mechanics** (`backlight.py`):
 - `resolve_scheduled_value(schedule, min_, max_, now, off_value=0)` -- pure function, no I/O. Matches `now`
   against each entry's `start`/`end` (inclusive both ends; `end < start` wraps past midnight).
-  Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`).
+  Time not covered by any entry falls back to `round((min_ + max_) / 2)` (always an `int`); so does
+  a matching entry whose `value` fails `is_valid_level()`, with a one-time warning.
 - `resolve_sun_curve_value(sunrise, sunset, min_, max_, now, twilight_minutes, peak_fraction)` --
   pure function for a sun schedule. An **eased trapezoid**, not a bump: the display should sit at
   `max_` for most of the day and pass through the in-between levels as briefly as looks natural.

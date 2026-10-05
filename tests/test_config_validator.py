@@ -1131,6 +1131,17 @@ class TestBacklight:
         assert any('must be a string' in i.message for i in result.errors)
 
 
+    @pytest.mark.parametrize('value', [
+        0, 1, 42, 255, 256, -1, 1.5, '42', True, False, 'min', 'max', 'off', 'MAX', ' off', 'dim', [1],
+    ])
+    def test_validator_and_driver_agree_on_schedule_values(self, value) -> None:
+        # One definition (backlight.is_valid_level): what the validator accepts, the driver runs.
+        from clockish import backlight
+        cfg = _backlight_config(schedule=[{'name': 'day', 'start': '07:00', 'end': '19:59', 'value': value}])
+        value_errors = [i for i in validate_config_dict(cfg).errors if 'value' in i.message]
+        assert (not value_errors) == backlight.is_valid_level(value)
+
+
 class TestBacklightSunSchedule:
     """'schedule:' as a scalar naming the sun curve, instead of a list."""
 

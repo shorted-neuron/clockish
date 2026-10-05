@@ -88,15 +88,37 @@ def _in_range(now_min: int, start_min: int, end_min: int) -> bool:
     return now_min >= start_min or now_min <= end_min
 
 
+def is_valid_level(value: object) -> bool:
+    """Whether a schedule entry's `value:` is usable.
+
+    An integer 0-255 (a bool is not one: YAML 1.1 turns an unquoted on/yes/true
+    into True, which int() would quietly read as 1), one of SCHEDULE_LEVEL_NAMES,
+    or False -- an unquoted `off`, see "Why `off_value` and not `off`" in
+    AGENTS.md.  config_validator.py imports this, so the validator and the driver
+    cannot disagree about what a valid entry is.
+    """
+    if value is False:
+        return True
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return 0 <= value <= 255
+    return isinstance(value, str) and value in SCHEDULE_LEVEL_NAMES
+
+
 def resolve_level(value: object, min_: int, max_: int, off_value: int = 0) -> int:
     """Return the number a schedule entry's `value:` stands for.
 
     A number is used as is.  `min`, `max` and `off` (exact, lowercase) take the
     backlight block's `min`, `max` and `off_value`, so a schedule follows a
-    display's tuned bounds instead of repeating them.  An unquoted `off` in YAML
-    1.1 arrives here as False (see "Why `off_value` and not `off`" in AGENTS.md),
-    so False means `off` too.
+    display's tuned bounds instead of repeating them.  False (an unquoted `off`)
+    means `off` too.  Anything else is_valid_level() rejects raises ValueError;
+    resolve_scheduled_value() catches that case and degrades instead.
     """
+    if not is_valid_level(value):
+        raise ValueError(
+            f"invalid backlight level {value!r}: must be an integer 0-255, "
+            f"or one of {', '.join(SCHEDULE_LEVEL_NAMES)}")
     if value is False:
         return off_value
     if value == 'min':
@@ -106,6 +128,11 @@ def resolve_level(value: object, min_: int, max_: int, off_value: int = 0) -> in
     if value == 'off':
         return off_value
     return int(value)  # type: ignore[call-overload]
+
+
+#: (entry name, bad value) pairs already warned about, so the 10-minute worker
+#: tick does not repeat the same line.
+_warned_bad_levels: set[tuple[str, str]] = set()
 
 
 def resolve_scheduled_value(
@@ -121,16 +148,29 @@ def resolve_scheduled_value(
     resolve_level() replaces with min_, max_ or off_value.
 
     Time not covered by any schedule entry falls back to the midpoint
-    between min_ and max_, rounded to the nearest int.
+    between min_ and max_, rounded to the nearest int.  So does a matching
+    entry whose `value` is not valid (a validator error): that is warned about
+    once and degrades like a gap, because raising here would kill clockish at
+    startup (start_backlight() applies synchronously) or the worker thread
+    later, and clockish is meant to keep running with a bad config.
     """
     now = now or datetime.datetime.now()
     now_min = now.hour * 60 + now.minute
+    midpoint = round((min_ + max_) / 2)
     for entry in schedule:
         start_min = _parse_hhmm(entry['start'])
         end_min = _parse_hhmm(entry['end'])
         if _in_range(now_min, start_min, end_min):
-            return resolve_level(entry['value'], min_, max_, off_value)
-    return round((min_ + max_) / 2)
+            value = entry.get('value')
+            if not is_valid_level(value):
+                key = (str(entry.get('name', '?')), repr(value))
+                if key not in _warned_bad_levels:
+                    _warned_bad_levels.add(key)
+                    print(f"WARNING: backlight: schedule entry {key[0]!r} has invalid value "
+                          f"{value!r}; using the midpoint ({midpoint}) for it")
+                return midpoint
+            return resolve_level(value, min_, max_, off_value)
+    return midpoint
 
 
 def resolve_sun_curve_value(

@@ -120,6 +120,59 @@ class TestScheduleLevelNames:
         assert backlight._resolve_value(cfg, now=_at(12, 0)) == 1
 
 
+class TestInvalidScheduleValue:
+    """A schedule entry whose value the validator rejects must not crash clockish or write a
+    stray level: it degrades to the midpoint (like a gap in the schedule), with one warning."""
+
+    BAD = [True, 1.5, '42', 256, -1, 'dim', 'MAX', ' off', None, [1]]
+
+    @pytest.fixture(autouse=True)
+    def _fresh_warnings(self):
+        backlight._warned_bad_levels.clear()
+        yield
+        backlight._warned_bad_levels.clear()
+
+    @staticmethod
+    def _entry(value):
+        return [{'name': 'all-day', 'start': '00:00', 'end': '23:59', 'value': value}]
+
+    @pytest.mark.parametrize('value', BAD)
+    def test_scheduler_falls_back_to_the_midpoint_instead_of_raising(self, value):
+        got = resolve_scheduled_value(self._entry(value), min_=40, max_=255, now=_at(12, 0), off_value=0)
+        assert got == 148
+
+    @pytest.mark.parametrize('value', BAD)
+    def test_resolve_level_rejects_them(self, value):
+        with pytest.raises(ValueError, match='min, max, off'):
+            backlight.resolve_level(value, 40, 255, 0)
+
+    def test_true_is_not_read_as_one(self):
+        # int(True) == 1 would have written level 1: dark on a panel that is off below 40.
+        assert resolve_scheduled_value(self._entry(True), min_=40, max_=255, now=_at(12, 0)) != 1
+
+    def test_false_is_still_off(self):
+        assert resolve_scheduled_value(self._entry(False), min_=40, max_=255, now=_at(12, 0), off_value=3) == 3
+
+    def test_warns_once_per_entry_and_value(self, capsys):
+        for _ in range(3):
+            resolve_scheduled_value(self._entry(True), min_=40, max_=255, now=_at(12, 0))
+        out = capsys.readouterr().out
+        assert out.count('WARNING: backlight') == 1
+        assert "'all-day'" in out and 'True' in out and '148' in out
+
+    def test_start_backlight_survives_a_bad_value(self, monkeypatch):
+        # start_backlight() applies synchronously during startup: raising there kills clockish.
+        written = []
+        monkeypatch.setitem(backlight._METHODS, 'sysfs', lambda dev, val: written.append(val) or True)
+        cfg = {'method': 'sysfs', 'device': 'x', 'min': 40, 'max': 255, 'off_value': 0,
+               'schedule': [{'name': 'all-day', 'start': '00:00', 'end': '23:59', 'value': 'dim'}]}
+        backlight.start_backlight({'backlight': cfg})
+        try:
+            assert written[-1] == 148
+        finally:
+            backlight.stop_backlight()
+
+
 class TestResolveSunCurveValue:
     """The `schedule: sun` trapezoid: min at night, eased ramp starting
     TWILIGHT_MINUTES before sunrise, flat max across the middle half of

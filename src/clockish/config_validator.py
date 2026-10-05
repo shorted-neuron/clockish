@@ -60,7 +60,7 @@ import yaml
 if __package__ in (None, ''):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from clockish.backlight import SCHEDULE_LEVEL_NAMES, SUN_SCHEDULE_VALUES  # noqa: E402
+from clockish.backlight import SCHEDULE_LEVEL_NAMES, SUN_SCHEDULE_VALUES, is_valid_level  # noqa: E402
 from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
     NO_ARG_TRANSFORMS,
@@ -839,11 +839,10 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                 err(sloc, f"'{field_name}: {field_val!r}' must be a 24h \"HH:MM\" string")
                                 valid_times = False
 
-                        # An unquoted `off` is YAML 1.1's False; accept it as the name it was written as.
-                        is_level_name = value is False or (isinstance(value, str) and value in SCHEDULE_LEVEL_NAMES)
+                        # Same predicate as the driver: unquoted `off` (False) is valid, unquoted `on` (True) is not.
                         if value is None:
                             err(sloc, "schedule entry missing required 'value' key")
-                        elif not is_level_name and not _valid_level(value):
+                        elif not is_valid_level(value):
                             err(sloc, f"'value: {value!r}' must be an integer 0-255, "
                                       f"or one of {', '.join(SCHEDULE_LEVEL_NAMES)}")
 
