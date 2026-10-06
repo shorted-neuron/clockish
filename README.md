@@ -76,10 +76,10 @@ display:
 ```
 
 Tested on real hardware: a Pi 1 B+ v1.2 with an ILI9486 and an SSD1306; a Pi 1 B Rev 2 with an
-ST7789; two Pi 2 B boards, one with an ILI9486 and one with an SSD1306. All four `gpio_backend`
-values were run on the ILI9486 of both the Pi 1 B+ and the Pi 2 B.
-Not tested: the Pi 1 A, A+ and compute module, and the Pi 5. All of it ran on 32-bit Raspberry Pi OS
-13 (trixie); bookworm is untested.
+ST7789; two Pi 2 B boards, one with an ILI9486 and one with an SSD1306; a Pi 4 B with an ILI9486. All
+four `gpio_backend` values were run on the ILI9486 of the Pi 1 B+, Pi 2 B and Pi 4 B.
+Not tested: the Pi 1 A, A+ and compute module, and the Pi 5. Every board ran the same Raspberry Pi OS
+Lite image (13, trixie); bookworm is untested.
 
 ---
 

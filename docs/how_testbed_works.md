@@ -89,15 +89,17 @@ and board generation. Not a requirement: any mix of boards works. Check a board'
 | Pi 1 B+              | ILI9486 (SPI)         | `ili9486`, all four backends | Pi 1 old-style revision code, slowest SPI push |
 | Pi 1 B+              | SSD1306 (I2C)         | `ssd1306`                   | native I2C driver on a Pi 1                     |
 | Pi 1 B Rev 2         | ST7789 (SPI)          | `st7789`, gpiod             | oldest board (not in the inventory)             |
-| Pi 2 B               | ILI9486 (SPI)         | `ili9486`, all four backends | 32-bit ARMv7, a second board for the backend run |
+| Pi 2 B               | ILI9486 (SPI)         | `ili9486`, all four backends | ARMv7, a second board for the backend run     |
 | Pi 2 B               | SSD1306 (I2C)         | `ssd1306`                   | native I2C driver on a Pi 2                     |
 | Pi Zero              | ST7789 (SPI)          | `st7789`                    | single-core ARMv6                               |
 | Pi Zero 2 W          | ST7789 (SPI)          | `st7789`                    | small Zero                                      |
+| Pi 4 B               | ILI9486 (SPI)         | `ili9486`, all four backends | fastest SPI push of the ILI9486 boards       |
 | Pi 4 B               | DSI panel, framebuffer | `framebuffer`, sysfs backlight | 800x480, `backlight:` schedules               |
 
-The Pi 1 B+ boards move between displays: one board plays both Pi 1 B+ rows by swapping its
-display. The ILI9486 and SSD1306 rows exist to prove each driver works on the oldest board that
-can run it.
+Every board runs the same Raspberry Pi OS Lite image, so an SD card can move between boards
+(it comes up on a new IP). A display moves the same way: the Pi 1 B+ rows are one board
+with its display swapped. The ILI9486 and SSD1306 rows prove each driver on the oldest board
+that can run it; newer boards differ only in speed.
 
 ## Usage
 
