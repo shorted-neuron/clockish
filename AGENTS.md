@@ -165,7 +165,7 @@ or display. Narrative, measurements per board, and ideas not built:
   (ILI9486: +40..+51ms instead of +10..+21ms).
 - `DisplayDriver.prepare()`/`push()` default to pass-through + `display()`. All four shipped
   drivers split them, and their `display()` is `push(prepare(image))`. `push()` may assume
-  the matching `prepare()` came just before it (SSD1306's prepare fills the library buffer).
+  the matching `prepare()` came just before it (no shipped driver relies on that now).
 - `_next_tick(prev, now)` picks each frame's second. A tick more than `_TICK_MAX_AHEAD_S` (2s)
   past `time.time()` means the wall clock stepped back; it resyncs to `int(now) + 1` instead of
   letting `show_rows()` sleep until the stale tick arrives. Tests: `tests/test_tick_alignment.py`.
@@ -652,8 +652,8 @@ Any exception from a facade means "unusable here" and is reported with the other
 - **Never import `pyili9486.gpio.rpilgpio_facade` or `RPi.GPIO` directly** on the ILI9486 path; go
   through the factory. `tests/test_gpio_backends.py::TestNoHardcodedRPiFacade` enforces it.
 - Per driver: ILI9486 -> the factory (any backend); ST7789 -> `gpiod` + `gpiodevice` + spidev, no
-  `RPi.GPIO`; SSD1306 -> Adafruit-Blinka, whose Pi pins import the `RPi` namespace (real `RPi.GPIO` on a
-  Pi 1, `rpi-lgpio` on a Pi 5) -- the one path that still needs an `RPi` library.
+  `RPi.GPIO`; SSD1306 -> the kernel's `/dev/i2c-N` directly (stdlib + Pillow); framebuffer -> nothing. So
+  no driver needs an `RPi` library: `RPi.GPIO` / `rpi-lgpio` matter only if someone picks `gpio_backend: rpi-gpio`.
 - `GPIO_BACKENDS` has one definition, in `gpio_backends.py` (stdlib-only at import, so the validator
   imports it); `configs/schema/` repeats the enum and a test keeps them equal. The demo utilities
   (`clockish-test`, `-colors`, `-depth`, `-fonts`) read `CLOCKISH_GPIO_BACKEND`.
@@ -668,6 +668,18 @@ Any exception from a facade means "unusable here" and is reported with the other
 **ST7789Driver** (Pimoroni; Adafruit 240×135/240×240):
 - Similar; uses st7789 lib + gpiod
 
+**SSD1306Driver** (I2C OLED, 128x64 / 128x32):
+- Native: `/dev/i2c-N` via an `I2C_SLAVE` ioctl and plain writes, Pillow + stdlib only. It replaced the
+  Adafruit CircuitPython stack (Blinka dragged in `RPi.GPIO`, which `rpi-lgpio` shadows and which fails on a Pi 1
+  just to open an I2C bus). Do not reintroduce `adafruit_*`/`board`/`busio`; `tests/test_ssd1306.py` guards it.
+- Init stream, `0x80`-per-command / `0x40`-data framing and page layout equal `adafruit_ssd1306`'s,
+  verified byte for byte (random images, 128x64 / 128x32 / 64x32); the one difference is that it skips the
+  library's display-on *before* init, which flashed RAM. Narrow panels are centred in the 128 columns.
+- `prepare()` returns the page bytes (convert, rotate, resize, `pack_pages()`); `push()` is two I2C transfers.
+  `prepare()` is ~30x faster than the old `lcd.image()` loop on a Pi 1 B+ (152 ms -> 4.8 ms); the push is bus-limited.
+- Config: `width`, `height` (multiple of 8), `rotation`, `i2c_addr`, `i2c_bus` (default 1). `scl_pin`/`sda_pin`
+  (old Blinka overrides) are ignored with a warning.
+
 **FramebufferDriver** (Linux /dev/fb0):
 - Reads /dev/fb0 geometry via ioctl
 - Supports 16-bpp (RGB565) and 32-bpp (XRGB/ARGB)
@@ -679,7 +691,7 @@ Any exception from a facade means "unusable here" and is reported with the other
 **pytest**: `tests/test_config_validator.py`, `tests/test_cached_facts.py` (background-thread
 fetch/retry/SIGUSR1 machinery), `tests/test_location.py` (location resolution, kill switch,
 file shapes, contrib-preview no-network guarantees), `tests/test_display_transform_wiring.py`,
-`test_platform_utils.py`, `test_all_encoding.py`, `tests/test_gpio_backends.py` (fake facades, no hardware).
+`test_platform_utils.py`, `test_all_encoding.py`, `tests/test_gpio_backends.py` (fake facades), `tests/test_ssd1306.py` (fake I2C bus); no hardware.
 
 Run:
 ```bash

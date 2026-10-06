@@ -66,7 +66,7 @@ is now `push(prepare(image))`:
 | framebuffer | rotate + pack to RGB565 / XRGB bytes                         | `mmap` write                        |
 | ili9486     | `pyili9486.image_to_data()` (RGB666/565)                     | `set_window` + `WRMEM` + SPI data   |
 | st7789      | Pimoroni `image_to_data()` (rotate + RGB565)                 | `set_window` + 4096-byte SPI chunks |
-| ssd1306     | convert to 1-bit, `lcd.image()` (slow per-pixel Python loop) | `lcd.show()` (the I2C write)        |
+| ssd1306     | convert to 1-bit, `pack_pages()` (Pillow, no per-pixel loop) | two I2C writes: address window, data |
 
 With the split, the ILI9486 seconds row moved from +40..+51 ms to +10..+21 ms.
 
@@ -83,6 +83,11 @@ now happens before the sleep, so it no longer affects when pixels land.
 | Zero 2 W, ST7789 240x240  | 6 ms                         | ~61 ms             | -1 to +4 ms (one 105 ms push spike: +23 ms, then -11 ms the next frame) |
 | Zero v1, ST7789 240x135   | ~22 ms                       | ~62 ms (was 69-98) | -3 to +9 ms                                                             |
 | Pi 2B, SSD1306 I2C 128x64 | 55-65 ms                     | 96 ms flat         | +0 ms every frame                                                       |
+
+The SSD1306 row above was measured with the old Adafruit driver, whose `lcd.image()` was a per-pixel
+Python loop. The native driver packs pages with Pillow instead: a CPU-only benchmark of `prepare()`
+(30 text-like 128x64 frames, fake I2C bus) gives 152 ms -> 4.8 ms on a Pi 1 B+ and 3.1 ms -> 0.2 ms
+on a Pi 4. The push is unchanged, since the bus is the limit.
 
 Before the split (step 1 only), under load: the Pi 4 stayed within ±8 ms with
 all four cores pegged, and the Zero v1 within ±12 ms with its single core
@@ -166,5 +171,6 @@ If the new driver's `display()` does real conversion work, implement
 `prepare()` (convert) and `push()` (send), and make `display()` =
 `push(prepare(image))`. Otherwise its ticks land late by the conversion time.
 `push()` must assume it is called right after the matching `prepare()` --
-`show_rows()` guarantees that, and the SSD1306 driver relies on it (its
-`prepare()` fills the library's internal buffer).
+`show_rows()` guarantees that. (No shipped driver depends on it any more: the
+SSD1306's `prepare()` used to fill a library buffer and now returns the page
+bytes, like the others.)
