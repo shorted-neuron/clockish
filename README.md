@@ -75,8 +75,9 @@ display:
   gpio_backend: auto    # auto | gpiod | lgpio | rpi-gpio
 ```
 
-Tested on real hardware: a Pi 1 B+ v1.2 with an ILI9486 (all four `gpio_backend` values) and an
-SSD1306; a Pi 1 B Rev 2 with an ST7789; two Pi 2 B boards, one with an ILI9486 and one with an SSD1306.
+Tested on real hardware: a Pi 1 B+ v1.2 with an ILI9486 and an SSD1306; a Pi 1 B Rev 2 with an
+ST7789; two Pi 2 B boards, one with an ILI9486 and one with an SSD1306. All four `gpio_backend`
+values were run on the ILI9486 of both the Pi 1 B+ and the Pi 2 B.
 Not tested: the Pi 1 A, A+ and compute module, and the Pi 5. All of it ran on 32-bit Raspberry Pi OS
 13 (trixie); bookworm is untested.
 

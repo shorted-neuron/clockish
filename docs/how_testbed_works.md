@@ -89,7 +89,7 @@ and board generation. Not a requirement: any mix of boards works. Check a board'
 | Pi 1 B+              | ILI9486 (SPI)         | `ili9486`, all four backends | Pi 1 old-style revision code, slowest SPI push |
 | Pi 1 B+              | SSD1306 (I2C)         | `ssd1306`                   | native I2C driver on a Pi 1                     |
 | Pi 1 B Rev 2         | ST7789 (SPI)          | `st7789`, gpiod             | oldest board (not in the inventory)             |
-| Pi 2 B               | ILI9486 (SPI)         | `ili9486`                   | 32-bit ARMv7                                    |
+| Pi 2 B               | ILI9486 (SPI)         | `ili9486`, all four backends | 32-bit ARMv7, a second board for the backend run |
 | Pi 2 B               | SSD1306 (I2C)         | `ssd1306`                   | native I2C driver on a Pi 2                     |
 | Pi Zero              | ST7789 (SPI)          | `st7789`                    | single-core ARMv6                               |
 | Pi Zero 2 W          | ST7789 (SPI)          | `st7789`                    | small Zero                                      |
