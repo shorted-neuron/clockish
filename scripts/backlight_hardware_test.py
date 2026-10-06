@@ -38,6 +38,8 @@ Modes
     --checks-only   the old unit-level hardware checks (direct _write_sysfs,
                     start/stop lifecycle, list and sun schedules), no day sim
     --no-frames     backlight only; no config/display/driver init, no panel
+    --keep-logging  leave the config's `logging:` alone, so the real `backlight: brightness -> N`
+                    lines print (to check they reach a pipe promptly)
     --dry-run       never touch sysfs; print what would have been written
                     (lets the whole thing be exercised on a dev box)
 
@@ -191,7 +193,8 @@ def _backlight_cfg_from_config(display_cfg: dict, args) -> dict:
                'min': args.min, 'max': args.max, 'off_value': 0}
     if args.device_override:
         cfg['device'] = args.device
-    cfg['logging'] = False  # this script prints its own per-tick line
+    if not args.keep_logging:
+        cfg['logging'] = False  # this script prints its own per-tick line
     return cfg
 
 
@@ -566,6 +569,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument('--min', type=int, default=40, help="min brightness if the config has no backlight block")
     p.add_argument('--max', type=int, default=255, help="max brightness if the config has no backlight block")
     p.add_argument('--no-frames', action='store_true', help="backlight only: no driver, no panel output")
+    p.add_argument('--keep-logging', action='store_true',
+                   help="keep the config's own `logging:` setting, so every change prints the real "
+                        "'backlight: brightness -> N' line (default: silenced, this script prints its own)")
     p.add_argument('--dry-run', action='store_true', help="never write sysfs; record the values instead")
     p.add_argument('--checks-only', action='store_true', help="run the old unit-level hardware checks and exit")
     p.add_argument('--loop', action='store_true', help="repeat the day until Ctrl-C")
