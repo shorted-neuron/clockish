@@ -592,12 +592,14 @@ confirmed working against the actual sysfs file (readback matched every write), 
 brightness file.
 
 **Simulated-day runner** (`scripts/backlight_hardware_test.py`): replays a whole day against the
-real panel in ~2.5 minutes -- one wall-second per tick, each tick advancing a simulated clock by 10
+real panel in ~2.5 minutes -- 25 simulated hours from 23:30 to 00:30 (so both midnights are
+crossed), one wall-second per tick, each tick advancing a simulated clock by 10
 simulated minutes (the worker's own cadence), running the REAL `backlight._apply()` + sysfs write
 for that moment AND a REAL `display.show_rows()` frame with the simulated time injected, so the
 clock on screen agrees with the brightness being watched. Prints a per-tick bar, then checks the
 collected samples (night == min, a flat `max` plateau centred on solar noon and covering ~50% of
-daylight, monotonic ramps either side, every sysfs readback matched) and exits non-zero on failure
+daylight, monotonic ramps either side, no level jump across midnight, every sysfs readback matched)
+and exits non-zero on failure
 -- the plateau checks are what catch the wrong-curve-shape regressions described above.
 
 Before the replay it prints a **location provenance block** -- the setting and which file it came
@@ -608,9 +610,19 @@ chain is deliberately quiet, so a replay should never leave you guessing which l
 Coordinates follow the same gating as the rest of clockish: ~11 km rounding unless
 `--debug-location` is passed.
 
+Run it on the device, from the checkout, with the project venv, after stopping the service (the
+service's own frames and backlight worker would fight the replay); it restores the brightness it
+found. `--tick-secs 0.5` halves the wall time. `--keep-logging` leaves the profile's `logging:` on, so
+the real `backlight: brightness -> N` lines print (the runner silences them by default, it prints
+its own per-tick line). With `--sunrise/--sunset` the runner stops the live sun worker first --
+otherwise real fetched times overwrite the forced ones mid-run and the checks fail falsely -- and the
+sun-times callable follows the simulated date, so a sun schedule survives the midnight crossings.
+
 ```bash
-python3 scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware
-python3 scripts/backlight_hardware_test.py --dry-run --no-frames \
+sudo systemctl stop clockish
+.venv/bin/python scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware
+sudo systemctl start clockish
+.venv/bin/python scripts/backlight_hardware_test.py --dry-run --no-frames \
         --tick-secs 0 --sunrise 06:22 --sunset 19:48            # instant, offline, dev box
 python3 scripts/backlight_hardware_test.py --checks-only        # old unit-level hw checks
 ```

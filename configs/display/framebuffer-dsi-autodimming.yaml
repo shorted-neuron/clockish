@@ -55,7 +55,7 @@ display:
     device: 10-0045
 
     # Log every actual brightness change (skips no-op writes). Default: false.
-    logging: true
+    logging: false
 
     # off_value/min/max are this display's brightness bounds (integers,
     # 0-255). Tune them to your particular panel:

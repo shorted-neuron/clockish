@@ -2,15 +2,19 @@
 """Simulated-day backlight runner -- manual real-hardware check for clockish.
 
 Not part of the pytest suite (no sysfs backlight, no panel on a dev machine).
-Run it ON the target device, e.g. over SSH:
+Run it ON the target device, from the clockish checkout, with the project venv, and stop the
+service first (its frames and backlight worker would fight the replay):
 
-    scp scripts/backlight_hardware_test.py user@device:/tmp/
-    ssh user@device 'python3 /tmp/backlight_hardware_test.py ~/clockish/configs/my.yaml'
+    ssh user@device
+    cd ~/clockish
+    sudo systemctl stop clockish
+    .venv/bin/python scripts/backlight_hardware_test.py configs/my.yaml
+    sudo systemctl start clockish
 
 What it does
 ------------
-Replays a whole day in a couple of minutes. One wall-clock tick (default 1s)
-advances a simulated clock by 10 simulated minutes; at every tick it
+Replays a whole day (23:30 round to 00:30, crossing midnight at both ends) in a couple of
+minutes. One wall-clock tick (default 1s) advances a simulated clock by 10 simulated minutes; at every tick it
 
   1. runs the REAL backlight resolution + sysfs write for that simulated
      moment (`backlight._apply(cfg, now=...)`, the same call the background
