@@ -78,6 +78,27 @@ all:
 | `clockish_config`  | required for `deploy` | repo-relative layout config             |
 | `clockish_display` | none           | repo-relative display profile (`configs/display/...`) |
 
+## Reference hardware
+
+What one maintainer's testbed covers, so a change can be checked against every driver path
+and board generation. Not a requirement: any mix of boards works. Check a board's model with
+`tr -d '\0' </proc/device-tree/model`.
+
+| Board                | Display               | Driver / GPIO path          | Covers                                          |
+|----------------------|-----------------------|-----------------------------|-------------------------------------------------|
+| Pi 1 B+              | ILI9486 (SPI)         | `ili9486`, all four backends | Pi 1 old-style revision code, slowest SPI push |
+| Pi 1 B+              | SSD1306 (I2C)         | `ssd1306`                   | native I2C driver on a Pi 1                     |
+| Pi 1 B Rev 2         | ST7789 (SPI)          | `st7789`, gpiod             | oldest board (not in the inventory)             |
+| Pi 2 B               | ILI9486 (SPI)         | `ili9486`                   | 32-bit ARMv7                                    |
+| Pi 2 B               | SSD1306 (I2C)         | `ssd1306`                   | native I2C driver on a Pi 2                     |
+| Pi Zero              | ST7789 (SPI)          | `st7789`                    | single-core ARMv6                               |
+| Pi Zero 2 W          | ST7789 (SPI)          | `st7789`                    | small Zero                                      |
+| Pi 4 B               | DSI panel, framebuffer | `framebuffer`, sysfs backlight | 800x480, `backlight:` schedules               |
+
+The Pi 1 B+ boards move between displays: one board plays both Pi 1 B+ rows by swapping its
+display. The ILI9486 and SSD1306 rows exist to prove each driver works on the oldest board that
+can run it.
+
 ## Usage
 
 ```bash
