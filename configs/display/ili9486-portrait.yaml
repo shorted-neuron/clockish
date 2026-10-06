@@ -26,3 +26,7 @@ display:
   # spi_speed_hz: 64000000
   # dc_pin:       24        # BCM GPIO for Data/Command
   # rst_pin:      25        # BCM GPIO for Reset
+  # gpio_backend: auto      # auto | gpiod | lgpio | rpi-gpio -- which library drives DC/RST.
+  #                         # auto tries gpiod, then lgpio, then RPi.GPIO; a Pi 1 needs the
+  #                         # first two, because rpi-lgpio rejects its old-style board revision.
+  # gpio_chip:    0         # /dev/gpiochipN for gpiod and lgpio (rpi-gpio has no chip number)

@@ -146,6 +146,7 @@ display:  # optional here; search display.yaml alongside config or ~/.config/clo
   height: 480
   rotation: 0 | 90 | 180 | 270
   # driver-specific keys (SPI pins, SKU, etc.) passed to constructor
+  # ili9486: gpio_backend auto|gpiod|lgpio|rpi-gpio, gpio_chip (see "GPIO backends")
 ```
 
 ### Tick alignment (seconds land on the NTP second)
@@ -633,9 +634,36 @@ transfer for tick alignment (see "Tick alignment" and `docs/how_tick_alignment_w
 Defaults are pass-through.
 
 **ili9486Driver** (Raspberry Pi SPI):
-- Opens pyili9486 + spidev + rpi-lgpio
-- Reads config: rotation, SKU (MPI3501/MHS3528), SPI bus/device/speed, GPIO pins (DC, RST)
-- Fails fast if hardware missing
+- Opens pyili9486 + spidev; the DC/RST pins go through `clockish/gpio_backends.py` (below)
+- Reads config: rotation, SKU (MPI3501/MHS3528), SPI bus/device/speed, GPIO pins (DC, RST),
+  `gpio_backend`, `gpio_chip`
+- Fails fast if hardware missing, or if no GPIO backend works (`GPIOBackendError` lists why each failed)
+
+**GPIO backends** (`gpio_backends.py`): `make_gpio_facade(dc, rst, backend, chip)` returns one of
+pyILI9486's three interchangeable facades and its name. `auto` (default) tries `gpiod` -> `lgpio` ->
+`rpi-gpio` (`AUTO_ORDER`): libgpiod is the maintained, kernel-blessed interface and works on every Pi;
+lgpio is the stable fallback; the `RPi.GPIO` module is last. A named backend is used alone, no fallback.
+Any exception from a facade means "unusable here" and is reported with the others. Rules for agents:
+
+- **Why not `RPi.GPIO` first:** the Pi 1 family (A, B, A+, B+, CM1) reports old-style board revision
+  codes and `rpi-lgpio` raises `NotImplementedError` (not `ImportError`) at *import* time; `RPi.GPIO`
+  has had no release since 2022 and does not support the Pi 5. `rpi-lgpio` and `RPi.GPIO` both install
+  the `RPi.GPIO` module, so they cannot coexist -- whichever pip installs last wins.
+- **Never import `pyili9486.gpio.rpilgpio_facade` or `RPi.GPIO` directly** on the ILI9486 path; go
+  through the factory. `tests/test_gpio_backends.py::TestNoHardcodedRPiFacade` enforces it.
+- Per driver: ILI9486 -> the factory (any backend); ST7789 -> `gpiod` + `gpiodevice` + spidev, no
+  `RPi.GPIO`; SSD1306 -> Adafruit-Blinka, whose Pi pins import the `RPi` namespace (real `RPi.GPIO` on a
+  Pi 1, `rpi-lgpio` on a Pi 5) -- the one path that still needs an `RPi` library.
+- `GPIO_BACKENDS` has one definition, in `gpio_backends.py` (stdlib-only at import, so the validator
+  imports it); `configs/schema/` repeats the enum and a test keeps them equal. The demo utilities
+  (`clockish-test`, `-colors`, `-depth`, `-fonts`) read `CLOCKISH_GPIO_BACKEND`.
+- `gpio_chip` defaults to 0. Raspberry Pi OS also provides a `gpiochip4` alias (on the Pi 1 B+ and Pi 4
+  boards tested it points at gpiochip0); whether a Pi 5 needs a different number is untested -- no Pi 5
+  has run this path.
+- Validation: `display.gpio_backend` / `gpio_chip` are checked by the semantic walker when `display:` is
+  in the config being validated. Startup validates the config *before* `_resolve_config()` merges
+  `display.yaml`, while reload validates after, so keys that only live in a profile are checked on
+  reload but not at startup; the driver fails fast on a bad `gpio_backend` regardless.
 
 **ST7789Driver** (Pimoroni; Adafruit 240×135/240×240):
 - Similar; uses st7789 lib + gpiod
@@ -651,7 +679,7 @@ Defaults are pass-through.
 **pytest**: `tests/test_config_validator.py`, `tests/test_cached_facts.py` (background-thread
 fetch/retry/SIGUSR1 machinery), `tests/test_location.py` (location resolution, kill switch,
 file shapes, contrib-preview no-network guarantees), `tests/test_display_transform_wiring.py`,
-`test_platform_utils.py`, `test_all_encoding.py`.
+`test_platform_utils.py`, `test_all_encoding.py`, `tests/test_gpio_backends.py` (fake facades, no hardware).
 
 Run:
 ```bash
