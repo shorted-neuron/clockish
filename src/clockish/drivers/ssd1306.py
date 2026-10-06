@@ -162,7 +162,7 @@ class SSD1306Driver(DisplayDriver):
         for key in ("scl_pin", "sda_pin"):
             if cfg.get(key) is not None:
                 print(f"WARNING: SSD1306: '{key}' is ignored (it was a Blinka pin override); "
-                      "the I2C bus is chosen with 'i2c_bus'.")
+                      "the I2C bus is chosen with 'i2c_bus'.", flush=True)
 
         self._dev = _I2CDevice(bus, addr)
         try:

@@ -125,7 +125,7 @@ class ILI9486Driver(DisplayDriver):
 
         # GPIOBackendError / ValueError here is fatal on purpose: with no GPIO there is no display.
         gpio, gpio_name = make_gpio_facade(dc_pin, rst_pin, backend=gpio_backend, chip=gpio_chip)
-        print(f"ILI9486: GPIO via {gpio_name}")
+        print(f"ILI9486: GPIO via {gpio_name}", flush=True)   # stdout is block-buffered under systemd
 
         spi = SpiDev(spi_bus, spi_dev)
         spi.mode = 0b10
