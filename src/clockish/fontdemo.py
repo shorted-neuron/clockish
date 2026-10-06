@@ -25,10 +25,10 @@ import tty
 
 from PIL import Image, ImageDraw, ImageFont
 from pyili9486 import ILI9486, SKU, Origin
-from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
 from spidev import SpiDev
 
 from clockish.colors import BY_NAME, PALETTE
+from clockish.gpio_backends import make_gpio_facade
 
 # ---------------------------------------------------------------------------
 # Hardware configuration
@@ -50,7 +50,7 @@ spi.max_speed_hz = 64000000
 #   Origin.LOWER_LEFT   -> portrait  (320x480)
 #   Origin.LOWER_RIGHT  -> landscape (480x320)
 DISPLAY_ORIGIN = Origin.UPPER_RIGHT
-_gpio = RPiLGPIOFacade(dc_pin=DC_PIN, rs_pin=RST_PIN)
+_gpio, _ = make_gpio_facade(DC_PIN, RST_PIN)  # $CLOCKISH_GPIO_BACKEND, default auto
 lcd = ILI9486(spi=spi, gpio_facade=_gpio, origin=DISPLAY_ORIGIN, sku=SKU.MPI3501).begin()
 
 # Always derive WIDTH/HEIGHT from the LCD so they match regardless of origin.
