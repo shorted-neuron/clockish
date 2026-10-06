@@ -173,6 +173,50 @@ class TestInvalidScheduleValue:
             backlight.stop_backlight()
 
 
+class TestLogLinesAreFlushed:
+    """systemd gives a service's stdout a pipe, so Python block-buffers it: an unflushed
+    `backlight: brightness -> N` line reaches the journal hours late, in one burst when the process
+    exits.  Every print in backlight.py must flush."""
+
+    @pytest.fixture
+    def printed(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(backlight, 'print', lambda *a, **kw: calls.append((a, kw)), raising=False)
+        return calls
+
+    @staticmethod
+    def _flushed(calls):
+        return bool(calls) and all(kw.get('flush') is True for _, kw in calls)
+
+    def test_the_logging_line(self, monkeypatch, printed):
+        monkeypatch.setitem(backlight._METHODS, 'sysfs', lambda dev, val: True)
+        monkeypatch.setattr(backlight, '_last_written_value', None)
+        cfg = {'method': 'sysfs', 'device': 'd', 'logging': True, 'min': 40, 'max': 255,
+               'schedule': [{'name': 'all', 'start': '00:00', 'end': '23:59', 'value': 100}]}
+        backlight._apply(cfg, now=_at(12, 0))
+        assert 'brightness -> 100' in printed[0][0][0]
+        assert self._flushed(printed)
+
+    def test_the_write_failure_warning(self, printed):
+        assert backlight._write_sysfs('no-such-backlight-device', 5) is False
+        assert 'failed writing' in printed[0][0][0]
+        assert self._flushed(printed)
+
+    def test_the_invalid_value_warning(self, printed):
+        backlight._warned_bad_levels.clear()
+        entry = [{'name': 'x', 'start': '00:00', 'end': '23:59', 'value': True}]
+        resolve_scheduled_value(entry, min_=40, max_=255, now=_at(12, 0))
+        backlight._warned_bad_levels.clear()
+        assert 'invalid value' in printed[0][0][0]
+        assert self._flushed(printed)
+
+    def test_the_debug_lines(self, monkeypatch, printed):
+        monkeypatch.setattr(backlight, 'DEBUG', True)
+        backlight._resolve_value({'min': 40, 'max': 255, 'schedule': 'moon'}, now=_at(12, 0))
+        backlight._apply({'method': 'no-such-method'}, now=_at(12, 0))
+        assert len(printed) == 2 and self._flushed(printed)
+
+
 class TestResolveSunCurveValue:
     """The `schedule: sun` trapezoid: min at night, eased ramp starting
     TWILIGHT_MINUTES before sunrise, flat max across the middle half of

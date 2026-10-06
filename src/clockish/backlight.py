@@ -167,7 +167,7 @@ def resolve_scheduled_value(
                 if key not in _warned_bad_levels:
                     _warned_bad_levels.add(key)
                     print(f"WARNING: backlight: schedule entry {key[0]!r} has invalid value "
-                          f"{value!r}; using the midpoint ({midpoint}) for it")
+                          f"{value!r}; using the midpoint ({midpoint}) for it", flush=True)
                 return midpoint
             return resolve_level(value, min_, max_, off_value)
     return midpoint
@@ -251,7 +251,7 @@ def _write_sysfs(device: str, value: int) -> bool:
             f.write(str(value))
         return True
     except OSError as e:
-        print(f"WARNING: backlight: failed writing {value} to {path}: {e}")
+        print(f"WARNING: backlight: failed writing {value} to {path}: {e}", flush=True)
         return False
 
 
@@ -326,12 +326,12 @@ def _resolve_value(cfg: dict, now: datetime.datetime | None = None) -> int:
     if isinstance(schedule, str):
         if schedule not in SUN_SCHEDULE_VALUES:
             if DEBUG:
-                print(f"DEBUG: backlight: unknown schedule {schedule!r}, using midpoint")
+                print(f"DEBUG: backlight: unknown schedule {schedule!r}, using midpoint", flush=True)
             return midpoint
         sun_times = _get_sun_times() if _get_sun_times is not None else None
         if sun_times is None:
             if DEBUG:
-                print(f"DEBUG: backlight: schedule: {schedule} but sun times not known yet, using midpoint")
+                print(f"DEBUG: backlight: schedule: {schedule} but sun times not known yet, using midpoint", flush=True)
             return midpoint
         sunrise, sunset = sun_times
         return resolve_sun_curve_value(sunrise, sunset, min_=min_, max_=max_, now=now)
@@ -351,7 +351,7 @@ def _apply(cfg: dict, now: datetime.datetime | None = None) -> None:
     write_fn = _METHODS.get(method)
     if write_fn is None:
         if DEBUG:
-            print(f"DEBUG: backlight: unknown or unimplemented method {method!r}, skipping")
+            print(f"DEBUG: backlight: unknown or unimplemented method {method!r}, skipping", flush=True)
         return
 
     value = _resolve_value(cfg, now=now)
@@ -362,7 +362,7 @@ def _apply(cfg: dict, now: datetime.datetime | None = None) -> None:
     if write_fn(device, value):
         _last_written_value = value
         if cfg.get('logging', False):
-            print(f"backlight: brightness -> {value} (device={device})")
+            print(f"backlight: brightness -> {value} (device={device})", flush=True)
 
 
 def _backlight_worker(cfg: dict) -> None:
