@@ -657,6 +657,15 @@ Any exception from a facade means "unusable here" and is reported with the other
 - `GPIO_BACKENDS` has one definition, in `gpio_backends.py` (stdlib-only at import, so the validator
   imports it); `configs/schema/` repeats the enum and a test keeps them equal. The demo utilities
   (`clockish-test`, `-colors`, `-depth`, `-fonts`) read `CLOCKISH_GPIO_BACKEND`.
+- **Packaging:** `rpi-lgpio`, `RPi.GPIO` and Adafruit Blinka must not appear in `pyproject.toml`
+  dependencies/extras or be pip-installed by `install.sh` (`tests/test_packaging.py` fails if they do):
+  the first two share one module, and Blinka hard-requires `RPi.GPIO`. `install.sh` apt-installs
+  `python3-libgpiod` (required) and `python3-lgpio` (optional, warns if the distro lacks it), builds the
+  venv with `--system-site-packages` so those are visible, and fails the import check if the selected
+  driver has no backend (ST7789 needs gpiod; ILI9486 needs gpiod or lgpio). The `ssd1306` extra is empty
+  on purpose (old install commands keep working). Choosing the SSD1306 driver also runs the I2C check
+  (`i2c_enabled`, tested by extracting the function between its `>>>`/`<<<` markers): a *commented-out*
+  `#dtparam=i2c_arm=on` is not enabled, and `raspi-config nonint do_i2c 0` ENABLES it (0 = yes, 1 = no).
 - `gpio_chip` defaults to 0. Raspberry Pi OS also provides a `gpiochip4` alias (on the Pi 1 B+ and Pi 4
   boards tested it points at gpiochip0); whether a Pi 5 needs a different number is untested -- no Pi 5
   has run this path.

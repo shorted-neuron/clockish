@@ -274,6 +274,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:
-        # GPIO cleanup is handled by the rpi-lgpio facade (see
-        # drivers/ili9486.py) -- only the SPI bus needs an explicit close.
+        # The GPIO facade (see gpio_backends.py) releases its lines when the
+        # process exits -- only the SPI bus needs an explicit close.
         spi.close()
