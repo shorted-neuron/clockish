@@ -940,6 +940,14 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 
 ## Code Conventions & Linter Notes
 
+### stdout under systemd
+
+`main()` calls `_line_buffer_stdout()` first, so every `print` reaches the journal at its newline
+(a service's stdout is a pipe, which Python block-buffers: startup and `logging: true` lines
+arrived hours late, or only when the service stopped). New prints in the service path need no
+`flush=True`; code that runs before `main()` (a driver imported by a demo utility, the
+simulated-day runner) still passes it where a delay would mislead. Test: `tests/test_stdout_buffering.py`.
+
 ### Import ordering (Ruff)
 Ruff enforces PEP 8 import grouping:
 1. Standard library (alphabetical)
