@@ -34,17 +34,52 @@ and each panel shows one thing — a clock, date, system fact, Wi-Fi signal grap
 or static text. Multiple timezones, font sizes, colors, and panel widths are all controlled
 from config with no code changes required.
 
-Target hardware: Raspberry Pi ( original thru pi5, zeros on armv6l, armv7l / aarch64).
+Target hardware: Raspberry Pi ( original thru pi5, zeros on armv6l, armv7l / aarch64; see
+[older boards](#older-boards-raspberry-pi-1-family) for the Pi 1 notes).
 Target OS: Raspberry Pi OS or Ubuntu, 32 or 64 bit.
 Tested displays:
 - 3.5" ILI9486-based SPI LCD (480x320, 16-bit color).
 - 1.1" Mini PiTFT (ST7789, 240x135, 16-bit color).
 - 1.3" Mini PiTFT (ST7789, 240x240, 16-bit color).
+- SSD1306 I²C OLED (128x64, monochrome).
 - Linux Framebuffer (any size, any resolution, any color depth):
   - DSI displays (like 5" and 7" Waveshare panels or others found on Amazon)
   - DSI displays (like 7" and 10" Raspberry Pi DSI panels)
   - HDMI displays or your TV
 
+#### Older boards (Raspberry Pi 1 family)
+
+The original Pi 1 boards (A, B, A+, B+ and the first compute module) report an old-style board
+revision code. `rpi-lgpio`, the `RPi.GPIO` replacement that current Raspberry Pi OS ships, refuses
+those boards when it is imported:
+
+```
+NotImplementedError: This module does not understand old-style revision codes
+```
+
+clockish no longer depends on it. No driver needs `rpi-lgpio` or `RPi.GPIO` (the two share one Python
+module, so only one of them can be installed), and it does not matter which your system has:
+
+- **ILI9486** picks a GPIO library itself: `gpiod`, then `lgpio`, then `RPi.GPIO`. Force one with
+  `gpio_backend:` in the display profile (`auto` is the default; `gpiod`, `lgpio` and `rpi-gpio` are
+  the other values). On the slowest boards `gpiod` pushes a frame a little slower than `RPi.GPIO`
+  (about 220 ms against 190 ms on a Pi 1 B+); seconds still land on time.
+- **ST7789** uses `gpiod`.
+- **SSD1306** talks to `/dev/i2c-1` directly, so I²C must be on: `sudo raspi-config nonint do_i2c 0`
+  and a reboot (`0` means enable). `install.sh` checks this when you pick the SSD1306 driver.
+- **Framebuffer** needs no GPIO library.
+
+```yaml
+display:
+  driver: ili9486
+  gpio_backend: auto    # auto | gpiod | lgpio | rpi-gpio
+```
+
+Tested on real hardware: a Pi 1 B+ v1.2 with an ILI9486 and an SSD1306; a Pi 1 B Rev 2 with an
+ST7789; two Pi 2 B boards, one with an ILI9486 and one with an SSD1306; a Pi 4 B with an ILI9486. All
+four `gpio_backend` values were run on the ILI9486 of the Pi 1 B+, Pi 2 B and Pi 4 B.
+Not tested: the Pi 1 A, A+ and compute module, and the Pi 5. Every board ran the same Raspberry Pi OS
+Lite image (13, trixie); bookworm is untested.
 
 ---
 
@@ -70,14 +105,17 @@ cd clockish
 bash install.sh
 ```
 
-That's it.  The script will tell you if a reboot is needed (SPI or group changes).
+That's it.  The script will tell you if a reboot is needed (SPI, I²C or group changes).
 
 #### Manual install (if you prefer not to use install.sh)
 
 ```bash
-python3 -m venv .venv
+# GPIO libraries come from apt, not pip (see "Older boards" above):
+sudo apt install python3-libgpiod python3-lgpio
+# --system-site-packages lets the venv see them:
+python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e .               # add [st7789] for the ST7789 driver
 ```
 
 ### On Windows (development / preview only)

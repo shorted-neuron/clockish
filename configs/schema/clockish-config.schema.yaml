@@ -52,6 +52,18 @@ properties:
     type: object
     description: Display hardware profile. Usually provided by a separate display.yaml file.
     properties:
+      gpio_backend:
+        type: string
+        enum: [auto, gpiod, lgpio, rpi-gpio]
+        description: |
+          ILI9486 only. Which GPIO library drives the DC/RST pins. 'auto' (the default) tries
+          gpiod, then lgpio, then RPi.GPIO (rpi-lgpio or the old RPi.GPIO), so a Pi 1, which
+          rpi-lgpio rejects at import, works without RPi.GPIO. A named backend is used alone.
+          Keep in step with clockish.gpio_backends.GPIO_BACKENDS (a test checks it).
+      gpio_chip:
+        type: integer
+        minimum: 0
+        description: ILI9486 only. /dev/gpiochipN number for the gpiod and lgpio backends (default 0).
       backlight:
         type: object
         description: |

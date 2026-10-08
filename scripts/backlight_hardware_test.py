@@ -2,15 +2,19 @@
 """Simulated-day backlight runner -- manual real-hardware check for clockish.
 
 Not part of the pytest suite (no sysfs backlight, no panel on a dev machine).
-Run it ON the target device, e.g. over SSH:
+Run it ON the target device, from the clockish checkout, with the project venv, and stop the
+service first (its frames and backlight worker would fight the replay):
 
-    scp scripts/backlight_hardware_test.py user@device:/tmp/
-    ssh user@device 'python3 /tmp/backlight_hardware_test.py ~/clockish/configs/my.yaml'
+    ssh user@device
+    cd ~/clockish
+    sudo systemctl stop clockish
+    .venv/bin/python scripts/backlight_hardware_test.py configs/my.yaml
+    sudo systemctl start clockish
 
 What it does
 ------------
-Replays a whole day in a couple of minutes. One wall-clock tick (default 1s)
-advances a simulated clock by 10 simulated minutes; at every tick it
+Replays a whole day (23:30 round to 00:30, crossing midnight at both ends) in a couple of
+minutes. One wall-clock tick (default 1s) advances a simulated clock by 10 simulated minutes; at every tick it
 
   1. runs the REAL backlight resolution + sysfs write for that simulated
      moment (`backlight._apply(cfg, now=...)`, the same call the background
@@ -38,6 +42,8 @@ Modes
     --checks-only   the old unit-level hardware checks (direct _write_sysfs,
                     start/stop lifecycle, list and sun schedules), no day sim
     --no-frames     backlight only; no config/display/driver init, no panel
+    --keep-logging  leave the config's `logging:` alone, so the real `backlight: brightness -> N`
+                    lines print (to check they reach a pipe promptly)
     --dry-run       never touch sysfs; print what would have been written
                     (lets the whole thing be exercised on a dev box)
 
@@ -191,7 +197,8 @@ def _backlight_cfg_from_config(display_cfg: dict, args) -> dict:
                'min': args.min, 'max': args.max, 'off_value': 0}
     if args.device_override:
         cfg['device'] = args.device
-    cfg['logging'] = False  # this script prints its own per-tick line
+    if not args.keep_logging:
+        cfg['logging'] = False  # this script prints its own per-tick line
     return cfg
 
 
@@ -327,6 +334,26 @@ def _print_location_provenance(args, day: datetime.date) -> None:
     print()
 
 
+def _install_sim_sun_times(day: datetime.date) -> None:
+    """Make backlight's sun-times callable follow the SIMULATED date.
+
+    display._get_today_sun_times() keys on the real clock, so once the simulated clock passes
+    midnight a sun schedule would keep using the previous day's times (and show night all day).
+    This reuses today's sunrise/sunset times of day on whatever date the simulation is at --
+    what the real worker does each morning with the new day's fetch.
+    """
+    entry = display._SUN_TIMES.get(day.isoformat())
+    if not entry or entry.get('sunrise') is None or entry.get('sunset') is None:
+        return
+    sr, ss = _naive(entry['sunrise']), _naive(entry['sunset'])
+
+    def sim_sun_times():
+        d = _SIM_NOW.date() if _SIM_NOW is not None else day
+        shift = datetime.timedelta(days=(d - day).days)
+        return sr + shift, ss + shift
+    backlight._get_sun_times = sim_sun_times
+
+
 # ---------------------------------------------------------------------------
 # the day simulation
 # ---------------------------------------------------------------------------
@@ -350,7 +377,21 @@ def _simulate_day(args, cfg: dict, dry: _DryRunWriter | None) -> int:
         ssh, ssm = _hhmm(args.sunset)
         sunrise = datetime.datetime.combine(day, datetime.time(srh, srm))
         sunset = datetime.datetime.combine(day, datetime.time(ssh, ssm))
-    lm = _curve_landmarks(sunrise, sunset) if sunrise and sunset else {}
+    sim_end = sim_start + step * (ticks - 1)
+
+    def lm_for(d: datetime.date) -> dict:
+        if not (sunrise and sunset):
+            return {}
+        shift = datetime.timedelta(days=(d - sunrise.date()).days)
+        return _curve_landmarks(sunrise + shift, sunset + shift)
+
+    # the date whose whole daylight curve falls inside the run (else the first date)
+    lm = lm_for(sim_start.date())
+    for d in (sim_start.date(), sim_start.date() + datetime.timedelta(days=1)):
+        cand = lm_for(d)
+        if cand and cand['ramp start'] >= sim_start and cand['ramp end'] <= sim_end:
+            lm = cand
+            break
 
     print()
     print(f"device={device}  min={min_}  max={max_}  "
@@ -413,11 +454,11 @@ def _simulate_day(args, cfg: dict, dry: _DryRunWriter | None) -> int:
             time.sleep(remaining)
 
     return _report(samples, cfg, min_, max_, lm,
-                   writes, readback_mismatches, step, dry is not None)
+                   writes, readback_mismatches, step, dry is not None, lm_for)
 
 
 def _report(samples, cfg, min_, max_, lm,
-            writes, readback_mismatches, step, dry) -> int:
+            writes, readback_mismatches, step, dry, lm_for=None) -> int:
     """Print the summary and the pass/fail checks. Returns an exit code."""
     peak_t, peak_v = max(samples, key=lambda s: s[1])
     low_v = min(v for _, v in samples)
@@ -438,7 +479,10 @@ def _report(samples, cfg, min_, max_, lm,
         checks.append((True, "sysfs readback matched every write"))
 
     if _follows_sun(cfg) and lm:
-        night = [(t, v) for t, v in samples if t < lm['ramp start'] or t >= lm['ramp end']]
+        def is_night(t):
+            m = lm_for(t.date()) if lm_for else lm
+            return t < m['ramp start'] or t >= m['ramp end']
+        night = [(t, v) for t, v in samples if is_night(t)]
         plateau = [(t, v) for t, v in samples if lm['peak start'] <= t < lm['peak end']]
         rising = [v for t, v in samples if lm['ramp start'] <= t <= lm['peak start']]
         falling = [v for t, v in samples if lm['peak end'] <= t <= lm['ramp end']]
@@ -486,6 +530,15 @@ def _report(samples, cfg, min_, max_, lm,
         checks.append((not stray,
                        "every written value came from the schedule (or its midpoint fallback)"
                        + (f" -- stray: {stray}" if stray else "")))
+
+    crossings = [(a, b) for a, b in zip(samples, samples[1:]) if a[0].date() != b[0].date()]
+    if crossings:
+        print("  midnight crossings: " + "; ".join(
+            f"{a[0]:%H:%M}={a[1]} -> {b[0]:%H:%M}={b[1]}" for a, b in crossings))
+        steady = all(a[1] == b[1] for a, b in crossings) if _follows_sun(cfg) else True
+        checks.append((steady, "no level jump across midnight"
+                       + ("" if _follows_sun(cfg) else " (list schedule: values shown above, "
+                          "checked by the schedule-values test)")))
 
     print()
     print("CHECKS")
@@ -557,8 +610,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument('--step-mins', type=int, default=10,
                    help="simulated minutes per tick (default: 10, matching the worker's cadence)")
     p.add_argument('--tick-secs', type=float, default=1.0, help="wall seconds per tick (default: 1.0)")
-    p.add_argument('--start', default='00:00', help="simulated start time HH:MM (default: 00:00)")
-    p.add_argument('--hours', type=float, default=24.0, help="simulated hours to replay (default: 24)")
+    p.add_argument('--start', default='23:30',
+                   help="simulated start time HH:MM, today (default: 23:30, so the run crosses midnight)")
+    p.add_argument('--hours', type=float, default=25.0,
+                   help="simulated hours to replay (default: 25: 23:30 round to 00:30, which crosses "
+                        "midnight at both ends)")
     p.add_argument('--sunrise', help="force sunrise HH:MM instead of the resolved location's")
     p.add_argument('--sunset', help="force sunset HH:MM instead of the resolved location's")
     p.add_argument('--sun-wait', type=float, default=15.0,
@@ -566,6 +622,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument('--min', type=int, default=40, help="min brightness if the config has no backlight block")
     p.add_argument('--max', type=int, default=255, help="max brightness if the config has no backlight block")
     p.add_argument('--no-frames', action='store_true', help="backlight only: no driver, no panel output")
+    p.add_argument('--keep-logging', action='store_true',
+                   help="keep the config's own `logging:` setting, so every change prints the real "
+                        "'backlight: brightness -> N' line (default: silenced, this script prints its own)")
     p.add_argument('--dry-run', action='store_true', help="never write sysfs; record the values instead")
     p.add_argument('--checks-only', action='store_true', help="run the old unit-level hardware checks and exit")
     p.add_argument('--loop', action='store_true', help="repeat the day until Ctrl-C")
@@ -643,6 +702,9 @@ def main(argv: list[str] | None = None) -> int:
         backlight._active_cfg = cfg
 
         if args.sunrise:
+            # The live sun worker would overwrite the injected times mid-run with the real ones
+            # (that is what made the plateau checks fail on a device with a location).
+            display._stop_sun_times()
             _inject_sun_times(day, args.sunrise, args.sunset)
         elif _follows_sun(cfg) and not args.no_frames:
             if not _wait_for_sun_times(day, args.sun_wait):
@@ -652,6 +714,7 @@ def main(argv: list[str] | None = None) -> int:
         # already wired it up, but --no-frames never called start_backlight().
         if backlight._get_sun_times is None:
             backlight._get_sun_times = display._get_today_sun_times
+        _install_sim_sun_times(day)
 
         _print_location_provenance(args, day)
 

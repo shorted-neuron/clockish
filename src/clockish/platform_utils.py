@@ -3,7 +3,8 @@ platform.py  --  runtime helpers for detecting the target platform.
 
 Because we develop on Windows but deploy on Raspberry Pi, code that touches
 GPIO / I2C / SPI must always guard itself with these helpers rather than
-importing RPi.GPIO or gpiozero unconditionally.
+importing a GPIO library unconditionally (and for the ILI9486 pins, go through
+clockish.gpio_backends rather than importing RPi.GPIO).
 
 Usage:
     from clockish.platform import is_raspberry_pi, require_pi

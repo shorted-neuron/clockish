@@ -61,6 +61,7 @@ if __package__ in (None, ''):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from clockish.backlight import SCHEDULE_LEVEL_NAMES, SUN_SCHEDULE_VALUES, is_valid_level  # noqa: E402
+from clockish.gpio_backends import GPIO_BACKENDS  # noqa: E402
 from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
     NO_ARG_TRANSFORMS,
@@ -744,9 +745,28 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                 if not isinstance(poll_interval, str) or not _is_valid_interval(poll_interval):
                     err('reload', f"poll_interval '{poll_interval}' must be a string in format <number>[s|m|h]")
 
+    # -- display.gpio_backend / display.gpio_chip ----------------------------
+    # ILI9486 only; see clockish.gpio_backends.  The driver fails fast on a bad value,
+    # so this is a heads-up at validation time, not the only line of defence.
+    display_cfg = config.get('display')
+    if isinstance(display_cfg, dict):
+        _driver = display_cfg.get('driver', 'ili9486')
+        gpio_backend = display_cfg.get('gpio_backend')
+        if gpio_backend is not None:
+            if not isinstance(gpio_backend, str) or gpio_backend not in GPIO_BACKENDS:
+                err('display.gpio_backend',
+                    f"'gpio_backend: {gpio_backend!r}' must be one of {', '.join(GPIO_BACKENDS)}")
+            elif _driver != 'ili9486':
+                warn('display.gpio_backend', f"'gpio_backend' only applies to the ili9486 driver, not {_driver!r}")
+        gpio_chip = display_cfg.get('gpio_chip')
+        if gpio_chip is not None:
+            if not isinstance(gpio_chip, int) or isinstance(gpio_chip, bool) or gpio_chip < 0:
+                err('display.gpio_chip', f"'gpio_chip: {gpio_chip!r}' must be a gpiochip number, an integer >= 0")
+            elif _driver != 'ili9486':
+                warn('display.gpio_chip', f"'gpio_chip' only applies to the ili9486 driver, not {_driver!r}")
+
     # -- display.backlight section -------------------------------------------
     # Optional brightness scheduler; see clockish.backlight and AGENTS.md.
-    display_cfg = config.get('display')
     if isinstance(display_cfg, dict):
         backlight_cfg = display_cfg.get('backlight')
         if backlight_cfg is not None:

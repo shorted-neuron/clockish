@@ -9,7 +9,7 @@ build-backend = "hatchling.build"
 # =============================================================================
 [project]
 name = "clockish"
-version = "26.10.2"
+version = "26.10.3"
 description = "Clockish is a customizable _whatever_ display for Raspberry Pi with a PIL compatible display driver."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -43,8 +43,13 @@ classifiers = [
 #   armv7l   --  Pi 2, Pi 3, Pi 4 (32-bit OS)
 #   aarch64  --  Pi 3, Pi 4, Pi 5 (64-bit OS), Ubuntu on Pi
 #
-#   "RPi.GPIO>=0.7.1; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'"
-#   "smbus2>=0.4"
+#   "some-pi-lib>=1.0; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'"
+#
+# GPIO libraries are deliberately NOT listed here.  rpi-lgpio and RPi.GPIO install the same
+# module, so they cannot coexist, and rpi-lgpio rejects the old-style board revision of a Pi 1.
+# The ILI9486 driver picks gpiod, lgpio or RPi.GPIO at runtime (src/clockish/gpio_backends.py);
+# install.sh installs python3-libgpiod and python3-lgpio from apt.  tests/test_packaging.py
+# fails if rpi-lgpio, RPi.GPIO or Adafruit Blinka shows up in the dependencies or extras.
 dependencies = [
     # Display rendering
     "Pillow>=12.0.0",
@@ -60,8 +65,6 @@ dependencies = [
     # pyili9486  --  ILI9486 SPI display driver (Pi only; pulls in spidev which is Linux-only)
     # Source: https://github.com/SirLefti/Python_ILI9486
     "pyili9486>=1.0.0; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
-    # GPIO  --  rpi-lgpio is the recommended modern backend; RPi.GPIO also works as a drop-in
-    "rpi-lgpio>=0.6; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
 ]
 
 # -- Optional / development dependencies ---------------------------------------
@@ -74,12 +77,9 @@ st7789 = [
     "gpiodevice>=0.0.4; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
 ]
 
-# SSD1306 monochrome OLEDs (Adafruit Blinka + CircuitPython SSD1306 driver)
-# Install: pip install clockish[ssd1306]
-ssd1306 = [
-    "adafruit-blinka>=8.0; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
-    "adafruit-circuitpython-ssd1306>=2.12.24; platform_machine == 'armv6l' or platform_machine == 'armv7l' or platform_machine == 'aarch64'",
-]
+# SSD1306 monochrome OLEDs: the driver talks to /dev/i2c-N directly (Pillow + stdlib only), so
+# there is nothing to install. The empty extra keeps `pip install clockish[ssd1306]` working.
+ssd1306 = []
 
 dev = [
     "pytest>=7",

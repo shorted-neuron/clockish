@@ -1142,6 +1142,60 @@ class TestBacklight:
         assert (not value_errors) == backlight.is_valid_level(value)
 
 
+class TestGpioBackend:
+    """display.gpio_backend / display.gpio_chip: ILI9486 GPIO backend selection."""
+
+    @staticmethod
+    def _cfg(**display):
+        cfg = _minimal_config()
+        cfg['display'] = {'driver': 'ili9486', **display}
+        return cfg
+
+    @pytest.mark.parametrize('backend', ['auto', 'gpiod', 'lgpio', 'rpi-gpio'])
+    def test_every_known_backend_is_accepted(self, backend) -> None:
+        result = validate_config_dict(self._cfg(gpio_backend=backend))
+        assert result.ok, f"expected no issues, got: {result.issues}"
+
+    @pytest.mark.parametrize('bad', ['gpio', 'RPi.GPIO', 'wiringpi', 'GPIOD', True, False, 3, ''])
+    def test_unknown_backend_errors_and_names_the_choices(self, bad) -> None:
+        errs = validate_config_dict(self._cfg(gpio_backend=bad)).errors
+        assert any('gpio_backend' in i.message and 'auto, gpiod, lgpio, rpi-gpio' in i.message for i in errs)
+
+    @pytest.mark.parametrize('chip', [0, 1, 4])
+    def test_chip_number_is_accepted(self, chip) -> None:
+        assert validate_config_dict(self._cfg(gpio_chip=chip)).ok
+
+    @pytest.mark.parametrize('bad', [-1, 1.5, '0', True, False])
+    def test_bad_chip_number_errors(self, bad) -> None:
+        errs = validate_config_dict(self._cfg(gpio_chip=bad)).errors
+        assert any('gpio_chip' in i.message for i in errs)
+
+    def test_default_driver_is_ili9486_so_no_warning_without_a_driver_key(self) -> None:
+        cfg = _minimal_config()
+        cfg['display'] = {'gpio_backend': 'gpiod'}
+        assert validate_config_dict(cfg).ok
+
+    @pytest.mark.parametrize('driver', ['st7789', 'ssd1306', 'framebuffer'])
+    def test_other_drivers_get_a_warning_not_an_error(self, driver) -> None:
+        result = validate_config_dict(self._cfg(driver=driver, gpio_backend='gpiod', gpio_chip=0))
+        assert not result.has_errors
+        msgs = ' '.join(i.message for i in result.warnings)
+        assert 'gpio_backend' in msgs and 'gpio_chip' in msgs and driver in msgs
+
+    def test_schema_enum_matches_the_code(self) -> None:
+        # One definition in gpio_backends.py; the schema repeats it, so a test keeps them equal.
+        import pathlib
+
+        import yaml
+
+        from clockish.gpio_backends import GPIO_BACKENDS
+        schema_dir = pathlib.Path(__file__).resolve().parent.parent / 'configs' / 'schema'
+        schema_path = schema_dir / 'clockish-config.schema.yaml'
+        schema = yaml.safe_load(schema_path.read_text())
+        enum = schema['properties']['display']['properties']['gpio_backend']['enum']
+        assert tuple(enum) == GPIO_BACKENDS
+
+
 class TestBacklightSunSchedule:
     """'schedule:' as a scalar naming the sun curve, instead of a list."""
 

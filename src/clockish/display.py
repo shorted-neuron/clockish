@@ -3790,9 +3790,23 @@ def _next_tick(prev: int, now: float) -> int:
 
 
 # ---------------------------------------------------------------------------
+def _line_buffer_stdout() -> None:
+    """Flush stdout at every newline.
+
+    systemd gives a service a pipe, which Python block-buffers: startup lines ("Initialized
+    display", driver messages, backlight changes) then reach the journal minutes or hours late, or
+    only when the process stops.  Line buffering makes every print show up when it happens, so no
+    individual print needs flush=True.
+    """
+    reconfigure = getattr(sys.stdout, 'reconfigure', None)
+    if reconfigure is not None:
+        reconfigure(line_buffering=True)
+
+
 def main():
     """Parse args, initialize hardware, then run the display loop."""
     global DEBUG_LAYOUT
+    _line_buffer_stdout()
     _init()
     try:
         lcd.idle()

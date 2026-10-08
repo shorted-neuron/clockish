@@ -146,6 +146,7 @@ display:  # optional here; search display.yaml alongside config or ~/.config/clo
   height: 480
   rotation: 0 | 90 | 180 | 270
   # driver-specific keys (SPI pins, SKU, etc.) passed to constructor
+  # ili9486: gpio_backend auto|gpiod|lgpio|rpi-gpio, gpio_chip (see "GPIO backends")
 ```
 
 ### Tick alignment (seconds land on the NTP second)
@@ -164,7 +165,7 @@ or display. Narrative, measurements per board, and ideas not built:
   (ILI9486: +40..+51ms instead of +10..+21ms).
 - `DisplayDriver.prepare()`/`push()` default to pass-through + `display()`. All four shipped
   drivers split them, and their `display()` is `push(prepare(image))`. `push()` may assume
-  the matching `prepare()` came just before it (SSD1306's prepare fills the library buffer).
+  the matching `prepare()` came just before it (no shipped driver relies on that now).
 - `_next_tick(prev, now)` picks each frame's second. A tick more than `_TICK_MAX_AHEAD_S` (2s)
   past `time.time()` means the wall clock stepped back; it resyncs to `int(now) + 1` instead of
   letting `show_rows()` sleep until the stale tick arrives. Tests: `tests/test_tick_alignment.py`.
@@ -591,12 +592,14 @@ confirmed working against the actual sysfs file (readback matched every write), 
 brightness file.
 
 **Simulated-day runner** (`scripts/backlight_hardware_test.py`): replays a whole day against the
-real panel in ~2.5 minutes -- one wall-second per tick, each tick advancing a simulated clock by 10
+real panel in ~2.5 minutes -- 25 simulated hours from 23:30 to 00:30 (so both midnights are
+crossed), one wall-second per tick, each tick advancing a simulated clock by 10
 simulated minutes (the worker's own cadence), running the REAL `backlight._apply()` + sysfs write
 for that moment AND a REAL `display.show_rows()` frame with the simulated time injected, so the
 clock on screen agrees with the brightness being watched. Prints a per-tick bar, then checks the
 collected samples (night == min, a flat `max` plateau centred on solar noon and covering ~50% of
-daylight, monotonic ramps either side, every sysfs readback matched) and exits non-zero on failure
+daylight, monotonic ramps either side, no level jump across midnight, every sysfs readback matched)
+and exits non-zero on failure
 -- the plateau checks are what catch the wrong-curve-shape regressions described above.
 
 Before the replay it prints a **location provenance block** -- the setting and which file it came
@@ -607,9 +610,19 @@ chain is deliberately quiet, so a replay should never leave you guessing which l
 Coordinates follow the same gating as the rest of clockish: ~11 km rounding unless
 `--debug-location` is passed.
 
+Run it on the device, from the checkout, with the project venv, after stopping the service (the
+service's own frames and backlight worker would fight the replay); it restores the brightness it
+found. `--tick-secs 0.5` halves the wall time. `--keep-logging` leaves the profile's `logging:` on, so
+the real `backlight: brightness -> N` lines print (the runner silences them by default, it prints
+its own per-tick line). With `--sunrise/--sunset` the runner stops the live sun worker first --
+otherwise real fetched times overwrite the forced ones mid-run and the checks fail falsely -- and the
+sun-times callable follows the simulated date, so a sun schedule survives the midnight crossings.
+
 ```bash
-python3 scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware
-python3 scripts/backlight_hardware_test.py --dry-run --no-frames \
+sudo systemctl stop clockish
+.venv/bin/python scripts/backlight_hardware_test.py configs/my.yaml      # the day, on real hardware
+sudo systemctl start clockish
+.venv/bin/python scripts/backlight_hardware_test.py --dry-run --no-frames \
         --tick-secs 0 --sunrise 06:22 --sunset 19:48            # instant, offline, dev box
 python3 scripts/backlight_hardware_test.py --checks-only        # old unit-level hw checks
 ```
@@ -633,12 +646,60 @@ transfer for tick alignment (see "Tick alignment" and `docs/how_tick_alignment_w
 Defaults are pass-through.
 
 **ili9486Driver** (Raspberry Pi SPI):
-- Opens pyili9486 + spidev + rpi-lgpio
-- Reads config: rotation, SKU (MPI3501/MHS3528), SPI bus/device/speed, GPIO pins (DC, RST)
-- Fails fast if hardware missing
+- Opens pyili9486 + spidev; the DC/RST pins go through `clockish/gpio_backends.py` (below)
+- Reads config: rotation, SKU (MPI3501/MHS3528), SPI bus/device/speed, GPIO pins (DC, RST),
+  `gpio_backend`, `gpio_chip`
+- Fails fast if hardware missing, or if no GPIO backend works (`GPIOBackendError` lists why each failed)
+
+**GPIO backends** (`gpio_backends.py`): `make_gpio_facade(dc, rst, backend, chip)` returns one of
+pyILI9486's three interchangeable facades and its name. `auto` (default) tries `gpiod` -> `lgpio` ->
+`rpi-gpio` (`AUTO_ORDER`): libgpiod is the maintained, kernel-blessed interface and works on every Pi;
+lgpio is the stable fallback; the `RPi.GPIO` module is last. A named backend is used alone, no fallback.
+Any exception from a facade means "unusable here" and is reported with the others. Rules for agents:
+
+- **Why not `RPi.GPIO` first:** the Pi 1 family (A, B, A+, B+, CM1) reports old-style board revision
+  codes and `rpi-lgpio` raises `NotImplementedError` (not `ImportError`) at *import* time; `RPi.GPIO`
+  has had no release since 2022 and does not support the Pi 5. `rpi-lgpio` and `RPi.GPIO` both install
+  the `RPi.GPIO` module, so they cannot coexist -- whichever pip installs last wins.
+- **Never import `pyili9486.gpio.rpilgpio_facade` or `RPi.GPIO` directly** on the ILI9486 path; go
+  through the factory. `tests/test_gpio_backends.py::TestNoHardcodedRPiFacade` enforces it.
+- Per driver: ILI9486 -> the factory (any backend); ST7789 -> `gpiod` + `gpiodevice` + spidev, no
+  `RPi.GPIO`; SSD1306 -> the kernel's `/dev/i2c-N` directly (stdlib + Pillow); framebuffer -> nothing. So
+  no driver needs an `RPi` library: `RPi.GPIO` / `rpi-lgpio` matter only if someone picks `gpio_backend: rpi-gpio`.
+- `GPIO_BACKENDS` has one definition, in `gpio_backends.py` (stdlib-only at import, so the validator
+  imports it); `configs/schema/` repeats the enum and a test keeps them equal. The demo utilities
+  (`clockish-test`, `-colors`, `-depth`, `-fonts`) read `CLOCKISH_GPIO_BACKEND`.
+- **Packaging:** `rpi-lgpio`, `RPi.GPIO` and Adafruit Blinka must not appear in `pyproject.toml`
+  dependencies/extras or be pip-installed by `install.sh` (`tests/test_packaging.py` fails if they do):
+  the first two share one module, and Blinka hard-requires `RPi.GPIO`. `install.sh` apt-installs
+  `python3-libgpiod` (required) and `python3-lgpio` (optional, warns if the distro lacks it), builds the
+  venv with `--system-site-packages` so those are visible, and fails the import check if the selected
+  driver has no backend (ST7789 needs gpiod; ILI9486 needs gpiod or lgpio). The `ssd1306` extra is empty
+  on purpose (old install commands keep working). Choosing the SSD1306 driver also runs the I2C check
+  (`i2c_enabled`, tested by extracting the function between its `>>>`/`<<<` markers): a *commented-out*
+  `#dtparam=i2c_arm=on` is not enabled, and `raspi-config nonint do_i2c 0` ENABLES it (0 = yes, 1 = no).
+- `gpio_chip` defaults to 0. Raspberry Pi OS also provides a `gpiochip4` alias (on the Pi 1 B+ and Pi 4
+  boards tested it points at gpiochip0); whether a Pi 5 needs a different number is untested -- no Pi 5
+  has run this path.
+- Validation: `display.gpio_backend` / `gpio_chip` are checked by the semantic walker when `display:` is
+  in the config being validated. Startup validates the config *before* `_resolve_config()` merges
+  `display.yaml`, while reload validates after, so keys that only live in a profile are checked on
+  reload but not at startup; the driver fails fast on a bad `gpio_backend` regardless.
 
 **ST7789Driver** (Pimoroni; Adafruit 240×135/240×240):
 - Similar; uses st7789 lib + gpiod
+
+**SSD1306Driver** (I2C OLED, 128x64 / 128x32):
+- Native: `/dev/i2c-N` via an `I2C_SLAVE` ioctl and plain writes, Pillow + stdlib only. It replaced the
+  Adafruit CircuitPython stack (Blinka dragged in `RPi.GPIO`, which `rpi-lgpio` shadows and which fails on a Pi 1
+  just to open an I2C bus). Do not reintroduce `adafruit_*`/`board`/`busio`; `tests/test_ssd1306.py` guards it.
+- Init stream, `0x80`-per-command / `0x40`-data framing and page layout equal `adafruit_ssd1306`'s,
+  verified byte for byte (random images, 128x64 / 128x32 / 64x32); the one difference is that it skips the
+  library's display-on *before* init, which flashed RAM. Narrow panels are centred in the 128 columns.
+- `prepare()` returns the page bytes (convert, rotate, resize, `pack_pages()`); `push()` is two I2C transfers.
+  `prepare()` is ~30x faster than the old `lcd.image()` loop on a Pi 1 B+ (152 ms -> 4.8 ms); the push is bus-limited.
+- Config: `width`, `height` (multiple of 8), `rotation`, `i2c_addr`, `i2c_bus` (default 1). `scl_pin`/`sda_pin`
+  (old Blinka overrides) are ignored with a warning.
 
 **FramebufferDriver** (Linux /dev/fb0):
 - Reads /dev/fb0 geometry via ioctl
@@ -651,7 +712,7 @@ Defaults are pass-through.
 **pytest**: `tests/test_config_validator.py`, `tests/test_cached_facts.py` (background-thread
 fetch/retry/SIGUSR1 machinery), `tests/test_location.py` (location resolution, kill switch,
 file shapes, contrib-preview no-network guarantees), `tests/test_display_transform_wiring.py`,
-`test_platform_utils.py`, `test_all_encoding.py`.
+`test_platform_utils.py`, `test_all_encoding.py`, `tests/test_gpio_backends.py` (fake facades), `tests/test_ssd1306.py` (fake I2C bus); no hardware.
 
 Run:
 ```bash
@@ -878,6 +939,14 @@ newer than 3.11, the same way the numpy issue above was diagnosed.
 ---
 
 ## Code Conventions & Linter Notes
+
+### stdout under systemd
+
+`main()` calls `_line_buffer_stdout()` first, so every `print` reaches the journal at its newline
+(a service's stdout is a pipe, which Python block-buffers: startup and `logging: true` lines
+arrived hours late, or only when the service stopped). New prints in the service path need no
+`flush=True`; code that runs before `main()` (a driver imported by a demo utility, the
+simulated-day runner) still passes it where a delay would mislead. Test: `tests/test_stdout_buffering.py`.
 
 ### Import ordering (Ruff)
 Ruff enforces PEP 8 import grouping:

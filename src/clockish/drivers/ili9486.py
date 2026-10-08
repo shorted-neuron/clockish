@@ -23,11 +23,14 @@ section of your YAML config:
       spi_speed_hz: 64000000
       dc_pin:       24       # BCM GPIO number for Data/Command
       rst_pin:      25       # BCM GPIO number for Reset
+      gpio_backend: auto     # auto | gpiod | lgpio | rpi-gpio  (see clockish.gpio_backends)
+      gpio_chip:    0        # /dev/gpiochipN for gpiod/lgpio; ignored by rpi-gpio
 
-Hardware dependencies (Pi-only, installed automatically on Pi via pyproject.toml):
+Hardware dependencies (Pi-only):
   * pyili9486   --  https://github.com/SirLefti/Python_ILI9486
   * spidev
-  * rpi-lgpio  (or RPi.GPIO)
+  * one GPIO library: gpiod (preferred), lgpio, or RPi.GPIO / rpi-lgpio.  ``auto`` tries them in
+    that order, so a Pi 1 (which rpi-lgpio rejects) works without RPi.GPIO.
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ from __future__ import annotations
 from PIL import Image
 
 from clockish.drivers.base import DisplayDriver
+from clockish.gpio_backends import make_gpio_facade
 
 # Lazy imports so the module can be *imported* on non-Pi platforms without
 # raising ImportError.  The error surfaces only when begin() is called.
@@ -42,7 +46,7 @@ _IMPORTS_OK = False
 
 
 def _try_import():
-    global _IMPORTS_OK, SpiDev, ILI9486, Origin, SKU, RPiLGPIOFacade
+    global _IMPORTS_OK, SpiDev, ILI9486, Origin, SKU
     global PixelFormat, image_to_data, CMD_WRMEM
     try:
         from pyili9486 import CMD_WRMEM as _CMD_WRMEM
@@ -51,20 +55,18 @@ def _try_import():
         from pyili9486 import Origin as _Origin
         from pyili9486 import PixelFormat as _PixelFormat
         from pyili9486 import image_to_data as _image_to_data
-        from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade as _RPLGF  # noqa: F401
         from spidev import SpiDev as _SpiDev  # noqa: F401
         SpiDev = _SpiDev
         ILI9486 = _ILI9486
         Origin = _Origin
         SKU = _SKU
-        RPiLGPIOFacade = _RPLGF
         PixelFormat = _PixelFormat
         image_to_data = _image_to_data
         CMD_WRMEM = _CMD_WRMEM
         _IMPORTS_OK = True
     except ImportError as exc:
         raise ImportError(
-            "pyili9486 / spidev / rpi-lgpio are required for the ILI9486 driver "
+            "pyili9486 and spidev are required for the ILI9486 driver "
             "and are only available on Raspberry Pi hardware.  "
             f"Original error: {exc}"
         ) from exc
@@ -111,6 +113,8 @@ class ILI9486Driver(DisplayDriver):
         spi_speed  = int(cfg.get("spi_speed_hz",  64_000_000))
         dc_pin     = int(cfg.get("dc_pin",        24))
         rst_pin    = int(cfg.get("rst_pin",       25))
+        gpio_backend = str(cfg.get("gpio_backend", "auto"))
+        gpio_chip  = int(cfg.get("gpio_chip",     0))
 
         origin_name = _ROTATION_TO_ORIGIN_NAME.get(rotation, "UPPER_RIGHT")
         origin      = getattr(Origin, origin_name)
@@ -119,7 +123,9 @@ class ILI9486Driver(DisplayDriver):
         sku = getattr(SKU, resolved_sku_name)
         self._pixel_format = PixelFormat.from_sku(sku)
 
-        gpio = RPiLGPIOFacade(dc_pin=dc_pin, rs_pin=rst_pin)
+        # GPIOBackendError / ValueError here is fatal on purpose: with no GPIO there is no display.
+        gpio, gpio_name = make_gpio_facade(dc_pin, rst_pin, backend=gpio_backend, chip=gpio_chip)
+        print(f"ILI9486: GPIO via {gpio_name}", flush=True)   # stdout is block-buffered under systemd
 
         spi = SpiDev(spi_bus, spi_dev)
         spi.mode = 0b10
@@ -151,7 +157,7 @@ class ILI9486Driver(DisplayDriver):
         self._lcd.idle(state)
 
     def close(self) -> None:
-        """Close the SPI bus.  (GPIO cleanup is handled by rpi-lgpio facade.)"""
+        """Close the SPI bus.  (The GPIO facade releases its lines itself.)"""
         if self._spi is not None:
             self._spi.close()
             self._spi = None

@@ -15,10 +15,10 @@ import tty
 
 from PIL import Image, ImageDraw, ImageFont
 from pyili9486 import ILI9486, SKU, Origin
-from pyili9486.gpio.rpilgpio_facade import RPiLGPIOFacade
 from spidev import SpiDev
 
 from clockish.colors import PALETTE, best_label_color, rgb_to_hex
+from clockish.gpio_backends import make_gpio_facade
 
 # ---------------------------------------------------------------------------
 # Hardware configuration
@@ -31,7 +31,7 @@ RST_PIN    = 25
 # ---------------------------------------------------------------------------
 # Display setup
 # ---------------------------------------------------------------------------
-_gpio = RPiLGPIOFacade(dc_pin=DC_PIN, rs_pin=RST_PIN)
+_gpio, _ = make_gpio_facade(DC_PIN, RST_PIN)  # $CLOCKISH_GPIO_BACKEND, default auto
 spi = SpiDev(SPI_BUS, SPI_DEVICE)
 spi.mode = 0b10
 spi.max_speed_hz = 64000000
@@ -167,6 +167,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nInterrupted.")
     finally:
-        # GPIO cleanup is handled by the rpi-lgpio facade (see
-        # drivers/ili9486.py) -- only the SPI bus needs an explicit close.
+        # The GPIO facade (see gpio_backends.py) releases its lines when the
+        # process exits -- only the SPI bus needs an explicit close.
         spi.close()

@@ -11,7 +11,8 @@
 #   1. Verifies it is running on a Raspberry Pi / Linux
 #   2. Checks and installs required apt system packages
 #   3. Verifies that SPI is enabled (offers to enable it via raspi-config)
-#   4. Prompts for which display driver(s) to install
+#   4. Prompts for which display driver(s) to install; for an SSD1306 OLED also
+#      verifies that I2C is enabled (offers to enable it)
 #   5. Creates a Python virtual environment (.venv)
 #   6. Installs all required pip packages into .venv
 #   7. Copies the default config to ~/.config/clockish/clockish.yaml
@@ -108,10 +109,8 @@ APT_PACKAGES=(
     fonts-dseg
     # YAML linter  --  used by clockish-validate for style checks
     yamllint
-    # swig is needed to build rpi-lgpio later
-    swig
-    # python3-swiglpk # unknown if needed
-    # lgpio / GPIO system library (needed by rpi-lgpio pip package)
+    # GPIO for the ILI9486 / ST7789 drivers: libgpiod v2 bindings (see src/clockish/gpio_backends.py).
+    # python3-lgpio, the second backend, is installed below as an optional package.
     python3-libgpiod
     # Timezone database  --  required by zoneinfo (used for multi-timezone clocks)
     tzdata
@@ -141,6 +140,18 @@ if [[ ${#MISSING_APT[@]} -gt 0 ]]; then
 else
     ok "All required apt packages are present."
 fi
+
+# Optional: lgpio is the ILI9486 driver's second GPIO backend (gpiod is tried first).  Not every
+# distro packages it, and one working backend is enough, so a failure here is only a warning.
+for pkg in python3-lgpio; do
+    if dpkg -s "$pkg" &>/dev/null; then
+        ok "  apt (optional): $pkg"
+    elif sudo apt-get install -y "$pkg" >/dev/null 2>&1; then
+        ok "  apt (optional): $pkg  [installed]"
+    else
+        warn "  apt (optional): $pkg is not available here  --  the ILI9486 driver will use gpiod or RPi.GPIO"
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # 2. SPI interface check  (Raspberry Pi only)
@@ -257,10 +268,69 @@ case "$_DRIVER_CHOICE" in
     *) info "Skipping display driver install." ;;
 esac
 
-$INSTALL_ILI9486 && ok "Will install: ili9486 driver     (pyili9486)"
+$INSTALL_ILI9486 && ok "Will install: ili9486 driver     (pyili9486; GPIO via gpiod or lgpio from apt)"
 $INSTALL_ST7789  && ok "Will install: st7789 driver      (st7789 + gpiod + gpiodevice)"
 $INSTALL_FB      && ok "Will install: framebuffer driver (no extra packages  --  uses /dev/fb0)"
-$INSTALL_SSD1306 && ok "Will install: ssd1306 driver     (adafruit-blinka + adafruit-circuitpython-ssd1306)"
+$INSTALL_SSD1306 && ok "Will install: ssd1306 driver     (no extra packages  --  uses /dev/i2c-N directly)"
+
+# ---------------------------------------------------------------------------
+# I2C interface check  (SSD1306 only)
+# ---------------------------------------------------------------------------
+# >>> i2c-check  (tests/test_install_sh.py runs this function; keep it self-contained)
+# True when the ARM I2C interface is on: the device node exists, or a boot config enables it.
+# I2C_DEVICE and BOOT_CONFIGS (space separated) are overridable so the test can fake both.
+i2c_enabled() {
+    local dev="${I2C_DEVICE:-/dev/i2c-1}"
+    local cfgs="${BOOT_CONFIGS:-/boot/firmware/config.txt /boot/config.txt}"
+    local cfg
+    [[ -e "$dev" ]] && return 0
+    for cfg in $cfgs; do
+        # same pattern raspi-config's get_i2c uses; a commented-out line does not match
+        [[ -f "$cfg" ]] && grep -q -E "^(device_tree_param|dtparam)=([^,]*,)*i2c(_arm)?(=(on|true|yes|1))?(,.*)?$" "$cfg" && return 0
+    done
+    return 1
+}
+# <<< i2c-check
+
+if $INSTALL_SSD1306 && [[ "$IS_RPI" == true ]]; then
+    section "I2C interface check"
+    if i2c_enabled; then
+        ok "I2C is enabled."
+    else
+        warn "I2C does not appear to be enabled  --  the SSD1306 driver needs /dev/i2c-1."
+        echo ""
+        echo "  To enable I2C, run ONE of the following:"
+        echo "    Option A (interactive):  sudo raspi-config"
+        echo "       -> Interface Options -> I2C -> Enable"
+        echo ""
+        echo "    Option B (non-interactive, then reboot):   (0 = enable, 1 = disable)"
+        echo "       sudo raspi-config nonint do_i2c 0"
+        echo "       sudo reboot"
+        echo ""
+        read -r -p "  Enable I2C now automatically? [y/N] " REPLY
+        if [[ "${REPLY,,}" == "y" ]]; then
+            sudo raspi-config nonint do_i2c 0
+            warn "I2C enabled  --  a REBOOT IS REQUIRED before /dev/i2c-1 appears."
+            NEEDS_REBOOT=true
+        else
+            warn "Skipping I2C enable. The SSD1306 driver will fail at runtime without it."
+        fi
+    fi
+
+    # I2C group membership -- 'i2c' on Raspberry Pi OS
+    if getent group i2c >/dev/null 2>&1; then
+        if ! groups | grep -qw i2c; then
+            warn "User '$USER' is not in the 'i2c' group."
+            info "Adding $USER to i2c group..."
+            sudo usermod -aG i2c "$USER"
+            warn "Group change requires logout/login (or reboot) to take effect."
+        else
+            ok "User '$USER' is in the 'i2c' group."
+        fi
+    else
+        info "No 'i2c' group on this system  --  /dev/i2c-N access is whatever your distro sets."
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 # Display profile selection
@@ -322,10 +392,10 @@ VENV_DIR="$SCRIPT_DIR/.venv"
 # via apt, pass --system-site-packages so the venv inherits them instead of
 # letting pip recompile/download them (numpy in particular takes a long time).
 VENV_SYSTEM_FLAG=""
-if python3 -c "import numpy" 2>/dev/null; then
+if python3 -c "import numpy" 2>/dev/null || python3 -c "import gpiod" 2>/dev/null || python3 -c "import lgpio" 2>/dev/null; then
     VENV_SYSTEM_FLAG="--system-site-packages"
-    ok "System numpy detected  --  venv will use --system-site-packages"
-    info "  (apt-installed packages such as python3-numpy will be visible inside the venv)"
+    ok "System numpy / gpiod / lgpio detected  --  venv will use --system-site-packages"
+    info "  (apt-installed packages such as python3-numpy and python3-libgpiod will be visible inside the venv)"
 else
     info "System numpy not found  --  creating isolated venv (numpy will be pip-installed)"
 fi
@@ -387,18 +457,17 @@ PIP_PACKAGES=(
     "types-seaborn>=0.13.2"  # satisfies pre-existing system dep conflict (requires matplotlib, pandas-stubs)
 )
 
-# GPIO: rpi-lgpio is the recommended drop-in for RPi.GPIO on modern kernels.
-if [[ "$IS_RPI" == true ]]; then
-    PIP_PACKAGES+=("rpi-lgpio>=0.6")
-else
-    warn "Not on Raspberry Pi  --  skipping rpi-lgpio. GPIO will fail at runtime."
+# GPIO: no pip package on purpose.  The ILI9486 driver uses gpiod or lgpio from apt (visible through
+# --system-site-packages); rpi-lgpio and RPi.GPIO install the same module, cannot coexist, and
+# rpi-lgpio rejects a Pi 1.  See src/clockish/gpio_backends.py.
+if [[ "$IS_RPI" != true ]]; then
+    warn "Not on Raspberry Pi  --  GPIO will fail at runtime."
 fi
 
 # Display driver packages.
 if [[ "$IS_RPI" == true ]]; then
     $INSTALL_ILI9486 && PIP_PACKAGES+=("pyili9486>=1.0.0")
     $INSTALL_ST7789  && PIP_PACKAGES+=("st7789>=1.0.0" "gpiod>=2.0" "gpiodevice>=0.0.4")
-    $INSTALL_SSD1306 && PIP_PACKAGES+=("adafruit-blinka>=8.0" "adafruit-circuitpython-ssd1306>=2.12.24")
 fi
 
 info "Installing pip packages..."
@@ -409,13 +478,12 @@ for pkg in "${PIP_PACKAGES[@]}"; do
 done
 
 # Install the clockish package itself (creates the `clockish` entry-point binary).
-# Include [st7789] extra when that driver was selected.
+# Include the [st7789] extra when that driver was selected (the ssd1306 extra is empty: no packages).
 info "Installing clockish package (pip install -e .) ..."
 _CLOCKISH_TARGET="$SCRIPT_DIR"
 # Build extras list for selected drivers so pip installs optional dependencies when requested.
 _EXTRAS=()
 $INSTALL_ST7789 && _EXTRAS+=(st7789)
-$INSTALL_SSD1306 && _EXTRAS+=(ssd1306)
 if [[ ${#_EXTRAS[@]} -gt 0 ]]; then
     IFS=, ; _EXTRA_STR="${_EXTRAS[*]}" ; unset IFS
     _CLOCKISH_TARGET="${SCRIPT_DIR}[$_EXTRA_STR]"
@@ -447,7 +515,22 @@ check_import "yaml"       "PyYAML (yaml)"
 
 if [[ "$IS_RPI" == true ]]; then
     check_import "spidev"     "spidev"
-    check_import "RPi.GPIO"   "RPi.GPIO (via rpi-lgpio)"
+
+    # GPIO for the ILI9486 / ST7789 drivers: gpiod (apt python3-libgpiod) and/or lgpio (apt python3-lgpio).
+    _HAVE_GPIOD=false
+    _HAVE_LGPIO=false
+    "$VENV_PY" -c "import gpiod" 2>/dev/null && _HAVE_GPIOD=true
+    "$VENV_PY" -c "import lgpio" 2>/dev/null && _HAVE_LGPIO=true
+    $_HAVE_GPIOD && ok "  import gpiod"
+    $_HAVE_LGPIO && ok "  import lgpio"
+    if $INSTALL_ST7789 && ! $_HAVE_GPIOD; then
+        error "  the ST7789 driver needs gpiod  [MISSING]  (sudo apt install python3-libgpiod)"
+        IMPORT_ERRORS=$((IMPORT_ERRORS + 1))
+    fi
+    if $INSTALL_ILI9486 && ! $_HAVE_GPIOD && ! $_HAVE_LGPIO; then
+        error "  the ILI9486 driver needs gpiod or lgpio  [MISSING]  (sudo apt install python3-libgpiod python3-lgpio)"
+        IMPORT_ERRORS=$((IMPORT_ERRORS + 1))
+    fi
 fi
 
 
@@ -676,7 +759,8 @@ echo "  - Permission denied?    sudo usermod -aG spi,gpio \$USER  then reboot"
 echo "  - Font errors?          sudo apt install fonts-dejavu-core
   - 7-seg font missing?   sudo apt install fonts-dseg
   - Nixie font missing?   bash scripts/download-nixie-font.sh"
-echo "  - RPi.GPIO missing?     source .venv/bin/activate && pip install rpi-lgpio"
+echo "  - GPIO library missing? sudo apt install python3-libgpiod python3-lgpio"
+echo "  - OLED not found?       sudo raspi-config nonint do_i2c 0 && sudo reboot   (0 = enable)"
 echo "  - numpy/Pillow slow?    sudo apt install python3-numpy  (then re-run install.sh)"
 echo "  - numpy missing?        source .venv/bin/activate && pip install 'numpy>=2.4'"
 echo "  - Service not starting? sudo journalctl -u clockish -n 50"
