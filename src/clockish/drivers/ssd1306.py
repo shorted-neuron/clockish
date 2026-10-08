@@ -203,6 +203,12 @@ class SSD1306Driver(DisplayDriver):
         """Write a :meth:`prepare` frame to the whole panel."""
         if self._dev is None:
             return
+        expected = self._width * self._pages
+        if len(frame) != expected:
+            # The controller wraps or leaves the rest stale instead of failing, so a wrong-sized
+            # frame would corrupt the panel silently.
+            raise ValueError(f"SSD1306 frame is {len(frame)} bytes, expected {expected} "
+                             f"({self._width}x{self._height})")
         first = self._col_offset
         self._commands((SET_COL_ADDR, first, first + self._width - 1, SET_PAGE_ADDR, 0, self._pages - 1))
         self._dev.write(bytes((_CTRL_DATA,)) + frame)

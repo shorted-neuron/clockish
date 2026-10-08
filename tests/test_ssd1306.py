@@ -127,6 +127,22 @@ class TestDriver:
         d.push(frame)
         assert len(fake_dev.instances[0].writes) == n + 2
 
+    @pytest.mark.parametrize('size', [(128, 64), (128, 32), (64, 32)])
+    @pytest.mark.parametrize('delta', [-1, 1, -8])
+    def test_a_wrong_sized_frame_is_rejected_and_nothing_is_written(self, fake_dev, size, delta):
+        d = SSD1306Driver({'width': size[0], 'height': size[1]}).begin()
+        n = len(fake_dev.instances[0].writes)
+        with pytest.raises(ValueError, match=rf'expected {size[0] * size[1] // 8}'):
+            d.push(bytes(size[0] * size[1] // 8 + delta))
+        assert len(fake_dev.instances[0].writes) == n
+
+    @pytest.mark.parametrize('size', [(128, 64), (128, 32), (64, 32)])
+    def test_a_prepared_frame_always_has_the_size_push_expects(self, fake_dev, size):
+        d = SSD1306Driver({'width': size[0], 'height': size[1]}).begin()
+        n = len(fake_dev.instances[0].writes)
+        d.push(d.prepare(Image.new('RGB', (200, 150), 'white')))
+        assert len(fake_dev.instances[0].writes) == n + 2
+
     def test_non_1bit_and_wrong_size_images_are_converted_and_resized(self, fake_dev):
         d = SSD1306Driver({'width': 128, 'height': 64}).begin()
         frame = d.prepare(Image.new('RGB', (240, 135), (255, 255, 255)))
