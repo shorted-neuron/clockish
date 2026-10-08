@@ -41,7 +41,8 @@ Tested displays:
 - 3.5" ILI9486-based SPI LCD (480x320, 16-bit color).
 - 1.1" Mini PiTFT (ST7789, 240x135, 16-bit color).
 - 1.3" Mini PiTFT (ST7789, 240x240, 16-bit color).
-- SSD1306 I²C OLED (128x64, monochrome).
+- SSD1306 I²C OLED (128x64, monochrome). A 128x32 profile (`ssd1306-128x32.yaml`, layout `tiny32.yaml`) is
+  included but not hardware-tested yet.
 - Linux Framebuffer (any size, any resolution, any color depth):
   - DSI displays (like 5" and 7" Waveshare panels or others found on Amazon)
   - DSI displays (like 7" and 10" Raspberry Pi DSI panels)

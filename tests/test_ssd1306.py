@@ -10,8 +10,10 @@ import pathlib
 import random
 
 import pytest
+import yaml
 from PIL import Image
 
+from clockish.config_validator import validate_config_file
 from clockish.drivers import ssd1306 as drv
 from clockish.drivers.ssd1306 import SSD1306Driver, init_commands, pack_pages
 
@@ -267,3 +269,46 @@ class TestNoBlinka:
         forbidden = {'board', 'busio', 'digitalio', 'RPi', 'lgpio', 'gpiod', 'smbus', 'smbus2'}
         assert not imported & forbidden
         assert not {m for m in imported if m.startswith('adafruit')}
+
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+PROFILES = [          # (display profile, the layout written for it)
+    ('ssd1306-128x64.yaml', 'tiny.yaml'),
+    ('ssd1306-128x32.yaml', 'tiny32.yaml'),
+]
+
+
+class TestShippedProfiles:
+    """The OLED profiles and their layouts must agree on the panel size, and drive the real driver."""
+
+    @staticmethod
+    def _display(profile):
+        return yaml.safe_load((ROOT / 'configs' / 'display' / profile).read_text())['display']
+
+    @pytest.mark.parametrize('profile, layout', PROFILES)
+    def test_layout_validates(self, profile, layout):
+        result = validate_config_file(str(ROOT / 'configs' / layout), run_yamllint=False)
+        assert not result.has_errors, [i.message for i in result.errors]
+
+    @pytest.mark.parametrize('profile, layout', PROFILES)
+    def test_layout_preview_size_matches_the_profile(self, profile, layout):
+        display = self._display(profile)
+        cfg = yaml.safe_load((ROOT / 'configs' / layout).read_text())
+        assert cfg['preview_size'] == f"{display['width']}x{display['height']}"
+
+    @pytest.mark.parametrize('profile, layout', PROFILES)
+    def test_profile_builds_the_driver_with_the_right_pages(self, fake_dev, profile, layout):
+        display = self._display(profile)
+        assert display['driver'] == 'ssd1306'
+        d = SSD1306Driver(display).begin()
+        w, h = display['width'], display['height']
+        assert d.dimensions == (w, h)
+        dev = fake_dev.instances[0]
+        assert commands_in(dev.writes[1]) == [0x21, 0, w - 1, 0x22, 0, h // 8 - 1]
+        assert dev.writes[2] == b'\x40' + bytes(w * h // 8)
+
+    def test_the_32_pixel_profile_uses_the_32_pixel_init_stream(self, fake_dev):
+        SSD1306Driver(self._display('ssd1306-128x32.yaml')).begin()
+        stream = commands_in(fake_dev.instances[0].writes[0])
+        assert stream[stream.index(0xA8) + 1] == 0x1F          # mux ratio: 32 - 1
+        assert stream[stream.index(0xDA) + 1] == 0x02          # sequential COM pins
