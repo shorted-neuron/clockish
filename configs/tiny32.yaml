@@ -1,0 +1,36 @@
+---
+# tiny32.yaml  --  minimal 128x32 OLED layout
+# ---------------------------------------------------------------------------
+# Intended for a 128x32 monochrome SSD1306 panel with the display profile:
+#   configs/display/ssd1306-128x32.yaml
+# Wifi + clock on the top row (18 px), the (wider) IP below (14 px): 32 px exactly.
+# ---------------------------------------------------------------------------
+
+orientation: landscape
+preview_size: 128x32
+
+rows:
+  - name: time-row
+    height: 18
+    panels:
+      - type: wifi_graphic
+        width: 25%
+        color: white
+        background: black
+      - type: clock
+        time_format: 24hs
+        label: ""
+        justify: center
+        color: white
+        font_size: auto
+        font_behavior: scale_numeric
+
+  - name: ip-row
+    height: 14
+    panels:
+      - type: fact
+        source: ip
+        color: black
+        background: white
+        font_size: auto
+        font_behavior: scale_numeric
