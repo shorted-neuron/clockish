@@ -702,7 +702,7 @@ Any exception from a facade means "unusable here" and is reported with the other
   verified byte for byte (random images, 128x64 / 128x32 / 64x32); the one difference is that it skips the
   library's display-on *before* init, which flashed RAM. Narrow panels are centred in the 128 columns.
 - Profiles: `configs/display/ssd1306-128x64.yaml` + `tiny.yaml`, `ssd1306-128x32.yaml` + `tiny32.yaml` (the 128x32 pair
-  is not hardware-tested yet; some 128x32 modules answer at `0x3D`, set `i2c_addr`). `TestShippedProfiles` keeps each
+  ran on a Pi 4 at `0x3C`, push ~48 ms; some 128x32 modules answer at `0x3D`, set `i2c_addr`). `TestShippedProfiles` keeps each
   layout's `preview_size` equal to its profile and builds the driver from it.
 - `prepare()` returns the page bytes (convert, rotate, resize, `pack_pages()`); `push()` is two I2C transfers.
   `prepare()` is ~30x faster than the old `lcd.image()` loop on a Pi 1 B+ (152 ms -> 4.8 ms); the push is bus-limited.

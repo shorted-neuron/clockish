@@ -41,8 +41,7 @@ Tested displays:
 - 3.5" ILI9486-based SPI LCD (480x320, 16-bit color).
 - 1.1" Mini PiTFT (ST7789, 240x135, 16-bit color).
 - 1.3" Mini PiTFT (ST7789, 240x240, 16-bit color).
-- SSD1306 I²C OLED (128x64, monochrome). A 128x32 profile (`ssd1306-128x32.yaml`, layout `tiny32.yaml`) is
-  included but not hardware-tested yet.
+- SSD1306 I2C OLED (128x64 and 128x32, monochrome; profiles `ssd1306-128x64.yaml` and `ssd1306-128x32.yaml`).
 - Linux Framebuffer (any size, any resolution, any color depth):
   - DSI displays (like 5" and 7" Waveshare panels or others found on Amazon)
   - DSI displays (like 7" and 10" Raspberry Pi DSI panels)
@@ -66,7 +65,7 @@ module, so only one of them can be installed), and it does not matter which your
   the other values). On the slowest boards `gpiod` pushes a frame a little slower than `RPi.GPIO`
   (about 220 ms against 190 ms on a Pi 1 B+); seconds still land on time.
 - **ST7789** uses `gpiod`.
-- **SSD1306** talks to `/dev/i2c-1` directly, so I²C must be on: `sudo raspi-config nonint do_i2c 0`
+- **SSD1306** talks to `/dev/i2c-1` directly, so I2C must be on: `sudo raspi-config nonint do_i2c 0`
   and a reboot (`0` means enable). `install.sh` checks this when you pick the SSD1306 driver.
 - **Framebuffer** needs no GPIO library.
 
@@ -77,8 +76,9 @@ display:
 ```
 
 Tested on real hardware: a Pi 1 B+ v1.2 with an ILI9486 and an SSD1306; a Pi 1 B Rev 2 with an
-ST7789; two Pi 2 B boards, one with an ILI9486 and one with an SSD1306; a Pi 4 B with an ILI9486. All
-four `gpio_backend` values were run on the ILI9486 of the Pi 1 B+, Pi 2 B and Pi 4 B.
+ST7789; two Pi 2 B boards, one with an ILI9486 and one with an SSD1306; a Pi 4 B with an ILI9486 and
+a 128x32 SSD1306. All four `gpio_backend` values were run on the ILI9486 of the Pi 1 B+, Pi 2 B and
+Pi 4 B.
 Not tested: the Pi 1 A, A+ and compute module, and the Pi 5. Every board ran the same Raspberry Pi OS
 Lite image (13, trixie); bookworm is untested.
 
@@ -89,7 +89,7 @@ Lite image (13, trixie); bookworm is untested.
 - Python 3.11 or newer
 - Raspberry Pi OS Bookworm / Ubuntu 22.04+ (for hardware features)
 - Almost any display with a PIL-compatible driver (ST7789, ILI9486, DSI, HDMI, etc.)
-- Develop on Linux/Mac/Windows: most features work in a normal venv; GPIO / I²C stubs are skipped
+- Develop on Linux/Mac/Windows: most features work in a normal venv; GPIO / I2C stubs are skipped
 
 ---
 
@@ -106,7 +106,7 @@ cd clockish
 bash install.sh
 ```
 
-That's it.  The script will tell you if a reboot is needed (SPI, I²C or group changes).
+That's it.  The script will tell you if a reboot is needed (SPI, I2C or group changes).
 
 #### Manual install (if you prefer not to use install.sh)
 

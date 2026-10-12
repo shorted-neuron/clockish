@@ -115,6 +115,7 @@ and board generation. Not a requirement: any mix of boards works. Check a board'
 | Pi Zero              | ST7789 (SPI)          | `st7789`                    | single-core ARMv6                               |
 | Pi Zero 2 W          | ST7789 (SPI)          | `st7789`                    | small Zero                                      |
 | Pi 4 B               | ILI9486 (SPI)         | `ili9486`, all four backends | fastest SPI push of the ILI9486 boards       |
+| Pi 4 B               | SSD1306 128x32 (I2C)  | `ssd1306`, 128x32 profile   | second instance on the DSI machine (own user and unit) |
 | Pi 4 B               | DSI panel, framebuffer | `framebuffer`, sysfs backlight | 800x480, `backlight:` schedules               |
 
 Every board runs the same Raspberry Pi OS Lite image, so an SD card can move between boards
