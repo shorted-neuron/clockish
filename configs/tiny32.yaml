@@ -3,6 +3,7 @@
 # ---------------------------------------------------------------------------
 # Intended for a 128x32 monochrome SSD1306 panel with the display profile:
 #   configs/display/ssd1306-128x32.yaml
+# Wifi + clock on the top row (19 px), the (wider) IP below (13 px): 32 px exactly.
 # ---------------------------------------------------------------------------
 
 orientation: landscape
@@ -10,8 +11,12 @@ preview_size: 128x32
 
 rows:
   - name: time-row
-    height: 68%
+    height: 19
     panels:
+      - type: wifi_graphic
+        width: 25%
+        color: white
+        background: black
       - type: clock
         time_format: 24hs
         label: ""
@@ -20,13 +25,9 @@ rows:
         font_size: auto
         font_behavior: scale_numeric
 
-  - name: info-row
-    height: 32%
+  - name: ip-row
+    height: 13
     panels:
-      - type: wifi_graphic
-        width: 12%
-        color: white
-        background: black
       - type: fact
         source: ip
         color: black
