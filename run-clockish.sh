@@ -6,11 +6,34 @@
 # Usage:
 #   ./run-clockish.sh [--debug] [--debug-layout] [config.yaml]
 #   ./run-clockish.sh --install-service [config.yaml]
+#   ./run-clockish.sh --install-service [config.yaml] --service-name NAME
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR"
 VENV_BIN="$PROJECT_ROOT/.venv/bin"
 SERVICE_NAME="clockish"
+
+# --service-name NAME (or --service-name=NAME) picks the systemd unit for --install-service and
+# --remove-service, so a second instance on one machine does not overwrite the first. It is taken
+# out of the argument list here. Same name rule as scripts/setup-testbed-sudoers.sh.
+SERVICE_NAME_GIVEN=""
+_args=()
+while (( $# )); do
+    case "$1" in
+        --service-name)
+            [[ $# -ge 2 ]] || { echo "ERROR: --service-name needs a value" >&2; exit 2; }
+            SERVICE_NAME="$2"; SERVICE_NAME_GIVEN=1; shift 2 ;;
+        --service-name=*)
+            SERVICE_NAME="${1#*=}"; SERVICE_NAME_GIVEN=1; shift ;;
+        *)
+            _args+=("$1"); shift ;;
+    esac
+done
+set -- "${_args[@]+"${_args[@]}"}"
+if [[ ! "$SERVICE_NAME" =~ ^[A-Za-z][A-Za-z0-9_-]*$ ]]; then
+    echo "ERROR: bad service name: '$SERVICE_NAME' (letters, digits, - and _; start with a letter)" >&2
+    exit 2
+fi
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 # ---------------------------------------------------------------------------
@@ -29,11 +52,21 @@ Wrapper-specific options (handled here, not passed to clockish):
   --remove-service
       Stop the clockish service, disable it, and delete the unit file.
 
+  --service-name NAME
+      With either option above, use /etc/systemd/system/NAME.service instead of
+      clockish.service (default: clockish). For a second instance on one machine,
+      run from its own checkout and user, e.g. --service-name clockish-oled.
+
 All other options and arguments are forwarded to clockish:
 
 USAGE
     "$VENV_BIN/clockish" --help 2>&1 || true
     exit 0
+fi
+
+if [[ -n "$SERVICE_NAME_GIVEN" && "${1:-}" != "--install-service" && "${1:-}" != "--remove-service" ]]; then
+    echo "ERROR: --service-name only applies to --install-service and --remove-service" >&2
+    exit 2
 fi
 
 # ---------------------------------------------------------------------------
@@ -81,10 +114,13 @@ if [[ "${1:-}" == "--install-service" ]]; then
         exit 1
     fi
 
+    DESCRIPTION="clockish LCD display"
+    [[ "$SERVICE_NAME" != "clockish" ]] && DESCRIPTION="$DESCRIPTION ($SERVICE_NAME)"
+
     echo "Writing $SERVICE_FILE ..."
     sudo tee "$SERVICE_FILE" > /dev/null <<UNIT
 [Unit]
-Description=clockish LCD display
+Description=$DESCRIPTION
 After=network-online.target
 Wants=network-online.target
 
