@@ -822,6 +822,7 @@ findings, matching CI's `ruff check . || true`.
 bash install.sh  # venv, system deps, run-clockish.sh, edit-clockish-config.sh
 ./run-clockish.sh --debug-layout  # single frame, layout debug output
 ./run-clockish.sh --install-service configs/my.yaml  # systemd unit + start
+./run-clockish.sh --install-service configs/my.yaml --service-name clockish-oled  # a second unit on one machine
 ```
 
 **Pre-commit** (GitHub Actions):

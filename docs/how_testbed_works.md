@@ -47,6 +47,27 @@ cp scripts/testbed-inventory.example.yaml testbed-inventory.yaml   # gitignored
    Check by hand: `ssh -T host 'sudo -n systemctl status clockish'` must not
    ask for a password.
 
+### A second instance on one machine
+
+Two displays on one Pi (say a DSI panel and an I2C OLED) means two clockish processes. Give the
+second its own OS user, checkout and service, so the fixed `~/.config/clockish/` path (and
+the symlink switching `deploy` does there) is not shared. Example for an OLED user `oled`:
+
+```bash
+sudo adduser --disabled-password --gecos "" oled
+sudo usermod -aG users,i2c oled          # users: sudoers rule; i2c: /dev/i2c-N (add spi/gpio/video as the display needs)
+sudo -iu oled
+git clone <repo> clockish && cd clockish && bash install.sh
+./run-clockish.sh --install-service configs/tiny32.yaml --service-name clockish-oled
+exit
+bash scripts/setup-testbed-sudoers.sh clockish-oled    # as a sudo user; rule file 099_clockish-oled
+```
+
+`--service-name` keeps `--install-service` from overwriting the first instance's `clockish.service`.
+Then add the host to the inventory with `ansible_host: localhost`, `ansible_user: oled`, `clockish_service:
+clockish-oled` and its own `clockish_path`, and authorise the control host's key for `oled`. The
+user needs its own `location.yaml` if its layout uses location facts.
+
 ## Inventory
 
 Ansible-style YAML. Precedence: `all.vars` < group vars < host vars. Groups nest
