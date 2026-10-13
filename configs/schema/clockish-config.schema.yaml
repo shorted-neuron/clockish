@@ -148,6 +148,39 @@ properties:
                         - type: string
                           enum: [min, max, 'off']   # quoted: bare off is false in YAML 1.1
                         - const: false
+      duty_cycle:
+        type: object
+        description: |
+          Optional. Blank the panel except for a short window each period, so a cheap OLED
+          does not burn in at 100% duty cycle. The window is wall-clock aligned and wraps
+          the period boundary. Visible at epoch second t iff (t - show_at) mod period < show_for.
+          See AGENTS.md "Duty cycle (OLED blanking)".
+        required: [period, show_at, show_for]
+        additionalProperties: false
+        properties:
+          period:
+            description: |
+              Length of one cycle. Must divide 86400 seconds. Whole seconds, or a string
+              like "60s", "5m", "1h".
+            oneOf:
+              - type: integer
+                minimum: 1
+              - type: string
+                pattern: '^\d+(?:\.\d+)?[smh]?$'
+          show_at:
+            description: Offset into the period where the panel turns on (>= 0, < period).
+            oneOf:
+              - type: integer
+                minimum: 0
+              - type: string
+                pattern: '^\d+(?:\.\d+)?[smh]?$'
+          show_for:
+            description: How long the panel stays on (> 0). At or above period = always on.
+            oneOf:
+              - type: integer
+                minimum: 1
+              - type: string
+                pattern: '^\d+(?:\.\d+)?[smh]?$'
   preview_size:
     type: string
     pattern: '^\d+x\d+$'

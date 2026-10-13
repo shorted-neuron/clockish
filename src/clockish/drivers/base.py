@@ -4,7 +4,7 @@ clockish.drivers.base
 Abstract base class for display hardware drivers.
 
 All display backends must subclass :class:`DisplayDriver` and implement the
-abstract methods.  Optional hooks (``prepare``/``push``, ``idle``, ``close``)
+abstract methods.  Optional hooks (``prepare``/``push``, ``idle``, ``blank``, ``close``)
 have pass-through/no-op defaults so minimal drivers need only implement ``begin`` and
 ``display``.
 """
@@ -90,6 +90,18 @@ class DisplayDriver(ABC):
 
         No-op by default; override if the hardware supports it.
         """
+
+    def blank(self, state: bool = True) -> None:
+        """Blank (``True``) or unblank (``False``) the panel; used by ``display.duty_cycle``.
+
+        Default: blank by pushing an all-black frame; unblank is a no-op because the
+        next pushed frame restores content.  Drivers with a real display-off command
+        override this.  Distinct from :meth:`idle` (ILI9486: 8-colour mode) and
+        :meth:`clear` (shutdown).  The main loop pushes a fresh frame BEFORE
+        ``blank(False)``, so an override must keep the panel's RAM intact while blanked.
+        """
+        if state:
+            self.push(self.prepare(Image.new("RGB", self.dimensions)))
 
     def close(self) -> None:
         """Release hardware resources (SPI bus, GPIO lines, file handles, ...).

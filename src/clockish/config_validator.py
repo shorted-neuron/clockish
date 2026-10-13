@@ -61,6 +61,7 @@ if __package__ in (None, ''):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from clockish.backlight import SCHEDULE_LEVEL_NAMES, SUN_SCHEDULE_VALUES, is_valid_level  # noqa: E402
+from clockish.duty_cycle import problems as duty_cycle_problems  # noqa: E402
 from clockish.gpio_backends import GPIO_BACKENDS  # noqa: E402
 from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
@@ -885,6 +886,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                     'display.backlight.schedule',
                                     f"schedule entries '{a_name}' and '{b_name}' overlap",
                                 )
+
+    # -- display.duty_cycle section ------------------------------------------
+    # Optional OLED blanking window; see clockish.duty_cycle and AGENTS.md.
+    if isinstance(display_cfg, dict) and display_cfg.get('duty_cycle') is not None:
+        for msg in duty_cycle_problems(display_cfg['duty_cycle']):
+            err('display.duty_cycle', msg)
 
     # -- rows ---------------------------------------------------------------
     rows = config.get('rows')

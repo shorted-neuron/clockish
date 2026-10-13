@@ -194,6 +194,8 @@ python3 src/clockish/render_preview.py --outdir /tmp/out configs/big-red.yaml
 Config files live in `configs/`. Each file is a YAML document with two top-level keys:
 
 - **`display`** — `width`, `height`, `rotation` (0 / 90 / 180 / 270)
+  An OLED can blank itself outside a short window to avoid burn-in (see the commented example in
+  `configs/display/ssd1306-128x64.yaml`): `duty_cycle: {period: 60s, show_at: 55s, show_for: 10s}`.
 - **`rows`** — a list of rows, each with a `height` and a `panels` list
 
 Each panel has a `type` and type-specific keys:

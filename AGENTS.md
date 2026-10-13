@@ -151,6 +151,7 @@ display:  # optional here; search display.yaml alongside config or ~/.config/clo
   height: 480
   rotation: 0 | 90 | 180 | 270
   # driver-specific keys (SPI pins, SKU, etc.) passed to constructor
+  duty_cycle: {period: 60s, show_at: 55s, show_for: 10s}  # optional OLED blanking, see "Duty cycle"
   # ili9486: gpio_backend auto|gpiod|lgpio|rpi-gpio, gpio_chip (see "GPIO backends")
 ```
 
@@ -643,9 +644,49 @@ patching module-level `datetime`.
 different brightness-control mechanism (GPIO pin? different sysfs path?) -- untested, needs a
 real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extension point.
 
+### Duty cycle (OLED blanking)
+
+Cheap OLEDs burn in at 100% duty cycle. Optional `display.duty_cycle:` blanks the panel except for
+a window each period:
+
+```yaml
+display:
+  duty_cycle:
+    period: 60s     # wall-clock aligned; must divide 86400
+    show_at: 55s    # offset into the period where the panel turns on
+    show_for: 10s   # lit :55 through :04, dark from :05 (window may wrap the period boundary)
+```
+
+Visible at tick `t` (integer epoch seconds) iff `((t - show_at) mod period) < show_for`. Rules for agents:
+
+- Schedule logic is `duty_cycle.py` (stdlib-only, pure). The validator **imports** `problems()` from it
+  (one-way, like `backlight.py`); `configs/schema/` repeats the key list and a test keeps them equal.
+  Durations go through `durations.seconds()` (stdlib-only), the one parser shared with
+  `display._parse_interval` (cached-facts `interval`, `reload.poll_interval`); `duty_cycle.parse_duration()`
+  adds only the whole-seconds rule. Don't add another parser.
+- Absent block = always visible. `show_for >= period` = always visible. `show_for: 0` and a `period` that
+  does not divide 86400 are validator errors; at runtime an invalid block warns and counts as absent.
+- Keys are `period`/`show_at`/`show_for`. Never add bare `on:`/`off:` keys (YAML 1.1 booleans).
+- `DisplayDriver.blank(state=True)` is the driver hook; it is NOT `idle()` (ILI9486 idle = 8-colour mode)
+  and not `clear()` (shutdown). Default: push a black frame on `blank(True)`, no-op on `blank(False)`.
+  Overrides: SSD1306 `0xAE`/`0xAF` (RAM kept); framebuffer `FBIOBLANK` (and `close()` unblanks). ILI9486 and
+  ST7789 keep the black-frame default on purpose: `DISPOFF` (0x28) on a TN panel whose backlight is hardwired on
+  shows white, not dark. An override must keep frame memory intact while blanked.
+- `display._run_tick(tick)` is the per-second step. Hidden: no render, no push; `lcd.blank(True)` once, at
+  the boundary of the first hidden second. Wake: render + `push()` the frame for that tick while still
+  blanked, THEN `blank(False)`, so the stale pre-blank image never flashes. `blank()` calls sit outside
+  `show_rows()`, so `_avg_display_ms` stays `push()`-only (see "Tick alignment").
+- State: `_duty` (parsed schedule) and `_panel_blanked`. `main()` loads `_duty` from
+  `_resolved_display_config` and blanks at once if the first tick is hidden; `_attempt_config_reload()`
+  reloads `_duty` and clears `_panel_blanked` when it swaps in a fresh driver. Hidden ticks still service
+  `_reload_event`. `--debug` prints one `duty_cycle: blank|wake at tick=N` line per transition.
+- Exit: blanked SSD1306 stays dark (`clear()` pushes black, never sends `0xAF`); framebuffer unblanks in
+  `close()` so the console is not left dark.
+- Tests: `tests/test_duty_cycle.py` (schedule math, validator, fake-bus driver bytes, `_run_tick` order).
+
 ### Display drivers
 
-Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.dimensions` property.
+Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.blank(bool)`, `.dimensions` property.
 Optional `.prepare(PIL_Image) -> frame` / `.push(frame)` split `display()` into conversion and
 transfer for tick alignment (see "Tick alignment" and `docs/how_tick_alignment_works.md`).
 Defaults are pass-through.

@@ -34,7 +34,7 @@ except ImportError:
 import PIL.ImageOps
 from PIL import Image, ImageDraw, ImageFont
 
-from clockish import __version__, backlight
+from clockish import __version__, backlight, durations, duty_cycle
 from clockish.colors import BY_NAME, rgb_to_hex
 from clockish.drivers import load_driver
 from clockish.transforms import apply_transforms
@@ -733,16 +733,11 @@ def _now_in_tz(tz_name: str, at: float | None = None) -> datetime.datetime:
 # ---------------------------------------------------------------------------
 
 def _parse_interval(interval_str: str) -> int:
-    """Convert interval string (e.g., '5m', '30s', '1h') to seconds."""
-    interval_str = interval_str.strip()
-    if interval_str.endswith('s'):
-        return int(float(interval_str[:-1]))
-    elif interval_str.endswith('m'):
-        return int(float(interval_str[:-1]) * 60)
-    elif interval_str.endswith('h'):
-        return int(float(interval_str[:-1]) * 3600)
-    # Fallback to seconds if no unit (shouldn't happen if validator works)
-    return int(float(interval_str))
+    """Convert interval string (e.g., '5m', '30s', '1h') to whole seconds (truncated)."""
+    secs = durations.seconds(interval_str)
+    if secs is None:
+        raise ValueError(f"invalid interval {interval_str!r}; expected <number>[s|m|h]")
+    return int(secs)
 
 def _extract_value_by_regex(response_text: str, pattern: str) -> str | None:
     """Extract first capture group from regex match, or None if no match."""
@@ -3428,6 +3423,7 @@ def _attempt_config_reload() -> None:
     """Attempt to reload the config from disk. On failure, log a warning and continue."""
     global _config, _display_cfg, _resolved_display_config
     global width, height, rotation, image, draw, lcd, _orientation, _FONTS, _LAYOUT
+    global _duty, _panel_blanked
 
     try:
         new_config = _load_config(_args.config)
@@ -3472,9 +3468,12 @@ def _attempt_config_reload() -> None:
             lcd = new_lcd
             rotation = new_display_cfg.get('rotation', 0)
             _resolved_display_config = new_display_cfg
+            _panel_blanked = False   # a freshly begun driver is lit
         except Exception as e:
             print(f"WARNING: config reload driver reinit failed: {e}", file=sys.stderr)
             return
+
+    _duty = _load_duty_cycle(new_display_cfg)
 
     # Stop and rejoin old cached-facts workers before reinitializing
     _stop_cached_facts()
@@ -3790,6 +3789,50 @@ def _next_tick(prev: int, now: float) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Duty cycle (OLED blanking) -- see clockish.duty_cycle and AGENTS.md
+_duty: duty_cycle.DutyCycle | None = None   # None = always visible
+_panel_blanked: bool = False                # we called lcd.blank(True) and not yet blank(False)
+
+
+def _load_duty_cycle(display_cfg: dict) -> duty_cycle.DutyCycle | None:
+    """Parse display.duty_cycle; an invalid block warns and counts as absent."""
+    raw = display_cfg.get('duty_cycle')
+    for msg in (duty_cycle.problems(raw) if raw is not None else []):
+        print(f"WARNING: display.duty_cycle ignored: {msg}", file=sys.stderr)
+    return duty_cycle.parse(raw)
+
+
+def _set_blanked(state: bool, tick: float) -> None:
+    """lcd.blank(state), remember it, and say so under --debug."""
+    global _panel_blanked
+    lcd.blank(state)
+    _panel_blanked = state
+    if DEBUG:
+        print(f"duty_cycle: {'blank' if state else 'wake'} at tick={int(tick)}")
+
+
+def _run_tick(tick: int) -> None:
+    """One loop pass for the second `tick`: render + push it, or keep the panel blanked.
+
+    Hidden: no render, no push; blank at the boundary of the first hidden second.
+    Wake: the frame for `tick` is pushed while the panel is still blanked, then
+    blank(False) -- the panel never shows the stale pre-blank image.  blank(False)
+    sits after show_rows() so _avg_display_ms stays push()-only.
+    """
+    if duty_cycle.is_visible(_duty, tick):
+        lead_s = (_avg_display_ms or 0.0) / 2000
+        show_rows(at=tick, push_at=tick - lead_s)
+        if _panel_blanked:
+            _set_blanked(False, tick)
+        return
+    delay = tick - time.time()
+    if delay > 0:
+        time.sleep(delay)
+    if not _panel_blanked:
+        _set_blanked(True, tick)
+
+
+# ---------------------------------------------------------------------------
 def _line_buffer_stdout() -> None:
     """Flush stdout at every newline.
 
@@ -3805,7 +3848,7 @@ def _line_buffer_stdout() -> None:
 
 def main():
     """Parse args, initialize hardware, then run the display loop."""
-    global DEBUG_LAYOUT
+    global DEBUG_LAYOUT, _duty
     _line_buffer_stdout()
     _init()
     try:
@@ -3831,6 +3874,9 @@ def main():
         # starts the transfer (lcd.push) early by half its measured cost, so
         # pixels change mid-transfer on the boundary whatever the Pi/display
         # speed (fb ~1ms, SPI 40-110ms).
+        _duty = _load_duty_cycle(_resolved_display_config)
+        if not duty_cycle.is_visible(_duty, int(time.time()) + 1):
+            _set_blanked(True, time.time())   # first tick is hidden: dark now, not at the boundary
         tick = 0
         while True:
             # Check for config reload request (from watcher or signal handler)
@@ -3839,8 +3885,7 @@ def main():
                 _attempt_config_reload()
 
             tick = _next_tick(tick, time.time())
-            lead_s = (_avg_display_ms or 0.0) / 2000
-            show_rows(at=tick, push_at=tick - lead_s)
+            _run_tick(tick)
 
     except KeyboardInterrupt:
         pass

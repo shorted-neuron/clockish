@@ -213,6 +213,12 @@ class SSD1306Driver(DisplayDriver):
         self._commands((SET_COL_ADDR, first, first + self._width - 1, SET_PAGE_ADDR, 0, self._pages - 1))
         self._dev.write(bytes((_CTRL_DATA,)) + frame)
 
+    def blank(self, state: bool = True) -> None:
+        """Display off (0xAE) / on (0xAF).  GDDRAM is kept, so a frame pushed while off shows on wake."""
+        if self._dev is None:
+            return
+        self._commands((SET_DISP | (0 if state else 1),))
+
     def close(self) -> None:
         if self._dev is not None:
             try:
