@@ -63,6 +63,10 @@ SET_PRECHARGE = 0xD9
 SET_VCOM_DESEL = 0xDB
 SET_CHARGE_PUMP = 0x8D
 
+# duty_cycle level names -> register values.  'high' / 'normal' are the init values.
+VCOMH_LEVELS = {"low": 0x00, "mid": 0x20, "high": 0x30}          # ~0.65 / 0.77 / 0.83 * Vcc
+PRECHARGE_LEVELS = {"normal": 0xF1, "short": 0x11}
+
 # I2C control bytes: Co=1 D/C#=0 (one command follows), Co=0 D/C#=1 (display data follows).
 _CTRL_COMMAND = 0x80
 _CTRL_DATA = 0x40
@@ -80,8 +84,8 @@ def init_commands(width: int, height: int) -> list[int]:
         SET_DISP_OFFSET, 0x00,
         SET_COM_PIN_CFG, 0x02 if width > 2 * height else 0x12,
         SET_DISP_CLK_DIV, 0x80,
-        SET_PRECHARGE, 0xF1,                                # internal VCC
-        SET_VCOM_DESEL, 0x30,                               # 0.83 * Vcc
+        SET_PRECHARGE, PRECHARGE_LEVELS["normal"],          # internal VCC
+        SET_VCOM_DESEL, VCOMH_LEVELS["high"],               # 0.83 * Vcc
         SET_CONTRAST, 0xFF,
         SET_ENTIRE_ON,                                      # output follows RAM
         SET_NORM_INV,                                       # not inverted
@@ -139,6 +143,7 @@ class SSD1306Driver(DisplayDriver):
     # Default to clearing the OLED on process exit unless the user explicitly
     # sets `display.clear_on_exit: false` in their profile.
     DEFAULT_CLEAR_ON_EXIT: bool = True
+    HARDWARE_INVERT: bool = True
 
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
@@ -219,6 +224,19 @@ class SSD1306Driver(DisplayDriver):
             return
         self._commands((SET_DISP | (0 if state else 1),))
 
+    def invert(self, state: bool = True) -> None:
+        """Inverse display (0xA7) / normal (0xA6).  RAM is untouched."""
+        if self._dev is None:
+            return
+        self._commands((SET_NORM_INV | (1 if state else 0),))
+
+    def set_level(self, contrast: int, vcomh: str, precharge: str) -> None:
+        """Contrast (0x81), VCOMH deselect (0xDB) and precharge (0xD9) in one transfer."""
+        if self._dev is None:
+            return
+        self._commands((SET_CONTRAST, contrast, SET_VCOM_DESEL, VCOMH_LEVELS[vcomh],
+                        SET_PRECHARGE, PRECHARGE_LEVELS[precharge]))
+
     def close(self) -> None:
         if self._dev is not None:
             try:
@@ -232,6 +250,7 @@ class SSD1306Driver(DisplayDriver):
         if self._dev is None:
             return
         try:
+            self._commands((SET_NORM_INV,))       # an inverted panel would show the black frame as white
             self.push(bytes(self._width * self._pages))
         except OSError:
             # Best-effort: ignore any errors during shutdown

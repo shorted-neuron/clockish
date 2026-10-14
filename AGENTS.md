@@ -151,7 +151,7 @@ display:  # optional here; search display.yaml alongside config or ~/.config/clo
   height: 480
   rotation: 0 | 90 | 180 | 270
   # driver-specific keys (SPI pins, SKU, etc.) passed to constructor
-  duty_cycle: {period: 60s, show_at: 55s, show_for: 10s}  # optional OLED blanking, see "Duty cycle"
+  duty_cycle: {steps: [{for: 5s, level: full}, ...]}  # OLED burn-in levels/invert/blank, see "Duty cycle"
   # ili9486: gpio_backend auto|gpiod|lgpio|rpi-gpio, gpio_chip (see "GPIO backends")
 ```
 
@@ -644,49 +644,71 @@ patching module-level `datetime`.
 different brightness-control mechanism (GPIO pin? different sysfs path?) -- untested, needs a
 real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extension point.
 
-### Duty cycle (OLED blanking)
+### Duty cycle (OLED burn-in)
 
-Cheap OLEDs burn in at 100% duty cycle. Optional `display.duty_cycle:` blanks the panel except for
-a window each period:
+OLEDs lit at full brightness all day burn in (the maintainer's SSD1306 modules did). `display.duty_cycle:`
+steps the panel through levels, inverted frames and blanking on the wall clock; both shipped SSD1306 profiles
+enable it (5s `full`, 25s `half`, 30s `dim` each minute). User docs: README "OLED burn-in".
 
 ```yaml
 display:
   duty_cycle:
-    period: 60s     # wall-clock aligned; must divide 86400
-    show_at: 55s    # offset into the period where the panel turns on
-    show_for: 10s   # lit :55 through :04, dark from :05 (window may wrap the period boundary)
+    steps:                       # period = sum of 'for'; must divide 86400
+      - {for: 5s, level: full}
+      - {for: 25s, level: half}
+      - {for: 30s, level: dim, mode: normal}   # mode: normal | invert | blank
+    offset: 0s                   # optional; where step 1 starts
+    levels:                      # optional; override/add, unset keys from the built-in or 'full'
+      dim: {contrast: 1, vcomh: low, precharge: normal}
+  # or shorthand: {period: 60s, show_at: 55s, show_for: 10s} = full window + blank rest
 ```
 
-Visible at tick `t` (integer epoch seconds) iff `((t - show_at) mod period) < show_for`. Rules for agents:
+Step at tick `t` (integer epoch seconds) = the one covering `(t - offset) mod period`. Rules for agents:
 
 - Schedule logic is `duty_cycle.py` (stdlib-only, pure). The validator **imports** `problems()` from it
-  (one-way, like `backlight.py`); `configs/schema/` repeats the key list and a test keeps them equal.
-  Durations go through `durations.seconds()` (stdlib-only), the one parser shared with
+  (one-way, like `backlight.py`); `configs/schema/` repeats the key lists, mode/vcomh/precharge enums, and a
+  test keeps them equal. Durations go through `durations.seconds()` (stdlib-only), the one parser shared with
   `display._parse_interval` (cached-facts `interval`, `reload.poll_interval`); `duty_cycle.parse_duration()`
   adds only the whole-seconds rule. Don't add another parser.
-- Absent block = always visible. `show_for >= period` = always visible. `show_for: 0` and a `period` that
-  does not divide 86400 are validator errors; at runtime an invalid block warns and counts as absent.
-- Keys are `period`/`show_at`/`show_for`. Never add bare `on:`/`off:` keys (YAML 1.1 booleans).
-- `DisplayDriver.blank(state=True)` is the driver hook; it is NOT `idle()` (ILI9486 idle = 8-colour mode)
-  and not `clear()` (shutdown). Default: push a black frame on `blank(True)`, no-op on `blank(False)`.
-  Overrides: SSD1306 `0xAE`/`0xAF` (RAM kept); framebuffer `FBIOBLANK` (and `close()` unblanks). ILI9486 and
-  ST7789 keep the black-frame default on purpose: `DISPOFF` (0x28) on a TN panel whose backlight is hardwired on
-  shows white, not dark. An override must keep frame memory intact while blanked.
-- `display._run_tick(tick)` is the per-second step. Hidden: no render, no push; `lcd.blank(True)` once, at
-  the boundary of the first hidden second. Wake: render + `push()` the frame for that tick while still
-  blanked, THEN `blank(False)`, so the stale pre-blank image never flashes. `blank()` calls sit outside
-  `show_rows()`, so `_avg_display_ms` stays `push()`-only (see "Tick alignment").
-- State: `_duty` (parsed schedule) and `_panel_blanked`. `main()` loads `_duty` from
-  `_resolved_display_config` and blanks at once if the first tick is hidden; `_attempt_config_reload()`
-  reloads `_duty` and clears `_panel_blanked` when it swaps in a fresh driver. Hidden ticks still service
-  `_reload_event`. `--debug` prints one `duty_cycle: blank|wake at tick=N` line per transition.
-- Exit: blanked SSD1306 stays dark (`clear()` pushes black, never sends `0xAF`); framebuffer unblanks in
-  `close()` so the console is not left dark.
-- Tests: `tests/test_duty_cycle.py` (schedule math, validator, fake-bus driver bytes, `_run_tick` order).
+- `parse()` compiles both forms into `DutyCycle(period, offset, steps, levels)`; the shorthand becomes one
+  `full` step plus one `blank` step (or a single step when `show_for >= period`). Mixing the forms, `offset`
+  with the shorthand, a period not dividing 86400 and an unknown level name are validator errors; at
+  runtime an invalid block warns and counts as absent. `state_at()` returns `State(mode, level, index)`;
+  absent = `ALWAYS_ON` with `level=None`, and the loop then never calls `set_level()`/`invert()`.
+- Built-in levels (`DEFAULT_LEVELS`) come from eye tests on two modules (128x32 on clock35, 128x64 on a
+  Pi 2): lowest VCOMH about halves brightness at any contrast; contrast 1 + VCOMH low is the dimmest level
+  visible on both. Contrast 0 and `precharge: short` go fully dark on the 128x64 module, so neither may
+  become a default. `full` must equal the SSD1306 init values (a test checks).
+- Keys/values are `for`/`mode`/`level`, `normal`/`invert`/`blank`, `low`/`mid`/`high`, `normal`/`short`.
+  Never add bare `on:`/`off:` keys or values (YAML 1.1 booleans).
+- Driver hooks (all default no-op or fallback in `DisplayDriver`):
+  - `blank(state)`: NOT `idle()` (ILI9486 idle = 8-colour mode) and not `clear()` (shutdown). Default pushes a
+    black frame on `blank(True)`. Overrides: SSD1306 `0xAE`/`0xAF` (RAM kept); framebuffer `FBIOBLANK` (and
+    `close()` unblanks). ILI9486/ST7789 keep the black-frame default on purpose: `DISPOFF` (0x28) on a TN
+    panel with a hardwired backlight shows white. An override must keep frame memory intact while blanked.
+  - `invert(state)` + `HARDWARE_INVERT`: SSD1306 `0xA7`/`0xA6`. Drivers without it get the image inverted in
+    `show_rows(invert=True)` before `prepare()`.
+  - `set_level(contrast, vcomh, precharge)`: SSD1306 sends `0x81`/`0xDB`/`0xD9` in one transfer
+    (`VCOMH_LEVELS`, `PRECHARGE_LEVELS`). Others ignore levels. A backlight mapping would go here later.
+- `display._run_tick(tick)` is the per-second step. Blank step: no render, no push; `lcd.blank(True)` once, at
+  the boundary of the first blank second. Other steps: render + `push()` the frame for that tick first, THEN
+  `_apply_state()`: `set_level()` if the level changed, `invert()` if hardware invert changed, `blank(False)`
+  if blanked -- so the stale pre-blank image never flashes. These calls sit outside `show_rows()`, so
+  `_avg_display_ms` stays `push()`-only (see "Tick alignment").
+- State: `_duty`, `_panel_blanked`, `_panel_level` (None = driver init level), `_panel_inverted`, `_duty_step`.
+  `main()` loads `_duty` from `_resolved_display_config` and blanks at once if the first tick is blank;
+  `_attempt_config_reload()` reloads `_duty` and resets the panel state when it swaps in a fresh driver. Blank
+  ticks still service `_reload_event`. `--debug` prints `duty_cycle: step N mode=... contrast=... at tick=T`
+  per step change and `duty_cycle: blank|wake at tick=N` per blank transition.
+- Exit: SSD1306 `clear()` sends `0xA6` before the black frame (an inverted panel would show it white) and never
+  `0xAF`, so a blanked panel stays dark; framebuffer unblanks in `close()` so the console is not left dark.
+- Tests: `tests/test_duty_cycle.py` (schedule math, validator, shipped OLED profiles, fake-bus driver bytes,
+  `_run_tick` order).
 
 ### Display drivers
 
-Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.blank(bool)`, `.dimensions` property.
+Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.blank(bool)`,
+`.invert(bool)` + `HARDWARE_INVERT`, `.set_level(contrast, vcomh, precharge)`, `.dimensions` property.
 Optional `.prepare(PIL_Image) -> frame` / `.push(frame)` split `display()` into conversion and
 transfer for tick alignment (see "Tick alignment" and `docs/how_tick_alignment_works.md`).
 Defaults are pass-through.

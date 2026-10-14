@@ -3267,7 +3267,7 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
 _last_display_ms: float = 0.0
 _avg_display_ms: float | None = None   # smoothed lcd.push() cost; sets push lead
 
-def show_rows(at: float | None = None, push_at: float | None = None):
+def show_rows(at: float | None = None, push_at: float | None = None, invert: bool = False):
     """Render one frame and push it to the display.
 
     at:      epoch seconds the clock/date panels depict (None = now).
@@ -3275,6 +3275,8 @@ def show_rows(at: float | None = None, push_at: float | None = None):
              rendering + lcd.prepare() (None = push immediately).  Lets
              main() render and convert the next second ahead of time, so
              only the transfer itself lands on the boundary.
+    invert:  invert the image before lcd.prepare() (a duty_cycle 'invert'
+             step on a driver without HARDWARE_INVERT).
     """
     global _last_display_ms, _avg_display_ms
     t0 = time.perf_counter()
@@ -3311,7 +3313,7 @@ def show_rows(at: float | None = None, push_at: float | None = None):
             _render_row(r, row_idx, ry, width, rh, tz_cache, timings, t0)
 
     with timed_section("conv", timings):
-        frame = lcd.prepare(image)
+        frame = lcd.prepare(PIL.ImageOps.invert(image) if invert else image)
 
     render_ms = (time.perf_counter() - t0) * 1000
     if push_at is not None:
@@ -3423,7 +3425,7 @@ def _attempt_config_reload() -> None:
     """Attempt to reload the config from disk. On failure, log a warning and continue."""
     global _config, _display_cfg, _resolved_display_config
     global width, height, rotation, image, draw, lcd, _orientation, _FONTS, _LAYOUT
-    global _duty, _panel_blanked
+    global _duty, _panel_blanked, _panel_level, _panel_inverted
 
     try:
         new_config = _load_config(_args.config)
@@ -3468,7 +3470,9 @@ def _attempt_config_reload() -> None:
             lcd = new_lcd
             rotation = new_display_cfg.get('rotation', 0)
             _resolved_display_config = new_display_cfg
-            _panel_blanked = False   # a freshly begun driver is lit
+            _panel_blanked = False   # a freshly begun driver is lit, at its init level, not inverted
+            _panel_level = None
+            _panel_inverted = False
         except Exception as e:
             print(f"WARNING: config reload driver reinit failed: {e}", file=sys.stderr)
             return
@@ -3789,9 +3793,12 @@ def _next_tick(prev: int, now: float) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Duty cycle (OLED blanking) -- see clockish.duty_cycle and AGENTS.md
-_duty: duty_cycle.DutyCycle | None = None   # None = always visible
+# Duty cycle (OLED burn-in) -- see clockish.duty_cycle and AGENTS.md
+_duty: duty_cycle.DutyCycle | None = None   # None = always on, levels untouched
 _panel_blanked: bool = False                # we called lcd.blank(True) and not yet blank(False)
+_panel_level: duty_cycle.Level | None = None  # last lcd.set_level(); None = driver init level
+_panel_inverted: bool = False               # last lcd.invert() (hardware invert only)
+_duty_step: int = -1                        # step shown last, for --debug transitions
 
 
 def _load_duty_cycle(display_cfg: dict) -> duty_cycle.DutyCycle | None:
@@ -3811,19 +3818,40 @@ def _set_blanked(state: bool, tick: float) -> None:
         print(f"duty_cycle: {'blank' if state else 'wake'} at tick={int(tick)}")
 
 
+def _apply_state(st: duty_cycle.State, tick: float) -> None:
+    """After the frame for `tick` is pushed: level, hardware invert, then unblank -- each only on change."""
+    global _panel_level, _panel_inverted, _duty_step
+    if DEBUG and st.index != _duty_step:
+        lvl = '' if st.level is None else (f" contrast={st.level.contrast} vcomh={st.level.vcomh}"
+                                           f" precharge={st.level.precharge}")
+        print(f"duty_cycle: step {st.index + 1} mode={st.mode}{lvl} at tick={int(tick)}")
+    _duty_step = st.index
+    if st.level is not None and st.level != _panel_level:
+        lcd.set_level(st.level.contrast, st.level.vcomh, st.level.precharge)
+        _panel_level = st.level
+    hw_invert = st.mode == 'invert' and lcd.HARDWARE_INVERT
+    if hw_invert != _panel_inverted:
+        lcd.invert(hw_invert)
+        _panel_inverted = hw_invert
+    if _panel_blanked:
+        _set_blanked(False, tick)
+
+
 def _run_tick(tick: int) -> None:
     """One loop pass for the second `tick`: render + push it, or keep the panel blanked.
 
-    Hidden: no render, no push; blank at the boundary of the first hidden second.
-    Wake: the frame for `tick` is pushed while the panel is still blanked, then
-    blank(False) -- the panel never shows the stale pre-blank image.  blank(False)
-    sits after show_rows() so _avg_display_ms stays push()-only.
+    Blank step: no render, no push; blank at the boundary of the first blank second.
+    Otherwise the frame for `tick` is pushed first (inverted in software for an 'invert'
+    step when the driver has no HARDWARE_INVERT), then _apply_state() changes level and
+    hardware invert and unblanks -- so after a blank the stale pre-blank image never shows.
+    Those calls sit after show_rows() so _avg_display_ms stays push()-only.
     """
-    if duty_cycle.is_visible(_duty, tick):
+    st = duty_cycle.state_at(_duty, tick)
+    if st.mode != 'blank':
         lead_s = (_avg_display_ms or 0.0) / 2000
-        show_rows(at=tick, push_at=tick - lead_s)
-        if _panel_blanked:
-            _set_blanked(False, tick)
+        show_rows(at=tick, push_at=tick - lead_s,
+                  invert=st.mode == 'invert' and not lcd.HARDWARE_INVERT)
+        _apply_state(st, tick)
         return
     delay = tick - time.time()
     if delay > 0:

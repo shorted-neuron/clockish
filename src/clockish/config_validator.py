@@ -888,7 +888,7 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                 )
 
     # -- display.duty_cycle section ------------------------------------------
-    # Optional OLED blanking window; see clockish.duty_cycle and AGENTS.md.
+    # Optional OLED burn-in steps (levels, invert, blank); see clockish.duty_cycle and AGENTS.md.
     if isinstance(display_cfg, dict) and display_cfg.get('duty_cycle') is not None:
         for msg in duty_cycle_problems(display_cfg['duty_cycle']):
             err('display.duty_cycle', msg)

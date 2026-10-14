@@ -1,7 +1,7 @@
 """tests/test_duty_cycle.py
 
-display.duty_cycle: schedule math, validator, driver blank() hooks (fakes only) and the
-main-loop blank/wake sequencing in display._run_tick.
+display.duty_cycle: schedule math (shorthand and steps), validator, driver blank()/invert()/
+set_level() hooks (fakes only) and the main-loop sequencing in display._run_tick.
 """
 from __future__ import annotations
 
@@ -17,6 +17,11 @@ from clockish.drivers import st7789 as stdrv
 from clockish.drivers.base import DisplayDriver
 
 MINUTE = {'period': '60s', 'show_at': '55s', 'show_for': '10s'}
+STEPS = {'steps': [{'for': '5s', 'level': 'full'}, {'for': '25s', 'level': 'half'},
+                   {'for': '30s', 'level': 'dim'}]}
+FULL = dc.Level(255, 'high', 'normal')
+HALF = dc.Level(255, 'low', 'normal')
+DIM = dc.Level(1, 'low', 'normal')
 T0 = 1_790_000_040   # divisible by 60: second 0 of a minute
 
 
@@ -82,7 +87,8 @@ class TestIsVisible:
 
     def test_accepts_parsed_object(self):
         parsed = dc.parse(MINUTE)
-        assert parsed == dc.DutyCycle(60, 55, 10)
+        assert (parsed.period, parsed.offset) == (60, 55)
+        assert parsed.steps == (dc.Step(0, 10, 'normal', 'full'), dc.Step(10, 50, 'blank', 'full'))
         assert dc.is_visible(parsed, T0 + 55)
 
     def test_invalid_is_always_visible(self):
@@ -136,7 +142,22 @@ class TestValidator:
                                  / 'clockish-config.schema.yaml').read_text())
         props = schema['properties']['display']['properties']['duty_cycle']
         assert tuple(props['properties']) == dc.DUTY_CYCLE_KEYS
-        assert props['required'] == list(dc.DUTY_CYCLE_KEYS)
+        assert props['anyOf'] == [{'required': list(dc.SHORTHAND_KEYS)}, {'required': ['steps']}]
+        step = props['properties']['steps']['items']
+        assert tuple(step['properties']) == dc.STEP_KEYS
+        assert step['properties']['mode']['enum'] == list(dc.MODES)
+        level = props['properties']['levels']['additionalProperties']['properties']
+        assert tuple(level) == dc.LEVEL_KEYS
+        assert level['vcomh']['enum'] == list(dc.VCOMH_VALUES)
+        assert level['precharge']['enum'] == list(dc.PRECHARGE_VALUES)
+
+    def test_steps_block_is_clean(self):
+        assert not [i for i in _validate({'duty_cycle': {**STEPS, 'levels': {'dim': {'contrast': 3}}}}).issues
+                    if 'duty_cycle' in i.path]
+
+    def test_bad_level_is_an_error(self):
+        res = _validate({'duty_cycle': {**STEPS, 'levels': {'dim': {'contrast': 300}}}})
+        assert any('0-255' in i.message for i in res.errors)
 
 
 # --- driver blank() ---------------------------------------------------------
@@ -263,12 +284,22 @@ class TestSpiPanels:
 # --- main loop -----------------------------------------------------------------
 
 class _Lcd:
+    HARDWARE_INVERT = True
+
     def __init__(self, events):
         self.events = events
+        self.prepared: list = []
 
     def prepare(self, image):
         self.events.append('prepare')
+        self.prepared.append(image.getextrema())
         return 'F'
+
+    def invert(self, state=True):
+        self.events.append(f'invert({state})')
+
+    def set_level(self, contrast, vcomh, precharge):
+        self.events.append(f'level({contrast},{vcomh},{precharge})')
 
     def push(self, frame):
         self.events.append('push')
@@ -290,6 +321,9 @@ def loop(monkeypatch):
     monkeypatch.setattr(d, 'DEBUG', False)
     monkeypatch.setattr(d, '_avg_display_ms', None)
     monkeypatch.setattr(d, '_panel_blanked', False)
+    monkeypatch.setattr(d, '_panel_level', FULL)      # the driver's init level
+    monkeypatch.setattr(d, '_panel_inverted', False)
+    monkeypatch.setattr(d, '_duty_step', -1)
     monkeypatch.setattr(d, '_duty', dc.parse(MINUTE))
     monkeypatch.setattr(d, 'get_ntp_status', lambda: '')
     monkeypatch.setattr(d, 'get_ntp_upstream_count', lambda: '')
@@ -343,4 +377,233 @@ class TestRunTick:
         assert d._load_duty_cycle({'duty_cycle': {**MINUTE, 'show_for': 0}}) is None
         assert 'duty_cycle ignored' in capsys.readouterr().err
         assert d._load_duty_cycle({}) is None
-        assert d._load_duty_cycle({'duty_cycle': MINUTE}) == dc.DutyCycle(60, 55, 10)
+        assert d._load_duty_cycle({'duty_cycle': MINUTE}) == dc.parse(MINUTE)
+
+
+# --- steps schedule -------------------------------------------------------------
+
+class TestSteps:
+    def test_minute_of_levels(self):
+        levels = [dc.state_at(STEPS, T0 + s).level for s in range(60)]
+        assert levels == [FULL] * 5 + [HALF] * 25 + [DIM] * 30
+        assert dc.state_at(STEPS, T0 + 60).level == FULL
+
+    def test_index_and_mode(self):
+        st = dc.state_at(STEPS, T0 + 31)
+        assert (st.index, st.mode) == (2, 'normal')
+
+    def test_offset_shifts_step_one(self):
+        cfg = {**STEPS, 'offset': '55s'}
+        assert dc.state_at(cfg, T0 + 55).level == FULL
+        assert dc.state_at(cfg, T0 + 59).level == FULL
+        assert dc.state_at(cfg, T0 + 0).level == HALF
+
+    def test_invert_and_blank_steps(self):
+        cfg = {'steps': [{'for': 10}, {'for': 10, 'mode': 'blank'}, {'for': 10, 'mode': 'invert'},
+                         {'for': 10, 'mode': 'blank'}]}
+        modes = [dc.state_at(cfg, T0 + s).mode for s in (0, 9, 10, 20, 29, 30, 39, 40)]
+        assert modes == ['normal', 'normal', 'blank', 'invert', 'invert', 'blank', 'blank', 'normal']
+        assert not dc.parse(cfg).always_visible
+        assert dc.parse(STEPS).always_visible
+
+    def test_levels_override_and_add(self):
+        cfg = {**STEPS, 'levels': {'dim': {'contrast': 0}, 'glow': {'vcomh': 'mid'}}}
+        cfg['steps'] = cfg['steps'] + [{'for': '60s', 'level': 'glow'}]
+        parsed = dc.parse(cfg)
+        assert parsed.levels['dim'] == dc.Level(0, 'low', 'normal')
+        assert parsed.levels['glow'] == dc.Level(255, 'mid', 'normal')    # unset keys from 'full'
+        assert parsed.levels['full'] == FULL
+
+    def test_defaults(self):
+        st = dc.state_at({'steps': [{'for': '1m'}]}, T0 + 7)
+        assert (st.mode, st.level) == ('normal', FULL)
+
+    def test_absent_leaves_levels_alone(self):
+        assert dc.state_at(None, T0) == dc.ALWAYS_ON
+        assert dc.ALWAYS_ON.level is None
+
+    def test_shorthand_full_window_is_full_level(self):
+        assert dc.state_at(MINUTE, T0 + 56).level == FULL
+
+
+class TestStepsProblems:
+    def test_clean(self):
+        assert dc.problems(STEPS) == []
+        assert dc.problems({**STEPS, 'offset': 59, 'levels': {'dim': {'precharge': 'short'}}}) == []
+
+    @pytest.mark.parametrize('cfg, fragment', [
+        ({**STEPS, **MINUTE}, 'not both'),
+        ({**STEPS, 'period': 60}, 'not both'),
+        ({'steps': []}, 'non-empty list'),
+        ({'steps': {'for': 5}}, 'non-empty list'),
+        ({'steps': ['5s']}, 'must be a mapping'),
+        ({'steps': [{'level': 'dim'}]}, "missing required 'for'"),
+        ({'steps': [{'for': 0}]}, 'whole seconds > 0'),
+        ({'steps': [{'for': '1.5s'}]}, 'whole seconds > 0'),
+        ({'steps': [{'for': 60, 'mode': 'off'}]}, 'mode must be one of'),
+        ({'steps': [{'for': 60, 'mode': False}]}, 'mode must be one of'),
+        ({'steps': [{'for': 60, 'level': 'bright'}]}, "unknown level 'bright'"),
+        ({'steps': [{'for': 60, 'level': ['dim']}]}, 'unknown level'),
+        ({'steps': [{'for': 60, 'on': 1}]}, "unknown key 'on'"),
+        ({'steps': [{'for': 7}]}, 'add up to 7s'),
+        ({**STEPS, 'offset': '60s'}, 'less than the period (60s)'),
+        ({**STEPS, 'offset': 'soon'}, 'whole seconds'),
+        ({**MINUTE, 'offset': 5}, 'show_at is the offset'),
+        ({**STEPS, 'levels': ['dim']}, 'levels must be a mapping'),
+        ({**STEPS, 'levels': {'dim': 1}}, 'levels.dim must be a mapping'),
+        ({**STEPS, 'levels': {'dim': {'contrast': 256}}}, 'integer 0-255'),
+        ({**STEPS, 'levels': {'dim': {'contrast': True}}}, 'integer 0-255'),
+        ({**STEPS, 'levels': {'dim': {'contrast': '1'}}}, 'integer 0-255'),
+        ({**STEPS, 'levels': {'dim': {'vcomh': 'lowest'}}}, 'vcomh must be one of'),
+        ({**STEPS, 'levels': {'dim': {'precharge': 'long'}}}, 'precharge must be one of'),
+        ({**STEPS, 'levels': {'dim': {'brightness': 1}}}, "unknown key 'brightness'"),
+        ({}, "missing required 'period'"),
+    ])
+    def test_errors(self, cfg, fragment):
+        assert any(fragment in m for m in dc.problems(cfg)), dc.problems(cfg)
+
+    def test_custom_level_name_is_known(self):
+        cfg = {'steps': [{'for': 60, 'level': 'glow'}], 'levels': {'glow': {'contrast': 9}}}
+        assert dc.problems(cfg) == []
+
+    def test_invalid_is_always_on(self):
+        assert dc.state_at({'steps': [{'for': 7}]}, T0) == dc.ALWAYS_ON
+
+
+class TestShippedOledProfiles:
+    """Both SSD1306 profiles ship the 5s full / 25s half / 30s dim minute."""
+
+    @pytest.mark.parametrize('name', ['ssd1306-128x32.yaml', 'ssd1306-128x64.yaml'])
+    def test_profile_schedule(self, name):
+        import pathlib
+
+        import yaml
+        path = pathlib.Path(__file__).parent.parent / 'configs' / 'display' / name
+        cfg = yaml.safe_load(path.read_text())['display']['duty_cycle']
+        assert dc.problems(cfg) == []
+        assert [dc.state_at(cfg, T0 + s).level for s in (0, 4, 5, 29, 30, 59)] == [FULL, FULL, HALF, HALF, DIM, DIM]
+
+
+# --- driver invert() / set_level() ------------------------------------------------
+
+class TestSSD1306Levels:
+    @pytest.fixture
+    def driver(self, monkeypatch):
+        _Bus.instances = []
+        monkeypatch.setattr(drv, '_I2CDevice', _Bus)
+        drv_ = drv.SSD1306Driver({'width': 128, 'height': 64}).begin()
+        _Bus.instances[0].writes.clear()
+        return drv_, _Bus.instances[0]
+
+    def test_hardware_invert(self, driver):
+        d_, bus = driver
+        assert d_.HARDWARE_INVERT
+        d_.invert(True)
+        d_.invert(False)
+        assert bus.writes == [b'\x80\xA7', b'\x80\xA6']
+
+    @pytest.mark.parametrize('level, payload', [
+        (DIM, [0x81, 0x01, 0xDB, 0x00, 0xD9, 0xF1]),
+        (HALF, [0x81, 0xFF, 0xDB, 0x00, 0xD9, 0xF1]),
+        (dc.Level(0, 'mid', 'short'), [0x81, 0x00, 0xDB, 0x20, 0xD9, 0x11]),
+    ])
+    def test_set_level_one_transfer(self, driver, level, payload):
+        d_, bus = driver
+        d_.set_level(level.contrast, level.vcomh, level.precharge)
+        assert bus.writes == [b''.join(bytes((0x80, c)) for c in payload)]
+
+    def test_full_equals_init(self):
+        cmds = drv.init_commands(128, 64)
+        assert cmds[cmds.index(drv.SET_CONTRAST) + 1] == FULL.contrast
+        assert cmds[cmds.index(drv.SET_VCOM_DESEL) + 1] == drv.VCOMH_LEVELS[FULL.vcomh]
+        assert cmds[cmds.index(drv.SET_PRECHARGE) + 1] == drv.PRECHARGE_LEVELS[FULL.precharge]
+
+    def test_clear_uninverts_before_black(self, driver):
+        d_, bus = driver
+        d_.invert(True)
+        bus.writes.clear()
+        d_.clear()
+        assert bus.writes[0] == b'\x80\xA6'
+        assert bus.writes[-1][0] == 0x40 and not any(bus.writes[-1][1:])
+
+    def test_noop_when_closed(self, driver):
+        d_, bus = driver
+        d_.close()
+        d_.invert(True)
+        d_.set_level(1, 'low', 'normal')
+        assert bus.writes == []
+
+
+class TestBaseLevels:
+    def test_noops(self):
+        b = _BaseDriver()
+        b.invert(True)
+        b.set_level(1, 'low', 'normal')
+        assert b.events == []
+
+    @pytest.mark.parametrize('cls', [fbdrv.FramebufferDriver, ilidrv.ILI9486Driver, stdrv.ST7789Driver])
+    def test_software_invert_drivers(self, cls):
+        assert not cls.HARDWARE_INVERT
+        assert cls.set_level is DisplayDriver.set_level
+
+
+# --- main loop with steps ---------------------------------------------------------
+
+class TestRunTickSteps:
+    def test_levels_change_once_per_step(self, loop, monkeypatch):
+        monkeypatch.setattr(d, '_duty', dc.parse(STEPS))
+        for s in range(60):
+            d._run_tick(T0 + s)
+        assert [e for e in loop if e.startswith('level')] == ['level(255,low,normal)', 'level(1,low,normal)']
+        assert loop.count('push') == 60
+        i = loop.index('level(255,low,normal)')
+        assert loop[i - 2:i] == ['prepare', 'push']       # new frame first, then the level
+
+    def test_first_tick_sets_level_from_unknown(self, loop, monkeypatch):
+        monkeypatch.setattr(d, '_duty', dc.parse(STEPS))
+        monkeypatch.setattr(d, '_panel_level', None)       # fresh driver after a reload
+        d._run_tick(T0 + 40)
+        assert loop == ['prepare', 'push', 'level(1,low,normal)']
+
+    def test_hardware_invert_step(self, loop, monkeypatch):
+        cfg = {'steps': [{'for': 10, 'mode': 'invert'}, {'for': 10, 'mode': 'blank'}, {'for': 10}]}
+        monkeypatch.setattr(d, '_duty', dc.parse(cfg))
+        for s in range(30):
+            d._run_tick(T0 + s)
+        flips = [e for e in loop if e.startswith(('invert', 'blank'))]
+        assert flips == ['invert(True)', 'blank(True)', 'invert(False)', 'blank(False)']
+        assert d.lcd.prepared[0] == ((0, 0), (0, 0), (0, 0))   # the frame itself is not inverted
+
+    def test_software_invert_step(self, loop, monkeypatch):
+        monkeypatch.setattr(d.lcd, 'HARDWARE_INVERT', False)
+        monkeypatch.setattr(d, '_duty', dc.parse({'steps': [{'for': 30, 'mode': 'invert'}, {'for': 30}]}))
+        d._run_tick(T0 + 1)
+        d._run_tick(T0 + 31)
+        assert not any(e.startswith('invert') for e in loop)
+        assert d.lcd.prepared == [((255, 255), (255, 255), (255, 255)), ((0, 0), (0, 0), (0, 0))]
+
+    def test_wake_into_dim_pushes_then_levels_then_unblanks(self, loop, monkeypatch):
+        cfg = {'steps': [{'for': 30, 'mode': 'blank'}, {'for': 30, 'level': 'dim'}]}
+        monkeypatch.setattr(d, '_duty', dc.parse(cfg))
+        d._run_tick(T0 + 29)
+        loop.clear()
+        d._run_tick(T0 + 30)
+        assert loop == ['prepare', 'push', 'level(1,low,normal)', 'blank(False)']
+
+    def test_no_duty_cycle_never_touches_levels(self, loop, monkeypatch):
+        monkeypatch.setattr(d, '_duty', None)
+        monkeypatch.setattr(d, '_panel_level', None)
+        for s in range(0, 60, 7):
+            d._run_tick(T0 + s)
+        assert set(loop) == {'prepare', 'push'}
+
+    def test_debug_prints_each_step_once(self, loop, monkeypatch, capsys):
+        monkeypatch.setattr(d, '_duty', dc.parse(STEPS))
+        monkeypatch.setattr(d, 'DEBUG', True)
+        monkeypatch.setattr(d, 'show_rows', lambda **kw: None)
+        for s in range(60):
+            d._run_tick(T0 + s)
+        lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith('duty_cycle: step')]
+        assert lines == [f'duty_cycle: step 1 mode=normal contrast=255 vcomh=high precharge=normal at tick={T0}',
+                         f'duty_cycle: step 2 mode=normal contrast=255 vcomh=low precharge=normal at tick={T0 + 5}',
+                         f'duty_cycle: step 3 mode=normal contrast=1 vcomh=low precharge=normal at tick={T0 + 30}']

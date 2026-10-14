@@ -151,36 +151,86 @@ properties:
       duty_cycle:
         type: object
         description: |
-          Optional. Blank the panel except for a short window each period, so a cheap OLED
-          does not burn in at 100% duty cycle. The window is wall-clock aligned and wraps
-          the period boundary. Visible at epoch second t iff (t - show_at) mod period < show_for.
-          See AGENTS.md "Duty cycle (OLED blanking)".
-        required: [period, show_at, show_for]
+          Optional burn-in protection for OLEDs. Either 'steps' (a list of mode/level steps whose
+          lengths add up to a period dividing 86400 s), or the shorthand period/show_at/show_for
+          (lit at full for show_for from show_at, blank the rest). Wall-clock aligned.
+          See AGENTS.md "Duty cycle (OLED burn-in)".
         additionalProperties: false
+        anyOf:
+          - required: [period, show_at, show_for]
+          - required: [steps]
         properties:
           period:
             description: |
-              Length of one cycle. Must divide 86400 seconds. Whole seconds, or a string
-              like "60s", "5m", "1h".
+              Shorthand: length of one cycle. Must divide 86400 seconds. Whole seconds, or a
+              string like "60s", "5m", "1h".
             oneOf:
               - type: integer
                 minimum: 1
               - type: string
                 pattern: '^\d+(?:\.\d+)?[smh]?$'
           show_at:
-            description: Offset into the period where the panel turns on (>= 0, < period).
+            description: Shorthand. Offset into the period where the panel turns on (>= 0, < period).
             oneOf:
               - type: integer
                 minimum: 0
               - type: string
                 pattern: '^\d+(?:\.\d+)?[smh]?$'
           show_for:
-            description: How long the panel stays on (> 0). At or above period = always on.
+            description: Shorthand. How long the panel stays on (> 0). At or above period = always on.
             oneOf:
               - type: integer
                 minimum: 1
               - type: string
                 pattern: '^\d+(?:\.\d+)?[smh]?$'
+          steps:
+            type: array
+            minItems: 1
+            description: Steps in order; the period is the sum of their 'for'.
+            items:
+              type: object
+              required: [for]
+              additionalProperties: false
+              properties:
+                for:
+                  description: Step length (> 0).
+                  oneOf:
+                    - type: integer
+                      minimum: 1
+                    - type: string
+                      pattern: '^\d+(?:\.\d+)?[smh]?$'
+                mode:
+                  enum: [normal, invert, blank]
+                  description: Default normal. invert flips lit/unlit pixels; blank turns the panel off.
+                level:
+                  type: string
+                  description: A name from 'levels' or the built-ins full / half / dim. Default full.
+          offset:
+            description: Where step 1 starts within the period (>= 0, < period). Default 0.
+            oneOf:
+              - type: integer
+                minimum: 0
+              - type: string
+                pattern: '^\d+(?:\.\d+)?[smh]?$'
+          levels:
+            type: object
+            description: |
+              Brightness levels by name; overrides or adds to the built-ins
+              full {contrast: 255, vcomh: high}, half {contrast: 255, vcomh: low},
+              dim {contrast: 1, vcomh: low}. Contrast 0 or precharge short goes dark on some
+              modules. SSD1306 only; other drivers show every level the same.
+            additionalProperties:
+              type: object
+              additionalProperties: false
+              properties:
+                contrast:
+                  type: integer
+                  minimum: 0
+                  maximum: 255
+                vcomh:
+                  enum: [low, mid, high]
+                precharge:
+                  enum: [normal, short]
   preview_size:
     type: string
     pattern: '^\d+x\d+$'
