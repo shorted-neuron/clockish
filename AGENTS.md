@@ -199,6 +199,10 @@ Setup, inventory vars, usage, sudoers rule and troubleshooting:
   privileged calls to the tool. Verify a sudoers change with `sudo -K` first: Debian here uses
   `timestamp_type=global`, so a recently typed password makes `sudo -n` pass without any rule.
 - Hosts fetch from `origin`; the tool never pushes.
+- Split dev/tester sessions: the tester's checkout is a control tree only (no host deploys into
+  it), deploys `-r origin/<branch>`, verifies each host's SHA, never commits/pushes/fixes hosts,
+  and its reports are not user approval. Details in the testbed doc, "Running it from a second
+  agent session".
 
 ### Layout pre-computation
 

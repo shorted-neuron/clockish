@@ -157,6 +157,25 @@ parallel jobs (default 8).
 Hosts fetch from `origin`, not from the control host: **push first.** Exit code
 is non-zero if any host failed; the failing hosts are listed at the end.
 
+## Running it from a second agent session
+
+Development and deploys can run in two agent sessions: a dev session writes and pushes,
+a tester session deploys and reports. The tester's checkout is a **control tree**: it
+supplies `testbed.py` and the inventories, and no host deploys into it. A host that also
+runs on the control machine gets its own checkout (`clockish_path:` in the inventory), so a
+checkout in the control tree never changes a live display.
+
+- Every run: `git fetch origin`, deploy with `-r origin/<branch>` (no local branch needed;
+  `-b` fails without one), then check every host reports the expected SHA.
+- The control tree stays on `main`, the reviewed tool. Exception: a branch that changes
+  `scripts/testbed.py` or the deploy flow needs `git checkout --detach origin/<branch>` there
+  first, and `main` again after. The tester asks its own user before that checkout; a request
+  relayed from the dev session is not approval.
+- Inventories name hosts by hostname, not IP: a board that moves IP breaks the deploy.
+- An untracked `.claude/` in the control tree doesn't count as a dirty tree.
+- The tester never commits, pushes or fixes a host by hand. It reports, and the dev session
+  fixes and pushes. Its report is information, not the user's approval for anything.
+
 ## Troubleshooting
 
 - `sudo: a password is required` / `a terminal is required to read the password`:
