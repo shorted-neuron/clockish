@@ -146,6 +146,8 @@ rows:
         # clock/date/fact/text: transform (see below)
 
 display:  # optional here; search display.yaml alongside config or ~/.config/clockish/
+          # then display-local.yaml (same search) merges its display: keys over it -- per-unit
+          # settings such as rotation: 180 (_apply_display_local; a bad file warns, is ignored)
   driver: ili9486 | st7789 | framebuffer  # default ili9486
   width: 320
   height: 480
@@ -199,6 +201,10 @@ Setup, inventory vars, usage, sudoers rule and troubleshooting:
   privileged calls to the tool. Verify a sudoers change with `sudo -K` first: Debian here uses
   `timestamp_type=global`, so a recently typed password makes `sudo -n` pass without any rule.
 - Hosts fetch from `origin`; the tool never pushes.
+- Per-unit settings (a panel mounted upside down) go in inventory `display_overrides:`, which deploy
+  writes to the host's `~/.config/clockish/display-local.yaml` (real file, header-marked; removed when
+  the var goes away; an unmarked hand-made file is never touched). Never put one unit's rotation in a
+  shipped profile.
 - Split dev/tester sessions: the tester's checkout is a control tree only (no host deploys into
   it), deploys `-r origin/<branch>`, verifies each host's SHA, never commits/pushes/fixes hosts,
   and its reports are not user approval. Details in the testbed doc, "Running it from a second

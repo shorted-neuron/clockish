@@ -215,6 +215,45 @@ def _find_display_profile(config_path: str | None) -> str | None:
     return None
 
 
+#: Per-host overrides merged over the display profile (a real file, never shipped or symlinked).
+DISPLAY_LOCAL_NAME = 'display-local.yaml'
+
+
+def _find_display_local(config_path: str | None) -> str | None:
+    """Search for the per-host override file: alongside the row config, then ~/.config/clockish/."""
+    candidates = []
+    if config_path:
+        candidates.append(os.path.join(os.path.dirname(os.path.abspath(config_path)), DISPLAY_LOCAL_NAME))
+    candidates.append(os.path.expanduser(f'~/.config/clockish/{DISPLAY_LOCAL_NAME}'))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _apply_display_local(config: dict, path: str) -> None:
+    """Merge ``path``'s ``display:`` keys over ``config['display']`` (each key replaces the profile's).
+
+    For what differs per unit, not per display model: a panel mounted upside down
+    (``rotation: 180``).  A bad file warns and is ignored; it must not stop the clock.
+    """
+    try:
+        with open(path) as f:
+            local = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as e:
+        print(f"WARNING: display overrides {path} ignored: {e}", file=sys.stderr)
+        return
+    if local == {} or local == {'display': None}:        # empty file / bare 'display:'
+        return
+    overrides = local.get('display') if isinstance(local, dict) else None
+    if not isinstance(overrides, dict):
+        print(f"WARNING: display overrides {path} ignored: needs a 'display:' mapping", file=sys.stderr)
+        return
+    if overrides:
+        config['display'] = {**config.get('display', {}), **overrides}
+        print(f"Display overrides from {path}: {', '.join(map(str, overrides))}")
+
+
 # Fonts  --  loaded once on first use, keyed by config name
 # ---------------------------------------------------------------------------
 
@@ -3343,7 +3382,8 @@ def show_rows(at: float | None = None, push_at: float | None = None, invert: boo
 # Config reload helpers
 # ---------------------------------------------------------------------------
 def _resolve_config(config: dict, args) -> tuple[dict, dict]:
-    """Resolve the config's display: section from profile file if needed.
+    """Resolve the config's display: section from profile file if needed, then merge
+    ``display-local.yaml`` over it (see :func:`_apply_display_local`).
 
     Returns: (config with 'display' section ensured, resolved_display_dict)
     """
@@ -3363,6 +3403,9 @@ def _resolve_config(config: dict, args) -> tuple[dict, dict]:
                 "  Fix:   run install.sh to set up a display profile, or copy one from\n"
                 "         configs/display/ to ~/.config/clockish/display.yaml"
             )
+    _local_path = _find_display_local(args.config)
+    if _local_path:
+        _apply_display_local(config, _local_path)
     return config, config.get('display', {})
 
 

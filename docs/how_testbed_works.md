@@ -98,6 +98,13 @@ all:
 | `clockish_service` | `clockish`     | systemd unit name                              |
 | `clockish_config`  | required for `deploy` | repo-relative layout config             |
 | `clockish_display` | none           | repo-relative display profile (`configs/display/...`) |
+| `display_overrides` | none          | mapping written to the host's `display-local.yaml`, e.g. `{rotation: 180}` |
+
+`display_overrides` covers how one unit is mounted, without baking it into a shipped profile.
+Deploy writes `~/.config/clockish/display-local.yaml` (clockish merges its `display:` keys over
+the profile) with a `# written by testbed.py` header line, and removes that file again when the
+host has no `display_overrides`. A `display-local.yaml` without the header was made by hand: deploy
+keeps it, and warns if the inventory wanted to replace it. `status` prints the host's overrides.
 
 ## Reference hardware
 

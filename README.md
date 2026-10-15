@@ -214,6 +214,22 @@ Each panel has a `type` and type-specific keys:
 
 See [configs directory](configs/) for lots of fully annotated reference configuration.
 
+### Per-unit display settings
+
+Settings that belong to one unit rather than its display model, such as a panel mounted upside down,
+go in `~/.config/clockish/display-local.yaml` (or next to your row config). Its `display:` keys
+replace the same keys of the display profile, so the shipped profile stays untouched and upgrades
+cleanly:
+
+```yaml
+display:
+  rotation: 180
+```
+
+The journal shows `Display overrides from <file>: rotation` at startup. `rotation: 90` or `270` turns
+a landscape panel portrait, so pair it with a portrait layout (the ST7789 driver only allows it on
+square panels).
+
 ### OLED burn-in
 
 An OLED shows a clock by lighting the same pixels, at full brightness, all day. Those pixels wear
