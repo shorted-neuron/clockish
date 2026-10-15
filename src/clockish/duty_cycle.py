@@ -43,12 +43,13 @@ LEVEL_KEYS = ('contrast', 'vcomh', 'precharge')
 VCOMH_VALUES = ('low', 'mid', 'high')
 PRECHARGE_VALUES = ('normal', 'short')
 
-#: Built-in levels.  'full' equals the SSD1306 init values.  Lowest VCOMH roughly halves brightness
-#: at any contrast; contrast 1 + lowest VCOMH is the dimmest setting visible on every module tested.
-#: Contrast 0 and short precharge go fully dark on some modules, so neither is a default.
+#: Built-in levels.  'full' equals the SSD1306 init values.  Lowest VCOMH alone barely shows next to
+#: full on a running clock, so 'half' also drops contrast.  Contrast 1 + lowest VCOMH is the dimmest
+#: setting visible on every module tested (a worn module may need more).  Contrast 0 and short
+#: precharge go fully dark on some modules, so neither is a default.
 DEFAULT_LEVELS: dict[str, dict[str, Any]] = {
     'full': {'contrast': 255, 'vcomh': 'high', 'precharge': 'normal'},
-    'half': {'contrast': 255, 'vcomh': 'low', 'precharge': 'normal'},
+    'half': {'contrast': 32, 'vcomh': 'low', 'precharge': 'normal'},
     'dim': {'contrast': 1, 'vcomh': 'low', 'precharge': 'normal'},
 }
 

@@ -10,6 +10,7 @@ preview_size: 128x64
 
 rows:
   - name: time-row
+    font_behavior: scale_numeric
     height: 40%
     panels:
       - type: clock
@@ -20,6 +21,7 @@ rows:
         font_size: auto
 
   - name: ip-row
+    font_behavior: scale_numeric
     height: 30%
     panels:
       - type: fact
@@ -29,6 +31,7 @@ rows:
         font_size: auto
 
   - name: net-row
+    font_behavior: scale_numeric
     height: 30%
     panels:
       - type: wifi_graphic

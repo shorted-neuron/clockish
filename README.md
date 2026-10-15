@@ -228,7 +228,7 @@ display:
   duty_cycle:
     steps:                         # one minute (period = sum of 'for'; must divide 86400)
       - {for: 5s, level: full}     # :00-:04 full brightness
-      - {for: 25s, level: half}    # :05-:29 about half
+      - {for: 25s, level: half}    # :05-:29 clearly dimmer
       - {for: 30s, level: dim}     # :30-:59 dimmest
 ```
 
@@ -239,13 +239,14 @@ display:
 - Shorthand, lit at full for 10 s a minute and off otherwise: `duty_cycle: {period: 60s, show_at: 55s, show_for: 10s}`.
 
 Levels set the SSD1306's contrast (0-255), VCOMH voltage (`low`/`mid`/`high`) and precharge
-(`normal`/`short`). The defaults are `full` = contrast 255, VCOMH high; `half` = contrast 255, VCOMH
-low; `dim` = contrast 1, VCOMH low. Modules differ at the bottom end: contrast 0 or `precharge: short`
-dims some panels further and turns others completely dark, so tune `dim` per module:
+(`normal`/`short`). The defaults are `full` = contrast 255, VCOMH high; `half` = contrast 32, VCOMH
+low; `dim` = contrast 1, VCOMH low. Modules differ at the bottom end: a worn (already burnt-in) module can be
+unreadable at contrast 1, and contrast 0 or `precharge: short` dims some panels further and turns
+others completely dark. Tune `dim` per module:
 
 ```yaml
     levels:
-      dim: {contrast: 0, vcomh: low}   # only if this module still shows something
+      dim: {contrast: 8, vcomh: low}   # brighter, if contrast 1 is too dim to read
 ```
 
 Other displays honour `blank` and `invert` (inverted in software); levels do nothing on them.

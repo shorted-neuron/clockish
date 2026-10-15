@@ -18,10 +18,11 @@ display:
   duty_cycle:
     steps:                         # one minute, wall-clock aligned (period = sum of 'for')
       - {for: 5s, level: full}     # :00-:04 full brightness
-      - {for: 25s, level: half}    # :05-:29 about half (lowest VCOMH)
+      - {for: 25s, level: half}    # :05-:29 clearly dimmer
       - {for: 30s, level: dim}     # :30-:59 dimmest level visible on every module tested
     # levels:                      # tune for this module; built-ins shown
     #   full: {contrast: 255, vcomh: high}
-    #   half: {contrast: 255, vcomh: low}
-    #   dim:  {contrast: 1, vcomh: low}   # contrast 0 or 'precharge: short' is dark on some modules
+    #   half: {contrast: 32, vcomh: low}
+    #   dim:  {contrast: 1, vcomh: low}   # worn modules may need more; contrast 0 or
+    #                                     # 'precharge: short' is dark on some modules
     # other step modes: {for: 10s, mode: invert} (lit/unlit swapped), {for: 10s, mode: blank} (off)

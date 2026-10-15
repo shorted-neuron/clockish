@@ -20,7 +20,7 @@ MINUTE = {'period': '60s', 'show_at': '55s', 'show_for': '10s'}
 STEPS = {'steps': [{'for': '5s', 'level': 'full'}, {'for': '25s', 'level': 'half'},
                    {'for': '30s', 'level': 'dim'}]}
 FULL = dc.Level(255, 'high', 'normal')
-HALF = dc.Level(255, 'low', 'normal')
+HALF = dc.Level(32, 'low', 'normal')
 DIM = dc.Level(1, 'low', 'normal')
 T0 = 1_790_000_040   # divisible by 60: second 0 of a minute
 
@@ -504,7 +504,7 @@ class TestSSD1306Levels:
 
     @pytest.mark.parametrize('level, payload', [
         (DIM, [0x81, 0x01, 0xDB, 0x00, 0xD9, 0xF1]),
-        (HALF, [0x81, 0xFF, 0xDB, 0x00, 0xD9, 0xF1]),
+        (HALF, [0x81, 0x20, 0xDB, 0x00, 0xD9, 0xF1]),
         (dc.Level(0, 'mid', 'short'), [0x81, 0x00, 0xDB, 0x20, 0xD9, 0x11]),
     ])
     def test_set_level_one_transfer(self, driver, level, payload):
@@ -554,9 +554,9 @@ class TestRunTickSteps:
         monkeypatch.setattr(d, '_duty', dc.parse(STEPS))
         for s in range(60):
             d._run_tick(T0 + s)
-        assert [e for e in loop if e.startswith('level')] == ['level(255,low,normal)', 'level(1,low,normal)']
+        assert [e for e in loop if e.startswith('level')] == ['level(32,low,normal)', 'level(1,low,normal)']
         assert loop.count('push') == 60
-        i = loop.index('level(255,low,normal)')
+        i = loop.index('level(32,low,normal)')
         assert loop[i - 2:i] == ['prepare', 'push']       # new frame first, then the level
 
     def test_first_tick_sets_level_from_unknown(self, loop, monkeypatch):
@@ -605,5 +605,5 @@ class TestRunTickSteps:
             d._run_tick(T0 + s)
         lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith('duty_cycle: step')]
         assert lines == [f'duty_cycle: step 1 mode=normal contrast=255 vcomh=high precharge=normal at tick={T0}',
-                         f'duty_cycle: step 2 mode=normal contrast=255 vcomh=low precharge=normal at tick={T0 + 5}',
+                         f'duty_cycle: step 2 mode=normal contrast=32 vcomh=low precharge=normal at tick={T0 + 5}',
                          f'duty_cycle: step 3 mode=normal contrast=1 vcomh=low precharge=normal at tick={T0 + 30}']
