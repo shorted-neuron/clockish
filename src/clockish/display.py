@@ -250,7 +250,13 @@ def _apply_display_local(config: dict, path: str) -> None:
         print(f"WARNING: display overrides {path} ignored: needs a 'display:' mapping", file=sys.stderr)
         return
     if overrides:
-        config['display'] = {**config.get('display', {}), **overrides}
+        base = config.get('display', {})
+        # The profile lists every key its driver reads, so a key it lacks is most likely a typo.
+        unknown = [str(k) for k in overrides if k not in base]
+        if unknown:
+            print(f"WARNING: display overrides {path}: {', '.join(unknown)} not in the display profile "
+                  "(typo?); applied anyway", file=sys.stderr)
+        config['display'] = {**base, **overrides}
         print(f"Display overrides from {path}: {', '.join(map(str, overrides))}")
 
 
@@ -3689,8 +3695,15 @@ def _init() -> None:
     # --- Config ------------------------------------------------------------
     _config = _load_config(_args.config)
 
-    # Validate config at startup: print all issues; errors are prominent but
-    # do NOT abort startup (clockish will attempt to run in a degraded state).
+    # Resolve display profile and ensure 'display' section exists
+    try:
+        _config, _display_cfg = _resolve_config(_config, _args)
+    except Exception as e:
+        sys.exit(f"ERROR: {e}")
+
+    # Validate config at startup, after the display profile and display-local.yaml are merged
+    # (as reload does): print all issues; errors are prominent but do NOT abort startup
+    # (clockish will attempt to run in a degraded state).
     try:
         from clockish.config_validator import validate_config_dict as _validate_cfg
         _cfg_path = _args.config or _DEFAULT_CONFIG
@@ -3705,12 +3718,6 @@ def _init() -> None:
                 )
     except Exception as _ve:
         print(f"WARNING: config validation failed unexpectedly: {_ve}", file=sys.stderr)
-
-    # Resolve display profile and ensure 'display' section exists
-    try:
-        _config, _display_cfg = _resolve_config(_config, _args)
-    except Exception as e:
-        sys.exit(f"ERROR: {e}")
 
     _resolved_display_config = _display_cfg
     rotation = _display_cfg.get('rotation', 0)

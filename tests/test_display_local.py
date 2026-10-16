@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 import clockish.display as d
+from clockish.config_validator import DISPLAY_ROTATIONS, validate_config_dict
 
 _ROOT = pathlib.Path(__file__).parent.parent
 
@@ -74,11 +75,36 @@ class TestResolve:
         assert _resolve(cfgdir)[1]['rotation'] == 0
         assert 'display overrides' in capsys.readouterr().err
 
+    def test_key_missing_from_profile_warns_but_applies(self, cfgdir, capsys):
+        _write(cfgdir / 'display-local.yaml', {'display': {'rotaton': 180}})
+        assert _resolve(cfgdir)[1]['rotaton'] == 180
+        assert 'rotaton not in the display profile' in capsys.readouterr().err
+
     def test_empty_file_is_silent(self, cfgdir, capsys):
         _write(cfgdir / 'display-local.yaml', '')
         assert _resolve(cfgdir)[1]['rotation'] == 0
         out = capsys.readouterr()
         assert 'overrides' not in out.out + out.err
+
+
+# --- display.rotation validation ---------------------------------------------------
+
+_ROWS = {'orientation': 'landscape', 'rows': [{'name': 'r', 'height': 1.0, 'panels': [{'type': 'text', 'label': 'x'}]}]}
+
+
+class TestRotationValidation:
+    @pytest.mark.parametrize('rot', [0, 90, 180, 270])
+    def test_valid(self, rot):
+        assert not validate_config_dict({**_ROWS, 'display': {'rotation': rot}}).issues
+
+    @pytest.mark.parametrize('rot', [45, '180', True, -90, 360])
+    def test_invalid(self, rot):
+        res = validate_config_dict({**_ROWS, 'display': {'rotation': rot}})
+        assert any('rotation' in i.message for i in res.errors)
+
+    def test_schema_matches_constant(self):
+        schema = yaml.safe_load((_ROOT / 'configs' / 'schema' / 'clockish-config.schema.yaml').read_text())
+        assert tuple(schema['properties']['display']['properties']['rotation']['enum']) == DISPLAY_ROTATIONS
 
 
 # --- scripts/testbed.py -------------------------------------------------------------

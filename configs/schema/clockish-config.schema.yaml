@@ -52,6 +52,9 @@ properties:
     type: object
     description: Display hardware profile. Usually provided by a separate display.yaml file.
     properties:
+      rotation:
+        enum: [0, 90, 180, 270]
+        description: Degrees; 90 and 270 turn a landscape panel portrait. Keep in step with DISPLAY_ROTATIONS.
       gpio_backend:
         type: string
         enum: [auto, gpiod, lgpio, rpi-gpio]

@@ -226,9 +226,11 @@ display:
   rotation: 180
 ```
 
-The journal shows `Display overrides from <file>: rotation` at startup. `rotation: 90` or `270` turns
-a landscape panel portrait, so pair it with a portrait layout (the ST7789 driver only allows it on
-square panels).
+The journal shows `Display overrides from <file>: rotation` at startup, and warns about a key the
+profile doesn't have (usually a typo). clockish reads the file at startup and when the row config
+reloads, but doesn't watch it: after editing it, restart clockish (or save the row config).
+`rotation: 90` or `270` turns a landscape panel portrait, so pair it with a portrait layout (the
+ST7789 driver only allows it on square panels).
 
 ### OLED burn-in
 

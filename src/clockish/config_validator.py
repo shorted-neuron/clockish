@@ -325,6 +325,8 @@ _CACHED_FACT_ATTRS: frozenset[str] = frozenset({
 
 #: Backlight control ``method:`` values recognised under ``display.backlight:``.
 #: Only 'sysfs' is implemented today; see clockish.backlight._METHODS.
+#: display.rotation values; configs/schema/ repeats them (a test keeps them equal).
+DISPLAY_ROTATIONS: tuple[int, ...] = (0, 90, 180, 270)
 KNOWN_BACKLIGHT_METHODS: frozenset[str] = frozenset({'sysfs'})
 
 #: All valid keys for a ``display.backlight:`` mapping. ``schedule`` is
@@ -750,6 +752,10 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
     # ILI9486 only; see clockish.gpio_backends.  The driver fails fast on a bad value,
     # so this is a heads-up at validation time, not the only line of defence.
     display_cfg = config.get('display')
+    if isinstance(display_cfg, dict) and 'rotation' in display_cfg:
+        _rot = display_cfg['rotation']
+        if isinstance(_rot, bool) or _rot not in DISPLAY_ROTATIONS:
+            err('display.rotation', f"'rotation: {_rot!r}' must be one of {', '.join(map(str, DISPLAY_ROTATIONS))}")
     if isinstance(display_cfg, dict):
         _driver = display_cfg.get('driver', 'ili9486')
         gpio_backend = display_cfg.get('gpio_backend')

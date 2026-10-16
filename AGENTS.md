@@ -147,7 +147,9 @@ rows:
 
 display:  # optional here; search display.yaml alongside config or ~/.config/clockish/
           # then display-local.yaml (same search) merges its display: keys over it -- per-unit
-          # settings such as rotation: 180 (_apply_display_local; a bad file warns, is ignored)
+          # settings such as rotation: 180 (_apply_display_local; a bad file warns, is ignored;
+          # a key the profile lacks warns as a likely typo). The reload watcher follows only the
+          # row config's mtime: editing display-local.yaml needs a restart (or touch the config)
   driver: ili9486 | st7789 | framebuffer  # default ili9486
   width: 320
   height: 480
@@ -760,9 +762,8 @@ Any exception from a facade means "unusable here" and is reported with the other
   boards tested it points at gpiochip0); whether a Pi 5 needs a different number is untested -- no Pi 5
   has run this path.
 - Validation: `display.gpio_backend` / `gpio_chip` are checked by the semantic walker when `display:` is
-  in the config being validated. Startup validates the config *before* `_resolve_config()` merges
-  `display.yaml`, while reload validates after, so keys that only live in a profile are checked on
-  reload but not at startup; the driver fails fast on a bad `gpio_backend` regardless.
+  in the config being validated. Startup and reload both validate *after* `_resolve_config()` merges
+  `display.yaml` and `display-local.yaml`, so profile and per-unit keys are checked either way.
 
 **ST7789Driver** (Pimoroni; Adafruit 240×135/240×240):
 - Similar; uses st7789 lib + gpiod
