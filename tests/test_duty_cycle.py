@@ -247,6 +247,11 @@ class TestBaseBlank:
 
 
 class TestFramebufferBlank:
+    @pytest.fixture(autouse=True)
+    def _no_device(self, monkeypatch):
+        # The constructor opens /dev/fb0; a dev Pi has one, a CI runner does not.
+        monkeypatch.setattr(fbdrv.FramebufferDriver, '_preflight_check', lambda self: None)
+
     def test_blank_uses_fbioblank_and_idle_is_unchanged(self, monkeypatch):
         calls = []
         monkeypatch.setattr(fbdrv.fcntl, 'ioctl', lambda fd, req, arg: calls.append((req, arg)))
