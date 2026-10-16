@@ -267,6 +267,9 @@ others completely dark. Tune `dim` per module:
       dim: {contrast: 8, vcomh: low}   # brighter, if contrast 1 is too dim to read
 ```
 
+`scripts/ssd1306-brightness-test.py` steps a module through these levels so you can pick by eye
+(stop the clockish service first; `--help` lists the sets).
+
 Other displays honour `blank` and `invert` (inverted in software); levels do nothing on them.
 Deleting `duty_cycle` from an OLED profile runs the panel at full brightness all the time — expect
 burn-in.
