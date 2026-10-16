@@ -34,7 +34,7 @@ except ImportError:
 import PIL.ImageOps
 from PIL import Image, ImageDraw, ImageFont
 
-from clockish import __version__, backlight
+from clockish import __version__, backlight, durations, duty_cycle
 from clockish.colors import BY_NAME, rgb_to_hex
 from clockish.drivers import load_driver
 from clockish.transforms import apply_transforms
@@ -213,6 +213,51 @@ def _find_display_profile(config_path: str | None) -> str | None:
         if os.path.isfile(path):
             return path
     return None
+
+
+#: Per-host overrides merged over the display profile (a real file, never shipped or symlinked).
+DISPLAY_LOCAL_NAME = 'display-local.yaml'
+
+
+def _find_display_local(config_path: str | None) -> str | None:
+    """Search for the per-host override file: alongside the row config, then ~/.config/clockish/."""
+    candidates = []
+    if config_path:
+        candidates.append(os.path.join(os.path.dirname(os.path.abspath(config_path)), DISPLAY_LOCAL_NAME))
+    candidates.append(os.path.expanduser(f'~/.config/clockish/{DISPLAY_LOCAL_NAME}'))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _apply_display_local(config: dict, path: str) -> None:
+    """Merge ``path``'s ``display:`` keys over ``config['display']`` (each key replaces the profile's).
+
+    For what differs per unit, not per display model: a panel mounted upside down
+    (``rotation: 180``).  A bad file warns and is ignored; it must not stop the clock.
+    """
+    try:
+        with open(path) as f:
+            local = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as e:
+        print(f"WARNING: display overrides {path} ignored: {e}", file=sys.stderr)
+        return
+    if local == {} or local == {'display': None}:        # empty file / bare 'display:'
+        return
+    overrides = local.get('display') if isinstance(local, dict) else None
+    if not isinstance(overrides, dict):
+        print(f"WARNING: display overrides {path} ignored: needs a 'display:' mapping", file=sys.stderr)
+        return
+    if overrides:
+        base = config.get('display', {})
+        # The profile lists every key its driver reads, so a key it lacks is most likely a typo.
+        unknown = [str(k) for k in overrides if k not in base]
+        if unknown:
+            print(f"WARNING: display overrides {path}: {', '.join(unknown)} not in the display profile "
+                  "(typo?); applied anyway", file=sys.stderr)
+        config['display'] = {**base, **overrides}
+        print(f"Display overrides from {path}: {', '.join(map(str, overrides))}")
 
 
 # Fonts  --  loaded once on first use, keyed by config name
@@ -733,16 +778,11 @@ def _now_in_tz(tz_name: str, at: float | None = None) -> datetime.datetime:
 # ---------------------------------------------------------------------------
 
 def _parse_interval(interval_str: str) -> int:
-    """Convert interval string (e.g., '5m', '30s', '1h') to seconds."""
-    interval_str = interval_str.strip()
-    if interval_str.endswith('s'):
-        return int(float(interval_str[:-1]))
-    elif interval_str.endswith('m'):
-        return int(float(interval_str[:-1]) * 60)
-    elif interval_str.endswith('h'):
-        return int(float(interval_str[:-1]) * 3600)
-    # Fallback to seconds if no unit (shouldn't happen if validator works)
-    return int(float(interval_str))
+    """Convert interval string (e.g., '5m', '30s', '1h') to whole seconds (truncated)."""
+    secs = durations.seconds(interval_str)
+    if secs is None:
+        raise ValueError(f"invalid interval {interval_str!r}; expected <number>[s|m|h]")
+    return int(secs)
 
 def _extract_value_by_regex(response_text: str, pattern: str) -> str | None:
     """Extract first capture group from regex match, or None if no match."""
@@ -3272,7 +3312,7 @@ def _render_row(r: dict, row_idx: int, ry: int, rw: int, rh: int,
 _last_display_ms: float = 0.0
 _avg_display_ms: float | None = None   # smoothed lcd.push() cost; sets push lead
 
-def show_rows(at: float | None = None, push_at: float | None = None):
+def show_rows(at: float | None = None, push_at: float | None = None, invert: bool = False):
     """Render one frame and push it to the display.
 
     at:      epoch seconds the clock/date panels depict (None = now).
@@ -3280,6 +3320,8 @@ def show_rows(at: float | None = None, push_at: float | None = None):
              rendering + lcd.prepare() (None = push immediately).  Lets
              main() render and convert the next second ahead of time, so
              only the transfer itself lands on the boundary.
+    invert:  invert the image before lcd.prepare() (a duty_cycle 'invert'
+             step on a driver without HARDWARE_INVERT).
     """
     global _last_display_ms, _avg_display_ms
     t0 = time.perf_counter()
@@ -3316,7 +3358,7 @@ def show_rows(at: float | None = None, push_at: float | None = None):
             _render_row(r, row_idx, ry, width, rh, tz_cache, timings, t0)
 
     with timed_section("conv", timings):
-        frame = lcd.prepare(image)
+        frame = lcd.prepare(PIL.ImageOps.invert(image) if invert else image)
 
     render_ms = (time.perf_counter() - t0) * 1000
     if push_at is not None:
@@ -3346,7 +3388,8 @@ def show_rows(at: float | None = None, push_at: float | None = None):
 # Config reload helpers
 # ---------------------------------------------------------------------------
 def _resolve_config(config: dict, args) -> tuple[dict, dict]:
-    """Resolve the config's display: section from profile file if needed.
+    """Resolve the config's display: section from profile file if needed, then merge
+    ``display-local.yaml`` over it (see :func:`_apply_display_local`).
 
     Returns: (config with 'display' section ensured, resolved_display_dict)
     """
@@ -3366,6 +3409,9 @@ def _resolve_config(config: dict, args) -> tuple[dict, dict]:
                 "  Fix:   run install.sh to set up a display profile, or copy one from\n"
                 "         configs/display/ to ~/.config/clockish/display.yaml"
             )
+    _local_path = _find_display_local(args.config)
+    if _local_path:
+        _apply_display_local(config, _local_path)
     return config, config.get('display', {})
 
 
@@ -3428,6 +3474,7 @@ def _attempt_config_reload() -> None:
     """Attempt to reload the config from disk. On failure, log a warning and continue."""
     global _config, _display_cfg, _resolved_display_config
     global width, height, rotation, image, draw, lcd, _orientation, _FONTS, _LAYOUT
+    global _duty, _panel_blanked, _panel_level, _panel_inverted
 
     try:
         new_config = _load_config(_args.config)
@@ -3472,9 +3519,14 @@ def _attempt_config_reload() -> None:
             lcd = new_lcd
             rotation = new_display_cfg.get('rotation', 0)
             _resolved_display_config = new_display_cfg
+            _panel_blanked = False   # a freshly begun driver is lit, at its init level, not inverted
+            _panel_level = None
+            _panel_inverted = False
         except Exception as e:
             print(f"WARNING: config reload driver reinit failed: {e}", file=sys.stderr)
             return
+
+    _duty = _load_duty_cycle(new_display_cfg)
 
     # Stop and rejoin old cached-facts workers before reinitializing
     _stop_cached_facts()
@@ -3643,8 +3695,15 @@ def _init() -> None:
     # --- Config ------------------------------------------------------------
     _config = _load_config(_args.config)
 
-    # Validate config at startup: print all issues; errors are prominent but
-    # do NOT abort startup (clockish will attempt to run in a degraded state).
+    # Resolve display profile and ensure 'display' section exists
+    try:
+        _config, _display_cfg = _resolve_config(_config, _args)
+    except Exception as e:
+        sys.exit(f"ERROR: {e}")
+
+    # Validate config at startup, after the display profile and display-local.yaml are merged
+    # (as reload does): print all issues; errors are prominent but do NOT abort startup
+    # (clockish will attempt to run in a degraded state).
     try:
         from clockish.config_validator import validate_config_dict as _validate_cfg
         _cfg_path = _args.config or _DEFAULT_CONFIG
@@ -3659,12 +3718,6 @@ def _init() -> None:
                 )
     except Exception as _ve:
         print(f"WARNING: config validation failed unexpectedly: {_ve}", file=sys.stderr)
-
-    # Resolve display profile and ensure 'display' section exists
-    try:
-        _config, _display_cfg = _resolve_config(_config, _args)
-    except Exception as e:
-        sys.exit(f"ERROR: {e}")
 
     _resolved_display_config = _display_cfg
     rotation = _display_cfg.get('rotation', 0)
@@ -3790,6 +3843,74 @@ def _next_tick(prev: int, now: float) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Duty cycle (OLED burn-in) -- see clockish.duty_cycle and AGENTS.md
+_duty: duty_cycle.DutyCycle | None = None   # None = always on, levels untouched
+_panel_blanked: bool = False                # we called lcd.blank(True) and not yet blank(False)
+_panel_level: duty_cycle.Level | None = None  # last lcd.set_level(); None = driver init level
+_panel_inverted: bool = False               # last lcd.invert() (hardware invert only)
+_duty_step: int = -1                        # step shown last, for --debug transitions
+
+
+def _load_duty_cycle(display_cfg: dict) -> duty_cycle.DutyCycle | None:
+    """Parse display.duty_cycle; an invalid block warns and counts as absent."""
+    raw = display_cfg.get('duty_cycle')
+    for msg in (duty_cycle.problems(raw) if raw is not None else []):
+        print(f"WARNING: display.duty_cycle ignored: {msg}", file=sys.stderr)
+    return duty_cycle.parse(raw)
+
+
+def _set_blanked(state: bool, tick: float) -> None:
+    """lcd.blank(state), remember it, and say so under --debug."""
+    global _panel_blanked
+    lcd.blank(state)
+    _panel_blanked = state
+    if DEBUG:
+        print(f"duty_cycle: {'blank' if state else 'wake'} at tick={int(tick)}")
+
+
+def _apply_state(st: duty_cycle.State, tick: float) -> None:
+    """After the frame for `tick` is pushed: level, hardware invert, then unblank -- each only on change."""
+    global _panel_level, _panel_inverted, _duty_step
+    if DEBUG and st.index != _duty_step:
+        lvl = '' if st.level is None else (f" contrast={st.level.contrast} vcomh={st.level.vcomh}"
+                                           f" precharge={st.level.precharge}")
+        print(f"duty_cycle: step {st.index + 1} mode={st.mode}{lvl} at tick={int(tick)}")
+    _duty_step = st.index
+    if st.level is not None and st.level != _panel_level:
+        lcd.set_level(st.level.contrast, st.level.vcomh, st.level.precharge)
+        _panel_level = st.level
+    hw_invert = st.mode == 'invert' and lcd.HARDWARE_INVERT
+    if hw_invert != _panel_inverted:
+        lcd.invert(hw_invert)
+        _panel_inverted = hw_invert
+    if _panel_blanked:
+        _set_blanked(False, tick)
+
+
+def _run_tick(tick: int) -> None:
+    """One loop pass for the second `tick`: render + push it, or keep the panel blanked.
+
+    Blank step: no render, no push; blank at the boundary of the first blank second.
+    Otherwise the frame for `tick` is pushed first (inverted in software for an 'invert'
+    step when the driver has no HARDWARE_INVERT), then _apply_state() changes level and
+    hardware invert and unblanks -- so after a blank the stale pre-blank image never shows.
+    Those calls sit after show_rows() so _avg_display_ms stays push()-only.
+    """
+    st = duty_cycle.state_at(_duty, tick)
+    if st.mode != 'blank':
+        lead_s = (_avg_display_ms or 0.0) / 2000
+        show_rows(at=tick, push_at=tick - lead_s,
+                  invert=st.mode == 'invert' and not lcd.HARDWARE_INVERT)
+        _apply_state(st, tick)
+        return
+    delay = tick - time.time()
+    if delay > 0:
+        time.sleep(delay)
+    if not _panel_blanked:
+        _set_blanked(True, tick)
+
+
+# ---------------------------------------------------------------------------
 def _line_buffer_stdout() -> None:
     """Flush stdout at every newline.
 
@@ -3805,7 +3926,7 @@ def _line_buffer_stdout() -> None:
 
 def main():
     """Parse args, initialize hardware, then run the display loop."""
-    global DEBUG_LAYOUT
+    global DEBUG_LAYOUT, _duty
     _line_buffer_stdout()
     _init()
     try:
@@ -3831,6 +3952,9 @@ def main():
         # starts the transfer (lcd.push) early by half its measured cost, so
         # pixels change mid-transfer on the boundary whatever the Pi/display
         # speed (fb ~1ms, SPI 40-110ms).
+        _duty = _load_duty_cycle(_resolved_display_config)
+        if not duty_cycle.is_visible(_duty, int(time.time()) + 1):
+            _set_blanked(True, time.time())   # first tick is hidden: dark now, not at the boundary
         tick = 0
         while True:
             # Check for config reload request (from watcher or signal handler)
@@ -3839,8 +3963,7 @@ def main():
                 _attempt_config_reload()
 
             tick = _next_tick(tick, time.time())
-            lead_s = (_avg_display_ms or 0.0) / 2000
-            show_rows(at=tick, push_at=tick - lead_s)
+            _run_tick(tick)
 
     except KeyboardInterrupt:
         pass

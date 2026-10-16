@@ -118,6 +118,7 @@ class FramebufferDriver(DisplayDriver):
         self._fb      = None
         self._mm      = None
         self._tty     = None   # handle to /dev/tty0 for KD_GRAPHICS mode
+        self._blanked = False  # blank() state, so close() hands the console back unblanked
         # These will be overwritten by begin() from the actual framebuffer.
         self._width   = int(cfg.get('width',  800))
         self._height  = int(cfg.get('height', 480))
@@ -353,8 +354,18 @@ class FramebufferDriver(DisplayDriver):
         except OSError:
             pass   # not all framebuffer drivers support FBIOBLANK
 
+    def blank(self, state: bool = True) -> None:
+        """Blank or unblank via FBIOBLANK (same ioctl as :meth:`idle`, separate state)."""
+        try:
+            fcntl.ioctl(self._fb, _FBIOBLANK, 1 if state else 0)
+            self._blanked = state
+        except OSError:
+            pass   # not all framebuffer drivers support FBIOBLANK
+
     def close(self) -> None:
         """Restore the VT, unmap the framebuffer, and close the device."""
+        if self._blanked and self._fb is not None:
+            self.blank(False)
         self._leave_graphics_mode()
         if self._mm is not None:
             self._mm.close()

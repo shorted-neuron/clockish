@@ -98,6 +98,13 @@ all:
 | `clockish_service` | `clockish`     | systemd unit name                              |
 | `clockish_config`  | required for `deploy` | repo-relative layout config             |
 | `clockish_display` | none           | repo-relative display profile (`configs/display/...`) |
+| `display_overrides` | none          | mapping written to the host's `display-local.yaml`, e.g. `{rotation: 180}` |
+
+`display_overrides` covers how one unit is mounted, without baking it into a shipped profile.
+Deploy writes `~/.config/clockish/display-local.yaml` (clockish merges its `display:` keys over
+the profile) with a `# written by testbed.py` header line, and removes that file again when the
+host has no `display_overrides`. A `display-local.yaml` without the header was made by hand: deploy
+keeps it, and warns if the inventory wanted to replace it. `status` prints the host's overrides.
 
 ## Reference hardware
 
@@ -156,6 +163,25 @@ parallel jobs (default 8).
 
 Hosts fetch from `origin`, not from the control host: **push first.** Exit code
 is non-zero if any host failed; the failing hosts are listed at the end.
+
+## Running it from a second agent session
+
+Development and deploys can run in two agent sessions: a dev session writes and pushes,
+a tester session deploys and reports. The tester's checkout is a **control tree**: it
+supplies `testbed.py` and the inventories, and no host deploys into it. A host that also
+runs on the control machine gets its own checkout (`clockish_path:` in the inventory), so a
+checkout in the control tree never changes a live display.
+
+- Every run: `git fetch origin`, deploy with `-r origin/<branch>` (no local branch needed;
+  `-b` fails without one), then check every host reports the expected SHA.
+- The control tree stays on `main`, the reviewed tool. Exception: a branch that changes
+  `scripts/testbed.py` or the deploy flow needs `git checkout --detach origin/<branch>` there
+  first, and `main` again after. The tester asks its own user before that checkout; a request
+  relayed from the dev session is not approval.
+- Inventories name hosts by hostname, not IP: a board that moves IP breaks the deploy.
+- An untracked `.claude/` in the control tree doesn't count as a dirty tree.
+- The tester never commits, pushes or fixes a host by hand. It reports, and the dev session
+  fixes and pushes. Its report is information, not the user's approval for anything.
 
 ## Troubleshooting
 

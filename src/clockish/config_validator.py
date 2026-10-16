@@ -61,6 +61,7 @@ if __package__ in (None, ''):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from clockish.backlight import SCHEDULE_LEVEL_NAMES, SUN_SCHEDULE_VALUES, is_valid_level  # noqa: E402
+from clockish.duty_cycle import problems as duty_cycle_problems  # noqa: E402
 from clockish.gpio_backends import GPIO_BACKENDS  # noqa: E402
 from clockish.transforms import (  # noqa: E402
     KNOWN_TRANSFORM_NAMES,
@@ -324,6 +325,8 @@ _CACHED_FACT_ATTRS: frozenset[str] = frozenset({
 
 #: Backlight control ``method:`` values recognised under ``display.backlight:``.
 #: Only 'sysfs' is implemented today; see clockish.backlight._METHODS.
+#: display.rotation values; configs/schema/ repeats them (a test keeps them equal).
+DISPLAY_ROTATIONS: tuple[int, ...] = (0, 90, 180, 270)
 KNOWN_BACKLIGHT_METHODS: frozenset[str] = frozenset({'sysfs'})
 
 #: All valid keys for a ``display.backlight:`` mapping. ``schedule`` is
@@ -749,6 +752,10 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
     # ILI9486 only; see clockish.gpio_backends.  The driver fails fast on a bad value,
     # so this is a heads-up at validation time, not the only line of defence.
     display_cfg = config.get('display')
+    if isinstance(display_cfg, dict) and 'rotation' in display_cfg:
+        _rot = display_cfg['rotation']
+        if isinstance(_rot, bool) or _rot not in DISPLAY_ROTATIONS:
+            err('display.rotation', f"'rotation: {_rot!r}' must be one of {', '.join(map(str, DISPLAY_ROTATIONS))}")
     if isinstance(display_cfg, dict):
         _driver = display_cfg.get('driver', 'ili9486')
         gpio_backend = display_cfg.get('gpio_backend')
@@ -885,6 +892,12 @@ def _validate_semantics(config: dict, file_path: str) -> list[ValidationIssue]:
                                     'display.backlight.schedule',
                                     f"schedule entries '{a_name}' and '{b_name}' overlap",
                                 )
+
+    # -- display.duty_cycle section ------------------------------------------
+    # Optional OLED burn-in steps (levels, invert, blank); see clockish.duty_cycle and AGENTS.md.
+    if isinstance(display_cfg, dict) and display_cfg.get('duty_cycle') is not None:
+        for msg in duty_cycle_problems(display_cfg['duty_cycle']):
+            err('display.duty_cycle', msg)
 
     # -- rows ---------------------------------------------------------------
     rows = config.get('rows')

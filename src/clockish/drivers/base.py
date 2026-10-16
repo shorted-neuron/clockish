@@ -4,7 +4,7 @@ clockish.drivers.base
 Abstract base class for display hardware drivers.
 
 All display backends must subclass :class:`DisplayDriver` and implement the
-abstract methods.  Optional hooks (``prepare``/``push``, ``idle``, ``close``)
+abstract methods.  Optional hooks (``prepare``/``push``, ``idle``, ``blank``, ``invert``, ``set_level``, ``close``)
 have pass-through/no-op defaults so minimal drivers need only implement ``begin`` and
 ``display``.
 """
@@ -26,6 +26,9 @@ class DisplayDriver(ABC):
     clearing the panel when clockish exits.  The base class default is False.
     """
     DEFAULT_CLEAR_ON_EXIT: bool = False
+    #: True when :meth:`invert` flips the panel in hardware.  Otherwise the main loop inverts
+    #: the image itself before :meth:`prepare` for a ``duty_cycle`` ``mode: invert`` step.
+    HARDWARE_INVERT: bool = False
     """Abstract interface that every display backend must satisfy.
 
     Life-cycle
@@ -89,6 +92,31 @@ class DisplayDriver(ABC):
         """Enter (``True``) or exit (``False``) low-power idle mode.
 
         No-op by default; override if the hardware supports it.
+        """
+
+    def blank(self, state: bool = True) -> None:
+        """Blank (``True``) or unblank (``False``) the panel; used by ``display.duty_cycle``.
+
+        Default: blank by pushing an all-black frame; unblank is a no-op because the
+        next pushed frame restores content.  Drivers with a real display-off command
+        override this.  Distinct from :meth:`idle` (ILI9486: 8-colour mode) and
+        :meth:`clear` (shutdown).  The main loop pushes a fresh frame BEFORE
+        ``blank(False)``, so an override must keep the panel's RAM intact while blanked.
+        """
+        if state:
+            self.push(self.prepare(Image.new("RGB", self.dimensions)))
+
+    def invert(self, state: bool = True) -> None:
+        """Hardware-invert (``True``) or restore (``False``) the panel; used by ``display.duty_cycle``.
+
+        Only called when :attr:`HARDWARE_INVERT` is True.  No-op by default.
+        """
+
+    def set_level(self, contrast: int, vcomh: str, precharge: str) -> None:
+        """Set panel brightness for a ``display.duty_cycle`` level (see ``clockish.duty_cycle``).
+
+        ``contrast`` 0-255, ``vcomh`` low|mid|high, ``precharge`` normal|short -- SSD1306 terms.
+        No-op by default: panels without such a control show every level the same.
         """
 
     def close(self) -> None:

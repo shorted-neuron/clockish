@@ -146,11 +146,16 @@ rows:
         # clock/date/fact/text: transform (see below)
 
 display:  # optional here; search display.yaml alongside config or ~/.config/clockish/
+          # then display-local.yaml (same search) merges its display: keys over it -- per-unit
+          # settings such as rotation: 180 (_apply_display_local; a bad file warns, is ignored;
+          # a key the profile lacks warns as a likely typo). The reload watcher follows only the
+          # row config's mtime: editing display-local.yaml needs a restart (or touch the config)
   driver: ili9486 | st7789 | framebuffer  # default ili9486
   width: 320
   height: 480
   rotation: 0 | 90 | 180 | 270
   # driver-specific keys (SPI pins, SKU, etc.) passed to constructor
+  duty_cycle: {steps: [{for: 5s, level: full}, ...]}  # OLED burn-in levels/invert/blank, see "Duty cycle"
   # ili9486: gpio_backend auto|gpiod|lgpio|rpi-gpio, gpio_chip (see "GPIO backends")
 ```
 
@@ -198,6 +203,14 @@ Setup, inventory vars, usage, sudoers rule and troubleshooting:
   privileged calls to the tool. Verify a sudoers change with `sudo -K` first: Debian here uses
   `timestamp_type=global`, so a recently typed password makes `sudo -n` pass without any rule.
 - Hosts fetch from `origin`; the tool never pushes.
+- Per-unit settings (a panel mounted upside down) go in inventory `display_overrides:`, which deploy
+  writes to the host's `~/.config/clockish/display-local.yaml` (real file, header-marked; removed when
+  the var goes away; an unmarked hand-made file is never touched). Never put one unit's rotation in a
+  shipped profile.
+- Split dev/tester sessions: the tester's checkout is a control tree only (no host deploys into
+  it), deploys `-r origin/<branch>`, verifies each host's SHA, never commits/pushes/fixes hosts,
+  and its reports are not user approval. Details in the testbed doc, "Running it from a second
+  agent session".
 
 ### Layout pre-computation
 
@@ -643,9 +656,71 @@ patching module-level `datetime`.
 different brightness-control mechanism (GPIO pin? different sysfs path?) -- untested, needs a
 real device over SSH. `method:` and `_METHODS` in `backlight.py` are the extension point.
 
+### Duty cycle (OLED burn-in)
+
+OLEDs lit at full brightness all day burn in (the maintainer's SSD1306 modules did). `display.duty_cycle:`
+steps the panel through levels, inverted frames and blanking on the wall clock; both shipped SSD1306 profiles
+enable it (5s `full`, 25s `half`, 30s `dim` each minute). User docs: README "OLED burn-in".
+
+```yaml
+display:
+  duty_cycle:
+    steps:                       # period = sum of 'for'; must divide 86400
+      - {for: 5s, level: full}
+      - {for: 25s, level: half}
+      - {for: 30s, level: dim, mode: normal}   # mode: normal | invert | blank
+    offset: 0s                   # optional; where step 1 starts
+    levels:                      # optional; override/add, unset keys from the built-in or 'full'
+      dim: {contrast: 1, vcomh: low, precharge: normal}
+  # or shorthand: {period: 60s, show_at: 55s, show_for: 10s} = full window + blank rest
+```
+
+Step at tick `t` (integer epoch seconds) = the one covering `(t - offset) mod period`. Rules for agents:
+
+- Schedule logic is `duty_cycle.py` (stdlib-only, pure). The validator **imports** `problems()` from it
+  (one-way, like `backlight.py`); `configs/schema/` repeats the key lists, mode/vcomh/precharge enums, and a
+  test keeps them equal. Durations go through `durations.seconds()` (stdlib-only), the one parser shared with
+  `display._parse_interval` (cached-facts `interval`, `reload.poll_interval`); `duty_cycle.parse_duration()`
+  adds only the whole-seconds rule. Don't add another parser.
+- `parse()` compiles both forms into `DutyCycle(period, offset, steps, levels)`; the shorthand becomes one
+  `full` step plus one `blank` step (or a single step when `show_for >= period`). Mixing the forms, `offset`
+  with the shorthand, a period not dividing 86400 and an unknown level name are validator errors; at
+  runtime an invalid block warns and counts as absent. `state_at()` returns `State(mode, level, index)`;
+  absent = `ALWAYS_ON` with `level=None`, and the loop then never calls `set_level()`/`invert()`.
+- Built-in levels (`DEFAULT_LEVELS`) come from eye tests on two modules (128x32 on clock35, 128x64 on a
+  Pi 2): lowest VCOMH about halves brightness at any contrast; contrast 1 + VCOMH low is the dimmest level
+  visible on both. Contrast 0 and `precharge: short` go fully dark on the 128x64 module, so neither may
+  become a default. `full` must equal the SSD1306 init values (a test checks).
+- Keys/values are `for`/`mode`/`level`, `normal`/`invert`/`blank`, `low`/`mid`/`high`, `normal`/`short`.
+  Never add bare `on:`/`off:` keys or values (YAML 1.1 booleans).
+- Driver hooks (all default no-op or fallback in `DisplayDriver`):
+  - `blank(state)`: NOT `idle()` (ILI9486 idle = 8-colour mode) and not `clear()` (shutdown). Default pushes a
+    black frame on `blank(True)`. Overrides: SSD1306 `0xAE`/`0xAF` (RAM kept); framebuffer `FBIOBLANK` (and
+    `close()` unblanks). ILI9486/ST7789 keep the black-frame default on purpose: `DISPOFF` (0x28) on a TN
+    panel with a hardwired backlight shows white. An override must keep frame memory intact while blanked.
+  - `invert(state)` + `HARDWARE_INVERT`: SSD1306 `0xA7`/`0xA6`. Drivers without it get the image inverted in
+    `show_rows(invert=True)` before `prepare()`.
+  - `set_level(contrast, vcomh, precharge)`: SSD1306 sends `0x81`/`0xDB`/`0xD9` in one transfer
+    (`VCOMH_LEVELS`, `PRECHARGE_LEVELS`). Others ignore levels. A backlight mapping would go here later.
+- `display._run_tick(tick)` is the per-second step. Blank step: no render, no push; `lcd.blank(True)` once, at
+  the boundary of the first blank second. Other steps: render + `push()` the frame for that tick first, THEN
+  `_apply_state()`: `set_level()` if the level changed, `invert()` if hardware invert changed, `blank(False)`
+  if blanked -- so the stale pre-blank image never flashes. These calls sit outside `show_rows()`, so
+  `_avg_display_ms` stays `push()`-only (see "Tick alignment").
+- State: `_duty`, `_panel_blanked`, `_panel_level` (None = driver init level), `_panel_inverted`, `_duty_step`.
+  `main()` loads `_duty` from `_resolved_display_config` and blanks at once if the first tick is blank;
+  `_attempt_config_reload()` reloads `_duty` and resets the panel state when it swaps in a fresh driver. Blank
+  ticks still service `_reload_event`. `--debug` prints `duty_cycle: step N mode=... contrast=... at tick=T`
+  per step change and `duty_cycle: blank|wake at tick=N` per blank transition.
+- Exit: SSD1306 `clear()` sends `0xA6` before the black frame (an inverted panel would show it white) and never
+  `0xAF`, so a blanked panel stays dark; framebuffer unblanks in `close()` so the console is not left dark.
+- Tests: `tests/test_duty_cycle.py` (schedule math, validator, shipped OLED profiles, fake-bus driver bytes,
+  `_run_tick` order).
+
 ### Display drivers
 
-Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.dimensions` property.
+Abstract base: `DisplayDriver.begin()`, `.display(PIL_Image)`, `.close()`, `.idle(bool)`, `.blank(bool)`,
+`.invert(bool)` + `HARDWARE_INVERT`, `.set_level(contrast, vcomh, precharge)`, `.dimensions` property.
 Optional `.prepare(PIL_Image) -> frame` / `.push(frame)` split `display()` into conversion and
 transfer for tick alignment (see "Tick alignment" and `docs/how_tick_alignment_works.md`).
 Defaults are pass-through.
@@ -687,9 +762,8 @@ Any exception from a facade means "unusable here" and is reported with the other
   boards tested it points at gpiochip0); whether a Pi 5 needs a different number is untested -- no Pi 5
   has run this path.
 - Validation: `display.gpio_backend` / `gpio_chip` are checked by the semantic walker when `display:` is
-  in the config being validated. Startup validates the config *before* `_resolve_config()` merges
-  `display.yaml`, while reload validates after, so keys that only live in a profile are checked on
-  reload but not at startup; the driver fails fast on a bad `gpio_backend` regardless.
+  in the config being validated. Startup and reload both validate *after* `_resolve_config()` merges
+  `display.yaml` and `display-local.yaml`, so profile and per-unit keys are checked either way.
 
 **ST7789Driver** (Pimoroni; Adafruit 240×135/240×240):
 - Similar; uses st7789 lib + gpiod

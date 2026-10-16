@@ -18,6 +18,7 @@ all:
       ansible_host: pi-st7789.local
       clockish_config: configs/tiny.yaml
       clockish_display: configs/display/st7789-240x135.yaml
+      display_overrides: {rotation: 180}   # mounted upside down; -> ~/.config/clockish/display-local.yaml
     pi-dsi:
       ansible_host: 192.168.1.60
       clockish_config: configs/bit-clock35.yaml

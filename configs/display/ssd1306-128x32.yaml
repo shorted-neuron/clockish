@@ -13,3 +13,15 @@ display:
   clear_on_exit: true  # this is an oled, so prevent burn in by clearing on exit
   # i2c_addr:     0x3C  # optional, default: 0x3C is most common (some 128x32 modules use 0x3D)
   # i2c_bus:      1     # optional, /dev/i2c-N (default 1: the header pins SDA=GPIO2, SCL=GPIO3)
+  # Burn-in protection: an OLED lit at full brightness all day burns in badly.
+  # Remove duty_cycle only if you accept that.  See README "OLED burn-in".
+  duty_cycle:
+    steps:                         # one minute, wall-clock aligned (period = sum of 'for')
+      - {for: 5s, level: full}     # :00-:04 full brightness
+      - {for: 25s, level: half}    # :05-:29 clearly dimmer
+      - {for: 30s, level: dim}     # :30-:59 dimmest level visible on every module tested
+    # levels:                      # tune for this module; built-ins shown
+    #   full: {contrast: 255, vcomh: high}
+    #   half: {contrast: 32, vcomh: low}
+    #   dim:  {contrast: 1, vcomh: low}   # contrast 0 or 'precharge: short' is dark on some modules
+    # other step modes: {for: 10s, mode: invert} (lit/unlit swapped), {for: 10s, mode: blank} (off)

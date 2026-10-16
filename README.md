@@ -42,6 +42,7 @@ Tested displays:
 - 1.1" Mini PiTFT (ST7789, 240x135, 16-bit color).
 - 1.3" Mini PiTFT (ST7789, 240x240, 16-bit color).
 - SSD1306 I2C OLED (128x64 and 128x32, monochrome; profiles `ssd1306-128x64.yaml` and `ssd1306-128x32.yaml`).
+  **Read [OLED burn-in](#oled-burn-in) before running one all day.**
 - Linux Framebuffer (any size, any resolution, any color depth):
   - DSI displays (like 5" and 7" Waveshare panels or others found on Amazon)
   - DSI displays (like 7" and 10" Raspberry Pi DSI panels)
@@ -193,7 +194,8 @@ python3 src/clockish/render_preview.py --outdir /tmp/out configs/big-red.yaml
 
 Config files live in `configs/`. Each file is a YAML document with two top-level keys:
 
-- **`display`** — `width`, `height`, `rotation` (0 / 90 / 180 / 270)
+- **`display`** — `width`, `height`, `rotation` (0 / 90 / 180 / 270); for an OLED, `duty_cycle`
+  (see [OLED burn-in](#oled-burn-in))
 - **`rows`** — a list of rows, each with a `height` and a `panels` list
 
 Each panel has a `type` and type-specific keys:
@@ -211,6 +213,66 @@ Each panel has a `type` and type-specific keys:
 | `blank`        | Empty space                                                                                              |
 
 See [configs directory](configs/) for lots of fully annotated reference configuration.
+
+### Per-unit display settings
+
+Settings that belong to one unit rather than its display model, such as a panel mounted upside down,
+go in `~/.config/clockish/display-local.yaml` (or next to your row config). Its `display:` keys
+replace the same keys of the display profile, so the shipped profile stays untouched and upgrades
+cleanly:
+
+```yaml
+display:
+  rotation: 180
+```
+
+The journal shows `Display overrides from <file>: rotation` at startup, and warns about a key the
+profile doesn't have (usually a typo). clockish reads the file at startup and when the row config
+reloads, but doesn't watch it: after editing it, restart clockish (or save the row config).
+`rotation: 90` or `270` turns a landscape panel portrait, so pair it with a portrait layout (the
+ST7789 driver only allows it on square panels).
+
+### OLED burn-in
+
+An OLED shows a clock by lighting the same pixels, at full brightness, all day. Those pixels wear
+out faster than the rest, and within a short time a ghost of the digits stays burnt into the panel.
+This is not hypothetical: SSD1306 modules running clockish around the clock have burnt in badly.
+
+`display.duty_cycle` steps the panel through brightness levels, inverted frames or blanking on
+the wall clock. Both shipped SSD1306 profiles turn it on:
+
+```yaml
+display:
+  duty_cycle:
+    steps:                         # one minute (period = sum of 'for'; must divide 86400)
+      - {for: 5s, level: full}     # :00-:04 full brightness
+      - {for: 25s, level: half}    # :05-:29 clearly dimmer
+      - {for: 30s, level: dim}     # :30-:59 dimmest
+```
+
+- `mode:` per step: `normal` (default), `invert` (lit and unlit pixels swap, which spreads the wear),
+  or `blank` (panel off).
+- `level:` per step: `full` (default), `half`, `dim`, or a name you define under `levels:`.
+- `offset:` moves where step 1 starts within the period.
+- Shorthand, lit at full for 10 s a minute and off otherwise: `duty_cycle: {period: 60s, show_at: 55s, show_for: 10s}`.
+
+Levels set the SSD1306's contrast (0-255), VCOMH voltage (`low`/`mid`/`high`) and precharge
+(`normal`/`short`). The defaults are `full` = contrast 255, VCOMH high; `half` = contrast 32, VCOMH
+low; `dim` = contrast 1, VCOMH low. Modules differ at the bottom end: a worn (already burnt-in) module can be
+unreadable at contrast 1, and contrast 0 or `precharge: short` dims some panels further and turns
+others completely dark. Tune `dim` per module:
+
+```yaml
+    levels:
+      dim: {contrast: 8, vcomh: low}   # brighter, if contrast 1 is too dim to read
+```
+
+`scripts/ssd1306-brightness-test.py` steps a module through these levels so you can pick by eye
+(stop the clockish service first; `--help` lists the sets).
+
+Other displays honour `blank` and `invert` (inverted in software); levels do nothing on them.
+Deleting `duty_cycle` from an OLED profile runs the panel at full brightness all the time — expect
+burn-in.
 
 ### Location (off by default)
 

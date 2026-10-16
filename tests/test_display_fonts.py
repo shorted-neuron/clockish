@@ -27,9 +27,18 @@ from __future__ import annotations
 import datetime
 import unittest.mock as mock
 
+import pytest
 from PIL import ImageFont
 
 import clockish.display as d
+
+
+@pytest.fixture(autouse=True)
+def _no_location(monkeypatch):
+    """_init_layout() resolves location: with no location: key it reads the user's
+    ~/.config/clockish/location.yaml and starts a sun-times worker that fetches in the
+    background -- a real network call that can land inside a later test_location test."""
+    monkeypatch.setattr(d, '_init_system_location', lambda *a, **k: None)
 
 
 def _reset_font_state() -> None:

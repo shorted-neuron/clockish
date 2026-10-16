@@ -22,7 +22,11 @@ scripts/setup-testbed-sudoers.sh for the passwordless rule.
 Host vars (inventory): ansible_host, ansible_user, ansible_port,
 clockish_path (default ~/clockish), clockish_service (default clockish),
 clockish_config (repo-relative, required for deploy),
-clockish_display (repo-relative, optional).
+clockish_display (repo-relative, optional),
+display_overrides (mapping, optional): written to ~/.config/clockish/display-local.yaml,
+which clockish merges over the display profile (e.g. {rotation: 180} for a panel mounted
+upside down).  Without it, deploy removes a display-local.yaml it wrote earlier; a
+hand-made one (no LOCAL_MARKER line) is never touched.
 """
 import argparse
 import concurrent.futures
@@ -40,6 +44,8 @@ DEFAULTS = {
 SSH_OPTS = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8']
 CONFIG_LINK = '.config/clockish/clockish-config.yaml'
 DISPLAY_LINK = '.config/clockish/display.yaml'
+LOCAL_FILE = '.config/clockish/display-local.yaml'
+LOCAL_MARKER = '# written by testbed.py from display_overrides; deploy rewrites or removes it'
 
 
 # --------------------------------------------------------------------------
@@ -111,6 +117,9 @@ def deploy_script(v, branch, pip, validate, ref=None):
     cfg = v.get('clockish_config')
     if not cfg:
         raise ValueError("clockish_config not set")
+    overrides = v.get('display_overrides')
+    if overrides is not None and (not isinstance(overrides, dict) or not overrides):
+        raise ValueError(f"display_overrides must be a non-empty mapping, got {overrides!r}")
     lines = [
         'set -euo pipefail',
         f'cd {repo}',
@@ -141,6 +150,14 @@ def deploy_script(v, branch, pip, validate, ref=None):
     if disp:
         lines.append(f'test -f {shlex.quote(disp)} || {{ echo "ERROR: no {disp}" >&2; exit 4; }}')
         lines.append(f'link {shlex.quote(disp)} {DISPLAY_LINK}')
+    # $1 = file body, or empty to remove; a file without the marker line is the host owner's
+    lines.append(
+        f'display_local() {{ t="$HOME/{LOCAL_FILE}"; '
+        f'if [ -e "$t" ] && ! grep -qxF {shlex.quote(LOCAL_MARKER)} "$t"; then '
+        '[ -z "$1" ] || echo "WARNING: kept $t, not written by testbed.py" >&2; '
+        'elif [ -n "$1" ]; then printf "%s" "$1" > "$t"; else rm -f "$t"; fi; }')
+    body = (f'{LOCAL_MARKER}\n' + yaml.safe_dump({'display': overrides}, sort_keys=False)) if overrides else ''
+    lines.append(f'display_local {shlex.quote(body)}')
     if validate:
         lines.append(f'.venv/bin/clockish-validate {shlex.quote(cfg)}')
     lines += [
@@ -163,6 +180,8 @@ def service_script(v, action):
                 'HEAD=$(git rev-parse --short HEAD)"\n'
                 f'echo "config=$(readlink "$HOME/{CONFIG_LINK}" || echo "$HOME/{CONFIG_LINK}")"\n'
                 f'echo "display=$(readlink "$HOME/{DISPLAY_LINK}" || echo "$HOME/{DISPLAY_LINK}")"\n'
+                f'[ ! -e "$HOME/{LOCAL_FILE}" ] || '
+                f'echo "display-local: $(grep -v "^#" "$HOME/{LOCAL_FILE}" | tr -s "\\n " " ")"\n'
                 f'systemctl is-active {svc}\n')
     return f'set -e\nsudo -n systemctl {action} {svc}\nsystemctl is-active {svc} || true\n'
 
